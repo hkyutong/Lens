@@ -1,0 +1,16 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" shape-rendering="geometricPrecision">
+  <style>
+    path { stroke: #000000; }
+    @media (prefers-color-scheme: dark) {
+      path { stroke: #ffffff; }
+    }
+  </style>
+
+  <path 
+    d="M302 205 L302 345 L588 512 L302 679 L302 819 L722 582 L722 442 Z" 
+    fill="none" 
+    stroke-width="48" 
+    stroke-linejoin="miter" 
+    stroke-miterlimit="10"
+  />
+</svg>

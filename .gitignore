@@ -1,0 +1,43 @@
+# System / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
+logs/
+**/logs/
+.dev-logs/
+**/.dev-logs/
+
+# Environment / secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Node / frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-test/
+coverage/
+test-results/
+
+# Python
+venv/
+**/venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Runtime / generated data
+academic-4.0/private_upload/
+academic-4.0/gpt_log/
+gpt_log/
+public/file/
+test-zip/
+

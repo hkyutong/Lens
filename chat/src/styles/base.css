@@ -1,0 +1,5 @@
+/* Tailwind base reset 之外，自定义全局字体/排版 */
+html {
+  font-family:
+    'IBM Plex Sans', 'Source Han Sans SC', 'Noto Sans SC', 'PingFang SC', 'SF Pro SC', sans-serif;
+}

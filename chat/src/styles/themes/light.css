@@ -1,0 +1,61 @@
+:root,
+:root[data-theme='light'] {
+  /* Core Palette */
+  --bg-body: #ffffff;
+  --bg-sidebar: #f2f2f2;
+  --surface-card: #ffffff;
+  --text-main: #080808;
+  --text-sub: rgba(8, 8, 8, 0.6);
+  --border-color: #f2f2f2;
+  --shadow-glow: 0 18px 40px rgba(8, 8, 8, 0.12);
+  --shadow-soft: 0 12px 30px rgba(8, 8, 8, 0.08);
+
+  /* Button Color */
+  --btn-bg-primary: #080808;
+  --btn-bg-primary-hover: #080808;
+  --btn-bg-primary-active: #080808;
+  --btn-text-primary: #ffffff;
+  --btn-border-primary: transparent;
+  --btn-border-primary-hover: transparent;
+  --btn-border-primary-active: transparent;
+
+  --btn-bg-secondary: #ffffff;
+  --btn-bg-secondary-hover: #ffffff;
+  --btn-bg-secondary-active: #ffffff;
+  --btn-text-secondary: var(--text-main);
+  --btn-border-secondary: var(--border-color);
+  --btn-border-secondary-hover: var(--border-color);
+  --btn-border-secondary-active: var(--border-color);
+
+  --btn-bg-ghost: transparent;
+  --btn-bg-ghost-hover: rgba(8, 8, 8, 0.06);
+  --btn-bg-ghost-active: rgba(8, 8, 8, 0.12);
+  --btn-text-ghost: var(--text-main);
+  --btn-border-ghost: transparent;
+
+  --btn-bg-danger: #ef4444;
+  --btn-bg-danger-hover: #dc2626;
+  --btn-bg-danger-active: #b91c1c;
+  --btn-text-danger: #ffffff;
+  --btn-border-danger: transparent;
+
+  /* Button Size */
+  --btn-border-width: 1px;
+
+  /* Input Color */
+  --input-border: var(--border-color);
+  --input-border-hover: #f2f2f2;
+  --input-border-focus: #080808;
+  --input-border-error: #080808;
+  --input-bg: #ffffff;
+  --input-text: var(--text-main);
+  --input-placeholder: var(--text-sub);
+
+  /* Tab Component */
+  --tab-group-bg: #f2f2f2;
+  --tab-group-bg-filled: #f2f2f2;
+  --tab-text: var(--text-main);
+  --tab-active-bg: #ffffff;
+  --tab-active-text: #080808;
+  --tab-active-shadow: var(--shadow-soft);
+}

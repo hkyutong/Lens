@@ -1,0 +1,45 @@
+# ========================
+# 1. 核心服务基座
+# ========================
+fastapi==0.110
+uvicorn
+requests          # 核心：用于调用 Claude/OpenAI API
+pydantic>=2.0
+loguru            # 日志
+gradio==3.50.2   # 保留：为了兼容代码中的类型引用，不可删
+
+# ========================
+# 2. AI 模型基础
+# ========================
+openai>=1.0       # 核心：调用 GPT
+tiktoken>=0.3.3   # 核心：计算 Token
+numpy
+pandas
+
+# ========================
+# 3. 学术文件处理 (核心竞争力)
+# ========================
+pypdf>=4.0        # 新版 PDF 处理
+pymupdf           # 高性能 PDF 解析
+docx2pdf          # Word 转 PDF
+python-docx       # 读取 Word
+scipdf_parser>=0.52 # 论文布局解析 (Grobid 客户端)
+spacy             # scipdf_parser 的依赖，必须保留
+
+# ========================
+# 4. RAG 知识库 (维持现状，不折腾)
+# ========================
+llama-index-core
+llama-index-legacy
+llama-index-readers-file
+llama-index-embeddings-openai
+llama-index-llms-openai
+
+# ========================
+# 5. 辅助工具
+# ========================
+arxiv             # 下载论文
+filelock
+beautifulsoup4    # 网页解析
+latex2mathml      # 简单的数学公式转换 (保留以防后端报错)
+rich              # 终端美化
