@@ -1,5 +1,8 @@
 # 更新日志
 
+## 0.0.18 (2026-03-07)
+- 新增学术服务 PM2 配置文件 `academic-4.0/ecosystem.config.cjs`，可直接供宝塔 PM2「配置文件」模式使用，统一以 `./venv/bin/python` 启动 `shared_utils/fastapi_stream_server.py`，降低学术服务长期运行配置门槛，避免在宝塔界面手工拼接 Python 启动参数。
+
 ## 0.0.17 (2026-03-07)
 - 修复本地与服务器轻量部署脚本的 `pnpm` 可用性问题：`build.sh` 与 `AIWebQuickDeploy/start.sh` 不再假设 `corepack prepare` 后 `pnpm` 会自动出现在当前 shell 中，统一改为显式走 `corepack pnpm` 兜底，避免 `QUICK_DEPLOY_ONLY=1 ./build.sh` 和部署包 `./start.sh` 在未全局安装 `pnpm` 的环境下直接报 `pnpm: command not found`。
 - 保持轻量部署链路可直接复用：当机器未全局安装 `pnpm` 时，部署脚本现在会在不污染现有环境的前提下继续完成依赖安装与启动，降低 `AIWebQuickDeploy` 上传后的一次部署失败概率。
