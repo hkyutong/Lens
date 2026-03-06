@@ -139,7 +139,7 @@ pnpm_install() {
 
 build_admin() {
   log "构建 admin"
-  (cd "$ADMIN_DIR" && pnpm run build)
+  (cd "$ADMIN_DIR" && pnpm exec vue-tsc && pnpm exec vite build)
 }
 
 build_chat() {

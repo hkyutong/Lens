@@ -1,6 +1,7 @@
 # 更新日志
 
 ## 0.0.16 (2026-03-06)
+- 修复 Linux 服务器部署时工作区被污染：`build.sh` 的 `admin` 构建改为直接执行 `vue-tsc + vite build`，不再调用 `admin/package.json` 中包含 `pnpm format` 的 `build` 脚本，避免部署后服务器源码被自动改写、`git pull` 被本地改动阻塞。
 - 修复 Linux 部署时 `admin` 构建失败：补齐 `admin/src/views/users/index.vue` 与 `admin/src/views/users/accountLog.vue` 缺失的 `getAvatarText`，并为 `admin/src/views/sensitive/violation.vue` 的 `getAvatarText` 增加明确类型声明，消除 `TS2339` 与 `TS7006` 构建错误。
 - 清理 `admin/src/views/users/index.vue` 模板中的残留脏字符 `expirationTime`，避免后续模板异常和构建隐患。
 - 新增根目录 `test.sql`：写入首发商业化套餐方案，包含 `轻用版 / 专业版 / 旗舰版 / 高级模型加油包 / 特殊模型加油包` 五个正式套餐，并同步将积分公开名称切换为 `基础模型额度 / 高级模型额度 / 特殊模型额度`。
