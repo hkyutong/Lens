@@ -295,7 +295,9 @@ main() {
   ensure_node_version
   require_cmd npm
   ensure_pnpm
-  ensure_pm2
+  if [ "$QUICK_DEPLOY_ONLY" != "1" ]; then
+    ensure_pm2
+  fi
   if [ "$QUICK_DEPLOY_ONLY" != "1" ]; then
     ensure_service_env
   fi
