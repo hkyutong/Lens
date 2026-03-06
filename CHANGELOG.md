@@ -126,6 +126,7 @@
 - 同步替换导出模板中的品牌文案：`shared_utils/advanced_markdown_format.py`、`crazy_functions/pdf_fns/report_template_v2.html`、`Conversation_To_File.py`、`doc_fns/review_fns` 的 Word/TXT/BibTeX 标题统一改为 `Lens ｜昱镜`。
 - 同步替换运行期可见提示文案：欢迎语与 AutoGen 等待提示（`themes/welcome.js`、`waifu-tips.js`、`agent_fns/pipe.py`）不再显示 `GPT-Academic`。
 - 新增统一聊天输出清洗：`academic-4.0/toolbox.py` 在 `update_ui` 前自动移除 `函数插件作者/贡献者` 文案与 `[Local Message]` 前缀，并去重重复的 Token 截断警告。
+- 修复 Linux 部署学术服务缺依赖问题：`academic-4.0/requirements.txt` 补充 `markdown`、`pymdown-extensions`、`python-markdown-math`、`pygments`，避免 `lens-academic` 因 `ModuleNotFoundError: markdown` 启动失败。
 - 修复截断提示格式：`crazy_functions/crazy_utils.py` 的超长文本提示改为 `警告，文本过长将进行截断，Token溢出数：N。`，不再输出 `[Local Message]`。
 - 修复指定学术插件开场脏文案：`PDF_Summary.py`、`PDF_QA.py`、`Word_Summary.py`、`Arxiv_Downloader.py`、`PDF_Translate.py`、`PDF_Translate_Nougat.py` 去除“函数插件贡献者”展示，并增强 Markdown 结构化输出提示。
 - 下载区文件名品牌兜底：`promote_file_to_downloadzone` 与 `write_history_to_file` 会自动把 `GPT-Academic` 前缀替换为 Lens 品牌命名，避免继续出现旧品牌文件名。

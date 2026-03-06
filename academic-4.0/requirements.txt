@@ -41,5 +41,9 @@ llama-index-llms-openai
 arxiv             # 下载论文
 filelock
 beautifulsoup4    # 网页解析
+markdown          # Markdown -> HTML 渲染
+pymdown-extensions # Mermaid / 代码高亮围栏扩展
+python-markdown-math # 提供 mdx_math 扩展
+pygments          # Markdown 代码高亮依赖
 latex2mathml      # 简单的数学公式转换 (保留以防后端报错)
 rich              # 终端美化
