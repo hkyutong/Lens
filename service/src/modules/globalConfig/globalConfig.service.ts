@@ -30,6 +30,31 @@ export class GlobalConfigService implements OnModuleInit {
   private oldWechatAccessToken: string;
   private oldWechatJsapiTicket: string;
 
+  private normalizeClientDomain(rawDomain: any, req: Request) {
+    const queryDomain = String(rawDomain || '').trim();
+    if (queryDomain) {
+      try {
+        const parsed = new URL(queryDomain);
+        if (parsed.protocol && parsed.host) {
+          return `${parsed.protocol}//${parsed.host}`;
+        }
+      } catch (_error) {
+        // ignore invalid query domains and fall back to request headers
+      }
+    }
+
+    const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '')
+      .split(',')[0]
+      .trim();
+    const host = String(req?.headers?.['x-forwarded-host'] || req?.headers?.host || '')
+      .split(',')[0]
+      .trim();
+    if (forwardedProto && host) {
+      return `${forwardedProto}://${host}`;
+    }
+    return '';
+  }
+
   isNetworkSearchEnabled() {
     const pluginUrl = this.globalConfigs?.pluginUrl;
     const pluginKey = this.globalConfigs?.pluginKey;
@@ -318,12 +343,12 @@ export class GlobalConfigService implements OnModuleInit {
     const data = await this.configEntity.find({
       where: { configKey: In(allowKeys) },
     });
-    const { domain } = query;
-    const domainDb = this.globalConfigs['domain'];
-    if (domainDb !== domain) {
+    const normalizedDomain = this.normalizeClientDomain(query?.domain, req);
+    const domainDb = String(this.globalConfigs['domain'] || '').trim();
+    if (normalizedDomain && domainDb !== normalizedDomain) {
       this.createOrUpdate({
         configKey: `domain`,
-        configVal: domain,
+        configVal: normalizedDomain,
         status: 1,
       });
       await this.initGetAllConfig();

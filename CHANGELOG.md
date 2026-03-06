@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.19 (2026-03-07)
+- 修复前台初始化配置请求的域名参数兜底：`chat/src/store/modules/auth/index.ts` 的 `getGlobalConfig` 现在默认回退到浏览器当前 origin，不再发出 `queryFront?domain=` 这种空域名请求。
+- 加固前台域名同步逻辑：`service/src/modules/globalConfig/globalConfig.service.ts` 现在会规范化 `domain`，仅在拿到有效的 `scheme://host` 后才更新站点域名配置；空值或非法值会自动回退到反向代理请求头，不再把空域名写回数据库配置。
+
 ## 0.0.18 (2026-03-07)
 - 新增学术服务 PM2 配置文件 `academic-4.0/ecosystem.config.cjs`，可直接供宝塔 PM2「配置文件」模式使用，统一以 `./venv/bin/python` 启动 `shared_utils/fastapi_stream_server.py`，降低学术服务长期运行配置门槛，避免在宝塔界面手工拼接 Python 启动参数。
 

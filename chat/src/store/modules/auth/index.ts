@@ -25,6 +25,13 @@ export const useAuthStore = defineStore('auth-store', {
   },
 
   actions: {
+    resolveBrowserDomain() {
+      if (typeof window === 'undefined' || !window.location) return ''
+      const { protocol, hostname, port } = window.location
+      if (!protocol || !hostname) return ''
+      return `${protocol}//${hostname}${port ? `:${port}` : ''}`
+    },
+
     async getUserInfo(): Promise<T> {
       try {
         if (!this.loadInit) await this.getGlobalConfig()
@@ -52,7 +59,8 @@ export const useAuthStore = defineStore('auth-store', {
     },
 
     async getGlobalConfig(domain = '') {
-      const res = await fetchQueryConfigAPI({ domain })
+      const resolvedDomain = String(domain || this.resolveBrowserDomain()).trim()
+      const res = await fetchQueryConfigAPI({ domain: resolvedDomain })
       this.globalConfig = res.data as GlobalConfig
       this.globalConfigLoading = false
       this.loadInit = true
