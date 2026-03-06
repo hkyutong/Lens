@@ -1,6 +1,7 @@
 # 更新日志
 
 ## 0.0.16 (2026-03-06)
+- 修复 Linux 服务器部署时 `admin` 的 Vite 配置崩溃：`admin/vite/plugins/compression.ts` 对空的 `VITE_BUILD_COMPRESS` 改为安全兜底，不再对 `undefined` 执行 `split()`，未配置压缩时直接跳过压缩插件，避免一键部署在 `vite build` 阶段报错。
 - 修复 Linux 服务器部署时工作区被污染：`build.sh` 的 `admin` 构建改为直接执行 `vue-tsc + vite build`，不再调用 `admin/package.json` 中包含 `pnpm format` 的 `build` 脚本，避免部署后服务器源码被自动改写、`git pull` 被本地改动阻塞。
 - 修复 Linux 部署时 `admin` 构建失败：补齐 `admin/src/views/users/index.vue` 与 `admin/src/views/users/accountLog.vue` 缺失的 `getAvatarText`，并为 `admin/src/views/sensitive/violation.vue` 的 `getAvatarText` 增加明确类型声明，消除 `TS2339` 与 `TS7006` 构建错误。
 - 清理 `admin/src/views/users/index.vue` 模板中的残留脏字符 `expirationTime`，避免后续模板异常和构建隐患。

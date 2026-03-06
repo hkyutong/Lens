@@ -4,8 +4,15 @@ import type { PluginOption } from 'vite'
 export default function createCompression(env, isBuild) {
   const plugin: (PluginOption | PluginOption[])[] = []
   if (isBuild) {
-    const { VITE_BUILD_COMPRESS } = env
-    const compressList = VITE_BUILD_COMPRESS.split(',')
+    const compressList = String(env?.VITE_BUILD_COMPRESS || '')
+      .split(',')
+      .map((item: string) => item.trim())
+      .filter(Boolean)
+
+    if (compressList.length === 0) {
+      return plugin
+    }
+
     if (compressList.includes('gzip')) {
       plugin.push(
         compression(),
