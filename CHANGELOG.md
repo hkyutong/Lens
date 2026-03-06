@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.17 (2026-03-07)
+- 修复本地与服务器轻量部署脚本的 `pnpm` 可用性问题：`build.sh` 与 `AIWebQuickDeploy/start.sh` 不再假设 `corepack prepare` 后 `pnpm` 会自动出现在当前 shell 中，统一改为显式走 `corepack pnpm` 兜底，避免 `QUICK_DEPLOY_ONLY=1 ./build.sh` 和部署包 `./start.sh` 在未全局安装 `pnpm` 的环境下直接报 `pnpm: command not found`。
+- 保持轻量部署链路可直接复用：当机器未全局安装 `pnpm` 时，部署脚本现在会在不污染现有环境的前提下继续完成依赖安装与启动，降低 `AIWebQuickDeploy` 上传后的一次部署失败概率。
+
 ## 0.0.16 (2026-03-06)
 - 修复 Linux 服务器部署时 `admin` 的 Vite 配置崩溃：`admin/vite/plugins/compression.ts` 对空的 `VITE_BUILD_COMPRESS` 改为安全兜底，不再对 `undefined` 执行 `split()`，未配置压缩时直接跳过压缩插件，避免一键部署在 `vite build` 阶段报错。
 - 修复 Linux 服务器部署时工作区被污染：`build.sh` 的 `admin` 构建改为直接执行 `vue-tsc + vite build`，不再调用 `admin/package.json` 中包含 `pnpm format` 的 `build` 脚本，避免部署后服务器源码被自动改写、`git pull` 被本地改动阻塞。

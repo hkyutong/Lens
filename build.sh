@@ -19,6 +19,7 @@ QUICK_DEPLOY_ONLY="${QUICK_DEPLOY_ONLY:-0}"
 ACADEMIC_PYTHON_BIN="${ACADEMIC_PYTHON_BIN:-}"
 ACADEMIC_PYTHON_VERSION="${ACADEMIC_PYTHON_VERSION:-3.12.12}"
 ACADEMIC_PYTHON=""
+PNPM_CMD=""
 
 log() {
   printf '[Lens Deploy] %s\n' "$*"
@@ -52,17 +53,34 @@ ensure_node_version() {
 
 ensure_pnpm() {
   if has_cmd pnpm; then
+    PNPM_CMD="pnpm"
     return
   fi
   if has_cmd corepack; then
     log "未检测到 pnpm，尝试通过 corepack 安装"
     corepack enable >/dev/null 2>&1 || true
     corepack prepare pnpm@latest --activate >/dev/null 2>&1 || die "corepack 安装 pnpm 失败"
+    if corepack pnpm --version >/dev/null 2>&1; then
+      PNPM_CMD="corepack pnpm"
+      return
+    fi
+    die "corepack 已执行，但 pnpm 仍不可用"
   else
     require_cmd npm
     log "未检测到 pnpm，尝试通过 npm 全局安装"
     npm install -g pnpm >/dev/null 2>&1 || die "pnpm 安装失败"
   fi
+  has_cmd pnpm || die "pnpm 安装后仍不可用"
+  PNPM_CMD="pnpm"
+}
+
+run_pnpm() {
+  [ -n "$PNPM_CMD" ] || die "PNPM_CMD 未初始化"
+  if [ "$PNPM_CMD" = "pnpm" ]; then
+    pnpm "$@"
+    return
+  fi
+  corepack pnpm "$@"
 }
 
 ensure_pm2() {
@@ -134,25 +152,25 @@ pnpm_install() {
   local dir="$1"
   log "安装依赖：$dir"
   if [ -f "$dir/pnpm-lock.yaml" ]; then
-    (cd "$dir" && pnpm install --frozen-lockfile)
+    (cd "$dir" && run_pnpm install --frozen-lockfile)
   else
-    (cd "$dir" && pnpm install)
+    (cd "$dir" && run_pnpm install)
   fi
 }
 
 build_admin() {
   log "构建 admin"
-  (cd "$ADMIN_DIR" && pnpm exec vue-tsc && pnpm exec vite build)
+  (cd "$ADMIN_DIR" && run_pnpm exec vue-tsc && run_pnpm exec vite build)
 }
 
 build_chat() {
   log "构建 chat"
-  (cd "$CHAT_DIR" && pnpm exec vite build --mode=production)
+  (cd "$CHAT_DIR" && run_pnpm exec vite build --mode=production)
 }
 
 build_service() {
   log "构建 service"
-  (cd "$SERVICE_DIR" && pnpm run build:test)
+  (cd "$SERVICE_DIR" && run_pnpm run build:test)
 }
 
 sync_frontend_assets() {
