@@ -7,12 +7,15 @@ SERVICE_DIR="$ROOT_DIR/service"
 CHAT_DIR="$ROOT_DIR/chat"
 ADMIN_DIR="$ROOT_DIR/admin"
 ACADEMIC_DIR="$ROOT_DIR/academic-4.0"
+QUICK_DEPLOY_DIR="$ROOT_DIR/AIWebQuickDeploy"
 
 SERVICE_PM2_NAME="${SERVICE_PM2_NAME:-lens-service}"
 ACADEMIC_PM2_NAME="${ACADEMIC_PM2_NAME:-lens-academic}"
 INSTALL_ACADEMIC="${INSTALL_ACADEMIC:-1}"
 START_DOCKER_DEPS="${START_DOCKER_DEPS:-0}"
 ENABLE_PM2_STARTUP="${ENABLE_PM2_STARTUP:-1}"
+PACKAGE_AIWEBQUICKDEPLOY="${PACKAGE_AIWEBQUICKDEPLOY:-1}"
+QUICK_DEPLOY_ONLY="${QUICK_DEPLOY_ONLY:-0}"
 ACADEMIC_PYTHON_BIN="${ACADEMIC_PYTHON_BIN:-}"
 ACADEMIC_PYTHON_VERSION="${ACADEMIC_PYTHON_VERSION:-3.12.12}"
 ACADEMIC_PYTHON=""
@@ -160,6 +163,32 @@ sync_frontend_assets() {
   cp -R "$CHAT_DIR/dist/." "$SERVICE_DIR/public/chat/"
 }
 
+package_aiwebquickdeploy() {
+  if [ "$PACKAGE_AIWEBQUICKDEPLOY" != "1" ]; then
+    warn "已跳过 AIWebQuickDeploy 部署包生成（PACKAGE_AIWEBQUICKDEPLOY=$PACKAGE_AIWEBQUICKDEPLOY）"
+    return
+  fi
+
+  log "生成 AIWebQuickDeploy 轻量部署包"
+  rm -rf "$QUICK_DEPLOY_DIR/dist" "$QUICK_DEPLOY_DIR/public" "$QUICK_DEPLOY_DIR/logs"
+  mkdir -p \
+    "$QUICK_DEPLOY_DIR/dist" \
+    "$QUICK_DEPLOY_DIR/public/admin" \
+    "$QUICK_DEPLOY_DIR/public/chat" \
+    "$QUICK_DEPLOY_DIR/public/file" \
+    "$QUICK_DEPLOY_DIR/logs"
+
+  cp -R "$SERVICE_DIR/dist/." "$QUICK_DEPLOY_DIR/dist/"
+  cp -R "$ADMIN_DIR/dist/." "$QUICK_DEPLOY_DIR/public/admin/"
+  cp -R "$CHAT_DIR/dist/." "$QUICK_DEPLOY_DIR/public/chat/"
+  cp "$SERVICE_DIR/package.json" "$QUICK_DEPLOY_DIR/package.json"
+  cp "$SERVICE_DIR/pnpm-lock.yaml" "$QUICK_DEPLOY_DIR/pnpm-lock.yaml"
+  cp "$SERVICE_DIR/pm2.conf.json" "$QUICK_DEPLOY_DIR/pm2.conf.json"
+  if [ -f "$SERVICE_DIR/.env.example" ]; then
+    cp "$SERVICE_DIR/.env.example" "$QUICK_DEPLOY_DIR/.env.example"
+  fi
+}
+
 install_academic_deps() {
   if [ "$INSTALL_ACADEMIC" != "1" ]; then
     warn "已跳过 academic-4.0 依赖安装（INSTALL_ACADEMIC=$INSTALL_ACADEMIC）"
@@ -267,7 +296,9 @@ main() {
   require_cmd npm
   ensure_pnpm
   ensure_pm2
-  ensure_service_env
+  if [ "$QUICK_DEPLOY_ONLY" != "1" ]; then
+    ensure_service_env
+  fi
   maybe_start_docker_deps
 
   pnpm_install "$ADMIN_DIR"
@@ -278,6 +309,13 @@ main() {
   build_chat
   build_service
   sync_frontend_assets
+  package_aiwebquickdeploy
+
+  if [ "$QUICK_DEPLOY_ONLY" = "1" ]; then
+    log "已完成构建并生成 AIWebQuickDeploy 部署包，跳过服务启动（QUICK_DEPLOY_ONLY=1）"
+    log "部署包目录：$QUICK_DEPLOY_DIR"
+    return
+  fi
 
   install_academic_deps
   start_service

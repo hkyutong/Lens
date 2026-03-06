@@ -1,0 +1,8 @@
+dist/
+public/
+logs/
+node_modules/
+package.json
+pnpm-lock.yaml
+pm2.conf.json
+.env.example

@@ -25,6 +25,7 @@ chmod +x build.sh
 - 安装 `admin/chat/service` 依赖
 - 构建 `admin/chat/service`
 - 将前台与后台产物同步到 `service/public`
+- 生成 `AIWebQuickDeploy/` 轻量部署包（含 `service dist + admin/chat dist`）
 - 创建 `academic-4.0/venv` 并安装 Python 依赖
 - 使用 PM2 启动 `lens-service` 与 `lens-academic`
 - 检查 `9520` 与 `38000` 端口是否成功拉起
@@ -41,6 +42,8 @@ chmod +x build.sh
   说明：显式指定学术服务要求的 Python 精确版本，默认即 `3.12.12`。
 - `ENABLE_PM2_STARTUP=0 ./build.sh`
   说明：跳过 PM2 开机自启配置。
+- `QUICK_DEPLOY_ONLY=1 ./build.sh`
+  说明：只构建并生成 `AIWebQuickDeploy/` 部署包，不在当前机器启动服务。
 
 ## 3. 环境准备
 
@@ -64,6 +67,31 @@ npm install -g pm2
 ```bash
 git clone git@github.com:hkyutong/Lens.git
 cd Lens
+```
+
+### 3.3 轻量部署包（AIWebQuickDeploy）
+
+如果你希望先在构建机打包，再把产物上传到目标服务器，可执行：
+
+```bash
+QUICK_DEPLOY_ONLY=1 ./build.sh
+```
+
+生成后的 `AIWebQuickDeploy/` 包含：
+
+- `dist/`：`service` 编译产物
+- `public/admin/`：后台产物
+- `public/chat/`：前台产物
+- `package.json` / `pnpm-lock.yaml`
+- `pm2.conf.json`
+- `start.sh`
+
+目标服务器只需把整个 `AIWebQuickDeploy/` 目录上传过去，然后执行：
+
+```bash
+cd AIWebQuickDeploy
+chmod +x start.sh
+./start.sh
 ```
 
 ## 4. 配置 service/.env
