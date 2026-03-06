@@ -1,7 +1,7 @@
 # 更新日志
 
 ## 0.0.19 (2026-03-07)
-- 修复前台初始化配置请求的域名参数兜底：`chat/src/store/modules/auth/index.ts` 的 `getGlobalConfig` 现在默认回退到浏览器当前 origin，不再发出 `queryFront?domain=` 这种空域名请求。
+- 修复前台初始化配置请求的域名参数问题：`chat/src/main.ts`、`chat/src/store/modules/auth/index.ts`、`chat/src/api/config.ts` 不再默认把站点域名拼进 `/config/queryFront` 查询串，避免生产站点层因 `domain=https://...` 或空 `domain` 触发额外拦截；前端默认改为直接请求 `/config/queryFront`。
 - 加固前台域名同步逻辑：`service/src/modules/globalConfig/globalConfig.service.ts` 现在会规范化 `domain`，仅在拿到有效的 `scheme://host` 后才更新站点域名配置；空值或非法值会自动回退到反向代理请求头，不再把空域名写回数据库配置。
 
 ## 0.0.18 (2026-03-07)

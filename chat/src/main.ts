@@ -63,10 +63,7 @@ async function bootstrap() {
   printYutoLensInfo()
   printAppInfo('YutoLens', '5.0.1')
 
-  const domain = `${window.location.protocol}//${window.location.hostname}${
-    window.location.port ? `:${window.location.port}` : ''
-  }`
-  authStore.getGlobalConfig(domain).catch(() => {})
+  authStore.getGlobalConfig().catch(() => {})
 
   // 安装插件
   app.use(VueViewer)
