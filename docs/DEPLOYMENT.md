@@ -91,8 +91,13 @@ QUICK_DEPLOY_ONLY=1 ./build.sh
 ```bash
 cd AIWebQuickDeploy
 chmod +x start.sh
-./start.sh
+sudo -u www -H bash -lc 'cd /你的部署目录/AIWebQuickDeploy && ./start.sh'
 ```
+
+说明：
+
+- `AIWebQuickDeploy/start.sh` 建议始终使用同一个业务用户执行，例如 `www`
+- 不要混用 `root` 与 `www` 分别管理 `YutoLens` / `lens-academic`，否则 PM2 会分裂为两套进程列表
 
 ## 4. 配置 service/.env
 

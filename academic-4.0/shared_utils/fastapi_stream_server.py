@@ -24,6 +24,7 @@ import asyncio
 import threading
 import traceback
 import sys
+import tempfile
 from fastapi.websockets import WebSocketState
 from loguru import logger
 from queue import Queue
@@ -46,8 +47,28 @@ ACADEMIC_LOG_PATH = os.path.abspath(
 )
 
 
+def _iter_academic_log_paths():
+    env_path = os.environ.get("ACADEMIC_LOG_FILE")
+    pm2_home = os.environ.get("PM2_HOME")
+    candidates = []
+    if env_path:
+        candidates.append(os.path.abspath(env_path))
+    else:
+        candidates.append(os.path.join(PROJECT_ROOT, "academic.log"))
+    if pm2_home:
+        candidates.append(os.path.join(pm2_home, "logs", "lens-academic.log"))
+    candidates.append(os.path.join(tempfile.gettempdir(), "lens-academic", "academic.log"))
+    seen = set()
+    for path in candidates:
+        normalized = os.path.abspath(path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        yield normalized
+
+
 def _setup_academic_logger():
-    os.makedirs(os.path.dirname(ACADEMIC_LOG_PATH), exist_ok=True)
+    global ACADEMIC_LOG_PATH
     logger.remove()
     logger.add(
         sys.stderr,
@@ -56,15 +77,27 @@ def _setup_academic_logger():
         backtrace=False,
         diagnose=False,
     )
-    logger.add(
-        ACADEMIC_LOG_PATH,
-        level="INFO",
-        encoding="utf-8",
-        enqueue=True,
-        backtrace=False,
-        diagnose=False,
-        rotation="20 MB",
-        retention=10,
+    last_error = None
+    for candidate in _iter_academic_log_paths():
+        try:
+            os.makedirs(os.path.dirname(candidate), exist_ok=True)
+            logger.add(
+                candidate,
+                level="INFO",
+                encoding="utf-8",
+                enqueue=True,
+                backtrace=False,
+                diagnose=False,
+                rotation="20 MB",
+                retention=10,
+            )
+            ACADEMIC_LOG_PATH = candidate
+            return
+        except Exception as exc:
+            last_error = exc
+    ACADEMIC_LOG_PATH = "stderr-only"
+    logger.warning(
+        f"Academic log file init failed, fallback to stderr only: {last_error}"
     )
 
 

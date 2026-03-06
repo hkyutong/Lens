@@ -9,6 +9,10 @@ log() {
   printf '[AIWebQuickDeploy] %s\n' "$*"
 }
 
+warn() {
+  printf '[AIWebQuickDeploy][WARN] %s\n' "$*" >&2
+}
+
 die() {
   printf '[AIWebQuickDeploy][ERROR] %s\n' "$*" >&2
   exit 1
@@ -42,6 +46,10 @@ ensure_pm2() {
 
 ensure_pnpm
 ensure_pm2
+
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+  warn "当前以 root 运行，将写入 root 的 PM2_HOME。生产环境建议统一使用同一业务用户执行，例如：sudo -u www -H bash -lc 'cd $ROOT_DIR && ./start.sh'"
+fi
 
 [ -f "$ROOT_DIR/.env" ] || die "缺少 .env，请先补齐部署配置"
 [ -f "$ROOT_DIR/package.json" ] || die "缺少 package.json，请确认当前目录是 AIWebQuickDeploy"

@@ -126,6 +126,8 @@
 - 同步替换导出模板中的品牌文案：`shared_utils/advanced_markdown_format.py`、`crazy_functions/pdf_fns/report_template_v2.html`、`Conversation_To_File.py`、`doc_fns/review_fns` 的 Word/TXT/BibTeX 标题统一改为 `Lens ｜昱镜`。
 - 同步替换运行期可见提示文案：欢迎语与 AutoGen 等待提示（`themes/welcome.js`、`waifu-tips.js`、`agent_fns/pipe.py`）不再显示 `GPT-Academic`。
 - 新增统一聊天输出清洗：`academic-4.0/toolbox.py` 在 `update_ui` 前自动移除 `函数插件作者/贡献者` 文案与 `[Local Message]` 前缀，并去重重复的 Token 截断警告。
+- 修复学术服务日志权限崩溃：`academic-4.0/shared_utils/fastapi_stream_server.py` 的学术日志初始化改为自动尝试 `ACADEMIC_LOG_FILE -> PM2_HOME/logs -> /tmp/lens-academic/academic.log`，即使项目目录日志文件不可写也不会导致 `lens-academic` 启动失败。
+- 增强轻量部署防误用提示：`AIWebQuickDeploy/start.sh` 现在会在 root 运行时显式警告 PM2 用户分裂风险，部署文档同步要求统一使用同一业务用户启动。
 - 恢复 AIWebQuickDeploy 轻量部署包链路：`build.sh` 现在会自动把 `service dist` 与 `admin/chat dist` 同步到 `AIWebQuickDeploy/`，并新增 `QUICK_DEPLOY_ONLY=1` 只打包不启动模式。
 - 新增 `AIWebQuickDeploy/start.sh` 与配套说明文档，目标服务器可直接安装运行时依赖并用 PM2 启动 `YutoLens`。
 - 修复 Linux 部署学术服务缺依赖问题：`academic-4.0/requirements.txt` 补充 `markdown`、`pymdown-extensions`、`python-markdown-math`、`pygments`，避免 `lens-academic` 因 `ModuleNotFoundError: markdown` 启动失败。
