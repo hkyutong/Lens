@@ -1,5 +1,12 @@
 # 更新日志
 
+## 0.0.15 (2026-03-06)
+- 将根目录 `build.sh` 从“本地打包拷贝脚本”重构为“Linux 服务器一键部署启动脚本”：自动检查 `node/npm/pnpm/pm2/python3`、安装 `admin/chat/service` 依赖、构建全部前后端、同步静态资源到 `service/public`、创建 `academic-4.0/venv` 并安装依赖、通过 PM2 启动 `lens-service` 与 `lens-academic`，并在启动后做 `9520/38000` 端口健康检查。
+- 新增部署脚本可选能力：支持 `START_DOCKER_DEPS=1` 一键拉起本地 `mysql/redis` 容器依赖，支持 `INSTALL_ACADEMIC=0` 跳过学术引擎依赖安装，方便在不同 Linux 服务器环境复用。
+- 同步更新部署文档 `docs/DEPLOYMENT.md`：改为以 `./build.sh` 为主入口，明确当前生产部署方式是由 `service` 统一托管前台 `/` 与后台 `/admin` 静态资源，不再要求单独起 `9000/9002` 开发服务器。
+- 补充学术部署约束：`build.sh` 现在默认优先使用 `python3.12` 创建 `academic-4.0/venv`，并强制校验学术解释器精确版本为 `3.12.12`；同时补上 PM2 开机自启配置逻辑，使 `lens-academic` 在异常退出和系统重启后都能继续常驻运行。
+- 重写官网产品文案 `docs/PRODUCT_PAGE_COPY.md`：调整为更接近 Prism 风格的用户价值表达，聚焦首屏、价值主张、使用流程、场景与 CTA，不暴露内部实现细节。
+
 ## 0.0.14 (2026-03-05)
 - 清理仓库敏感信息：`academic-4.0/config.py` 与 `academic-4.0/docs/use_audio.md` 中的真实/高风险密钥示例全部替换为安全占位符，避免触发 GitHub Push Protection。
 - 发布链路安全加固：准备重新整理提交历史后推送至 `git@github.com:hkyutong/Lens.git`，确保远程仓库不包含历史密钥痕迹。
