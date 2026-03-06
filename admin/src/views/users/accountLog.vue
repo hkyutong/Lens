@@ -59,6 +59,12 @@ meta:
     nickname: string;
   }
 
+  function getAvatarText(row: UserItem) {
+    const email = (row?.email || '').split('@')[0];
+    const base = email || row?.nickname || row?.username || '';
+    return String(base).slice(0, 2).toUpperCase();
+  }
+
   const rules = reactive<FormRules>({
     model3Count: [{ required: true, message: '请填写赠送基础额度', trigger: 'blur' }],
     model4Count: [{ required: true, message: '请填写赠送高级额度', trigger: 'blur' }],
@@ -149,7 +155,9 @@ meta:
       <el-table v-loading="loading" border :data="tableData" style="width: 100%" size="large">
         <el-table-column prop="avatar" label="用户头像" width="120" fixed>
           <template #default="scope">
-            <el-avatar :style="{ background: '#22c55e', color: '#fff' }">{{ getAvatarText(scope.row) }}</el-avatar>
+            <el-avatar :style="{ background: '#22c55e', color: '#fff' }">{{
+              getAvatarText(scope.row)
+            }}</el-avatar>
           </template>
         </el-table-column>
         <el-table-column prop="username" label="用户名称" width="150" fixed />

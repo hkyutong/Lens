@@ -40,13 +40,21 @@ meta:
     size: 10,
   });
 
-  const tableData = ref([])
-const getAvatarText = (row) => {
-  const email = (row?.email || row?.userInfo?.email || '').split('@')[0]
-  const base = email || row?.username || row?.userInfo?.username || ''
-  return String(base).slice(0, 2).toUpperCase()
-}
-;
+  interface AvatarUserRow {
+    email?: string;
+    username?: string;
+    userInfo?: {
+      email?: string;
+      username?: string;
+    };
+  }
+
+  const tableData = ref([]);
+  const getAvatarText = (row: AvatarUserRow) => {
+    const email = (row?.email || row?.userInfo?.email || '').split('@')[0];
+    const base = email || row?.username || row?.userInfo?.username || '';
+    return String(base).slice(0, 2).toUpperCase();
+  };
   const visible = ref(false);
   const form = reactive({
     status: '0',
@@ -165,7 +173,10 @@ const getAvatarText = (row) => {
         <el-table-column fixed prop="userInfo.username" label="用户名称" width="150" />
         <el-table-column prop="userInfo.avatar" label="头像" width="120">
           <template #default="scope">
-            <el-avatar :style="{ background: '#22c55e', color: '#fff', height: '50px', width: '50px' }">{{ getAvatarText(scope.row?.userInfo || scope.row) }}</el-avatar>
+            <el-avatar
+              :style="{ background: '#22c55e', color: '#fff', height: '50px', width: '50px' }"
+              >{{ getAvatarText(scope.row?.userInfo || scope.row) }}</el-avatar
+            >
           </template>
         </el-table-column>
         <el-table-column prop="userInfo.email" label="邮箱" width="200" />
