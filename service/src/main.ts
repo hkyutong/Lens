@@ -1,3 +1,4 @@
+import './preload-env';
 import { TypeOrmQueryFailedFilter } from '@/common/filters/typeOrmQueryFailed.filter';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
 import { CustomLoggerService } from '@/common/logger/custom-logger.service';
@@ -8,14 +9,12 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as compression from 'compression';
 import { randomBytes } from 'crypto';
-import * as Dotenv from 'dotenv';
 import * as fs from 'fs';
 import Redis from 'ioredis';
 import * as path from 'path';
 import 'reflect-metadata';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/allExceptions.filter';
-Dotenv.config({ path: '.env' });
 
 const isTransientInfraError = (error: any) => {
   const code = String(error?.code || '');

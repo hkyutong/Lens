@@ -2,6 +2,7 @@
   "apps": {
     "name": "YutoLens",
     "script": "./dist/main.js",
+    "env_file": ".env",
     "watch": false,
     "ignore_watch": ["node_modules", "logs", "public/file"],
     "env": {
