@@ -36,7 +36,6 @@ const clearCacheEnabled = computed(() => Number(authStore.globalConfig?.clearCac
 function clearAllCache(forceClear = false) {
   // 如果未启用清除缓存且未指定强制清除，则跳过
   if (!clearCacheEnabled.value && !forceClear) {
-    console.log('缓存清除未启用')
     return
   }
 
@@ -44,7 +43,6 @@ function clearAllCache(forceClear = false) {
   const isUserLoggedIn = authStore.isLogin
   // 如果用户已登录，则不清除缓存
   if (isUserLoggedIn) {
-    console.log('用户已登录，跳过缓存清除')
     return
   }
 
@@ -113,7 +111,6 @@ function clearAllCache(forceClear = false) {
     })
   }
 
-  console.log('本地缓存已清除')
 }
 
 async function loadBaiduCode() {

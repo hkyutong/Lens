@@ -725,7 +725,6 @@ const processImageFile = async (file: File) => {
 }
 
 const handleFileSelect = async (event: Event) => {
-  console.log('文件选择事件触发')
   const input = event.target as HTMLInputElement
   const files = input?.files
   if (!files || files.length === 0) return
@@ -787,7 +786,6 @@ const handleFileSelect = async (event: Event) => {
 }
 
 const handleImageSelect = async (event: Event) => {
-  console.log('图片选择事件触发')
   const input = event.target as HTMLInputElement
   const files = input?.files
   if (!files || files.length === 0) return

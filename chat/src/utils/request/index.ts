@@ -98,14 +98,6 @@ function http<T = any>({
   const params =
     method === 'GET' ? (requestData ?? {}) : isRawBody ? requestData : (requestData ?? {})
 
-  if (url.includes('getOldQRCode')) {
-    console.log('[请求调试] GET请求参数转换:', {
-      url,
-      originalData: data,
-      convertedParams: params,
-    })
-  }
-
   return method === 'GET'
     ? request.get(url, { params, signal, onDownloadProgress }).then(successHandler, failHandler)
     : request

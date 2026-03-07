@@ -1273,7 +1273,6 @@ const copyTimeoutsMap = new Map()
 
 // 复制代码的处理函数
 function handleCodeCopy(blockId: string, element: HTMLElement) {
-  console.log('复制开始，blockId:', blockId)
   // 如果已经是"已复制"状态，则不重复处理
   const copiedText = element.querySelector('.copied-text')
   if (copiedText && getComputedStyle(copiedText).display !== 'none') return
@@ -1296,7 +1295,6 @@ function handleCodeCopy(blockId: string, element: HTMLElement) {
       navigator.clipboard
         .writeText(codeElement.textContent)
         .then(() => {
-          console.log('使用navigator.clipboard成功复制')
           // 成功复制后更新UI
           updateCopyButtonState(element, blockId)
         })
@@ -1325,7 +1323,6 @@ function fallbackCopy(text: string | null, element: HTMLElement, blockId: string
 
   try {
     copyText({ text: text, origin: true })
-    console.log('使用fallback方法复制成功')
     updateCopyButtonState(element, blockId)
   } catch (error) {
     console.error('fallback复制失败:', error)
@@ -1363,7 +1360,6 @@ function updateCopyButtonState(element: HTMLElement, blockId: string) {
 
   // 设置新的定时器，3秒后恢复原始状态
   const timeoutId = setTimeout(() => {
-    console.log('恢复原始按钮内容')
     if (element) {
       const copyIcon = element.querySelector('.copy-icon')
       const checkIcon = element.querySelector('.check-icon')
@@ -1811,7 +1807,6 @@ onMounted(() => {
 
   // 添加复制功能
   const setupCodeCopy = () => {
-    console.log('设置代码复制功能')
     // 选择包含btn-copy类的按钮
     const copyButtons = document.querySelectorAll('.btn-copy[data-block-id]')
     copyButtons.forEach(button => {
@@ -1827,7 +1822,6 @@ onMounted(() => {
       button.addEventListener('click', event => {
         event.stopPropagation()
         event.preventDefault()
-        console.log('复制按钮被点击, blockId:', blockId)
         handleCodeCopy(blockId, button as HTMLElement)
       })
 

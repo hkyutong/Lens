@@ -189,7 +189,6 @@ export const useGlobalStore = defineStore('global-store', {
     },
 
     updatePythonContent(content: string) {
-      console.log('updatePythonContent', content)
       this.pythonContent = content
     },
 

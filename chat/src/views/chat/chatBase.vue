@@ -299,7 +299,6 @@ watch(
 onMounted(async () => {
   try {
     await authStore.getUserInfo()
-    console.log('用户信息获取成功', authStore.userInfo)
   } catch (error) {
     console.error('获取用户信息失败:', error)
   }

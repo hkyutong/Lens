@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.21 (2026-03-07)
+- 修复轻量部署包复用旧 PM2 进程导致环境变量不刷新的问题：`build.sh` 在生成 `AIWebQuickDeploy/package.json` 时将 `pnpm start` 与 `pnpm start:daemon` 统一改为调用 `bash ./start.sh`，确保每次部署都先删除旧的 `YutoLens` 进程，再基于最新 `.env` 与 `pm2.conf.json` 重新创建进程，不再因为 `restartProcessId` 沿用旧的 `ADMIN_SERVE_ROOT`。
+- 清理聊天前端高频调试噪声：移除 `chat/src/App.vue`、`chat/src/utils/request/index.ts`、`chat/src/store/modules/global/index.ts`、`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/components/Message/Text/index.vue`、`chat/src/components/common/ImageViewer/index.vue` 中的生产路径 `console.log` 调试输出，减少前端控制台垃圾和运行时噪声。
+
 ## 0.0.20 (2026-03-07)
 - 修复后台自定义路径在生产部署中不生效：新增 `service/src/preload-env.ts`，并在 `service/src/main.ts` 中先加载 `.env` 再导入 `AppModule`，确保 `ADMIN_SERVE_ROOT` 等在模块初始化阶段就能读取到，避免后台路径始终回退到 `/admin`。
 - 加固 PM2 运行时环境注入：`service/pm2.conf.json` 与 `AIWebQuickDeploy/pm2.conf.json` 新增 `env_file: ".env"`，确保通过 `pm2 start pm2.conf.json`、`AIWebQuickDeploy/start.sh`、宝塔 PM2 等方式启动时都能稳定读取部署目录下的 `.env`。

@@ -202,6 +202,15 @@ package_aiwebquickdeploy() {
   cp "$SERVICE_DIR/package.json" "$QUICK_DEPLOY_DIR/package.json"
   cp "$SERVICE_DIR/pnpm-lock.yaml" "$QUICK_DEPLOY_DIR/pnpm-lock.yaml"
   cp "$SERVICE_DIR/pm2.conf.json" "$QUICK_DEPLOY_DIR/pm2.conf.json"
+  node - "$QUICK_DEPLOY_DIR/package.json" <<'NODE'
+const fs = require('fs');
+const path = process.argv[2];
+const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+pkg.scripts = pkg.scripts || {};
+pkg.scripts.start = 'bash ./start.sh';
+pkg.scripts['start:daemon'] = 'bash ./start.sh';
+fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+NODE
   if [ -f "$SERVICE_DIR/.env.example" ]; then
     cp "$SERVICE_DIR/.env.example" "$QUICK_DEPLOY_DIR/.env.example"
   fi
