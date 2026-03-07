@@ -91,13 +91,14 @@ QUICK_DEPLOY_ONLY=1 ./build.sh
 ```bash
 cd AIWebQuickDeploy
 chmod +x start.sh
-sudo -u www -H bash -lc 'cd /你的部署目录/AIWebQuickDeploy && ./start.sh'
+./start.sh
 ```
 
 说明：
 
-- `AIWebQuickDeploy/start.sh` 建议始终使用同一个业务用户执行，例如 `www`
-- 不要混用 `root` 与 `www` 分别管理 `YutoLens` / `lens-academic`，否则 PM2 会分裂为两套进程列表
+- 部署时请自行选择一个固定的业务用户执行，并始终保持一致
+- 不要混用不同系统用户分别管理 `YutoLens` / `lens-academic`，否则 PM2 会分裂为多套进程列表
+- 本文档不预设你必须使用 `root`、`www` 或其他特定用户，按你的服务器规范执行即可
 
 ## 4. 配置 service/.env
 
@@ -120,7 +121,7 @@ cp .env.example .env
 - 学术服务虚拟环境固定使用 Python `3.12.12`，默认优先取 `python3.12`
 - 如果服务器上存在多个 Python，可用 `ACADEMIC_PYTHON_BIN=python3.12 ./build.sh` 显式指定
 - `build.sh` 会通过 PM2 守护 `lens-academic`，服务异常退出后 PM2 会自动拉起
-- 如果脚本以 `root` 执行且系统支持 `systemd`，会自动配置 PM2 开机自启；否则脚本会给出手动执行提示
+- 是否启用 PM2 开机自启由你的部署策略决定；建议在确认进程归属与运行用户一致后，再统一执行 `pm2 startup` 与 `pm2 save`
 
 ## 5. 生产建议（强烈建议）
 
@@ -147,7 +148,7 @@ ss -lntp | grep -E '9520|38000'
 访问入口：
 
 - 前台：`http://127.0.0.1:9520/`
-- 后台：`http://127.0.0.1:9520/admin`
+- 后台：`http://127.0.0.1:9520/<你的 ADMIN_SERVE_ROOT>/`
 
 日志排查：
 

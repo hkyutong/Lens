@@ -19,10 +19,21 @@ def get_core_functions():
                                 r"Below is a paragraph from an academic paper. Polish the writing to meet the academic style, "
                                 r"improve the spelling, grammar, clarity, concision and overall readability. When necessary, rewrite the whole sentence. "
                                 r"Firstly, you must provide the polished paragraph in Chinese. "
-                                r"Secondly, you should list all the modifications in Chinese, and explain the reasons for these modifications and the modified terms in a Markdown table in Chinese.",
+                                r"Secondly, you must output a Markdown table in Chinese with exactly these three columns: "
+                                r"`修改前原文片段 | 修改后片段 | 修改原因与解释`。 "
+                                r"Each row must cover only one minimal edit unit, preferably a short sentence or a short clause. "
+                                r"Do not merge multiple sentences or multiple edits into one row. "
+                                r"Keep each cell short and quote only the necessary fragment instead of copying a whole long paragraph. "
+                                r"The reason column must explain only that single edit in concise Chinese.",
                             text_show_chinese=
                                 r"作为一名中文学术论文写作改进助理，你的任务是必须用中文改进所提供文本的拼写、语法、清晰、简洁和整体可读性，"
-                                r"同时必须用中文分解长句，减少重复，并提供改进建议。请先用中文提供文本的更正版本，然后在markdown表格中列出修改的内容，并给出修改的理由和修改后的术语:"
+                                r"同时必须用中文分解长句，减少重复，并提供改进建议。"
+                                r"请先用中文提供文本的更正版本，然后输出一个 Markdown 表格，列名必须严格为："
+                                r"`修改前原文片段 | 修改后片段 | 修改原因与解释`。"
+                                r"表格必须按“小句/短片段”粒度拆分，每一行只允许描述一个局部修改，"
+                                r"不要把多个句子或多处改动合并成一行。"
+                                r"每个单元格尽量简短，只摘录必要片段，不要整段照抄；"
+                                r"第三列只解释这一处修改，说明要简洁准确："
                         ) + "\n\n",
             # [2*] 后缀字符串，会被加在你的输入之后。例如，配合前缀可以把你的输入内容用引号圈起来
             "Suffix":   r"",
@@ -44,7 +55,12 @@ def get_core_functions():
             "Prefix":   r"Below is a paragraph from an academic paper. Polish the writing to meet the academic style, " +
                         r"improve the spelling, grammar, clarity, concision and overall readability. When necessary, rewrite the whole sentence. " +
                         r"Firstly, you must provide the polished paragraph in English. "
-                        r"Secondly, you should list all your modification and explain the reasons to do so in markdown table." + "\n\n",
+                        r"Secondly, you must output a Markdown table with exactly these three Chinese column names: "
+                        r"`修改前原文片段 | 修改后片段 | 修改原因与解释`. "
+                        r"Each row must cover only one minimal edit unit, preferably one short sentence or one short clause. "
+                        r"Do not merge multiple sentences or multiple edits into one row. "
+                        r"Keep every table cell short and quote only the necessary fragment instead of copying a whole long paragraph. "
+                        r"The third column must explain that single edit in concise Chinese." + "\n\n",
             "Suffix":   r"",
         },
 
