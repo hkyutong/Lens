@@ -12,6 +12,7 @@ export class SpaController {
   private readonly publicPath = join(process.cwd(), 'public/chat');
   private readonly exists: boolean;
   private readonly adminPath: string;
+  private readonly legacyAdminPath = '/admin';
 
   constructor() {
     // 检查index.html是否存在
@@ -31,7 +32,8 @@ export class SpaController {
     if (
       req.path.startsWith('/api') ||
       req.path.startsWith('/file') ||
-      req.path.startsWith(this.adminPath)
+      req.path.startsWith(this.adminPath) ||
+      (this.adminPath !== this.legacyAdminPath && req.path.startsWith(this.legacyAdminPath))
     ) {
       return next();
     }

@@ -18,9 +18,20 @@ import {
 } from './routes';
 
 const { isLoading } = useNProgress();
+const runtimeAdminBase = (() => {
+  if (import.meta.env.DEV) {
+    return import.meta.env.VITE_BASE_PATH || '/';
+  }
+  if (typeof window === 'undefined') {
+    return '/';
+  }
+  const pathname = window.location.pathname || '/';
+  return pathname.endsWith('/') ? pathname : `${pathname}/`;
+})();
 
 const router = createRouter({
-  history: createWebHashHistory(import.meta.env.VITE_BASE_PATH),
+  // 生产环境按当前访问路径自适应，避免后台入口从 /admin 改到随机路径后路由仍写死旧前缀
+  history: createWebHashHistory(runtimeAdminBase),
   routes:
     useSettingsStore(pinia).settings.app.routeBaseOn === 'filesystem'
       ? constantRoutesByFilesystem

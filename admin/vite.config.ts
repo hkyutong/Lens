@@ -10,6 +10,7 @@ import createVitePlugins from './vite/plugins';
 // https://vitejs.dev/config/
 export default async ({ mode, command }) => {
   const env = loadEnv(mode, process.cwd());
+  const isBuild = command === 'build';
   // 全局 scss 资源
   const scssResources = [];
   fs.readdirSync('src/assets/styles/resources').forEach((dirname) => {
@@ -22,7 +23,8 @@ export default async ({ mode, command }) => {
   const enableTypeCheck = env.VITE_ENABLE_TYPE_CHECK === 'true';
 
   return defineConfig({
-    base: env.VITE_BASE_PATH,
+    // 生产环境改为相对资源路径，避免后台入口换路径后仍回落到 /admin 资产前缀
+    base: isBuild ? './' : env.VITE_BASE_PATH,
     // 开发服务器选项 https://cn.vitejs.dev/config/#server-options
     server: {
       open: false,

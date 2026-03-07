@@ -3,6 +3,8 @@
 ## 0.0.21 (2026-03-07)
 - 修复轻量部署包复用旧 PM2 进程导致环境变量不刷新的问题：`build.sh` 在生成 `AIWebQuickDeploy/package.json` 时将 `pnpm start` 与 `pnpm start:daemon` 统一改为调用 `bash ./start.sh`，确保每次部署都先删除旧的 `YutoLens` 进程，再基于最新 `.env` 与 `pm2.conf.json` 重新创建进程，不再因为 `restartProcessId` 沿用旧的 `ADMIN_SERVE_ROOT`。
 - 清理聊天前端高频调试噪声：移除 `chat/src/App.vue`、`chat/src/utils/request/index.ts`、`chat/src/store/modules/global/index.ts`、`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/components/Message/Text/index.vue`、`chat/src/components/common/ImageViewer/index.vue` 中的生产路径 `console.log` 调试输出，减少前端控制台垃圾和运行时噪声。
+- 修复后台自定义入口与后台前端打包基路径脱节的问题：`admin/vite.config.ts` 生产构建改为相对资源路径，`admin/src/router/index.ts` 生产环境按当前访问路径自适应 `hash` 路由基座，避免后台入口改为 `/alice3306` 后 HTML 仍引用 `/admin/*` 资源、路由仍回跳旧前缀。
+- 修复旧 `/admin` 地址在自定义后台入口启用后被聊天前台 SPA 误吞的问题：`service/src/modules/spa/spa.controller.ts` 现在会同时保留对当前后台入口和遗留 `/admin` 的排除，避免旧后台地址误返回前台页面。
 
 ## 0.0.20 (2026-03-07)
 - 修复后台自定义路径在生产部署中不生效：新增 `service/src/preload-env.ts`，并在 `service/src/main.ts` 中先加载 `.env` 再导入 `AppModule`，确保 `ADMIN_SERVE_ROOT` 等在模块初始化阶段就能读取到，避免后台路径始终回退到 `/admin`。
