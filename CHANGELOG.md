@@ -1,6 +1,7 @@
 # 更新日志
 
 ## 0.0.22 (2026-03-08)
+- 调整中英文润色表格结构：`academic-4.0/core_functional.py` 将润色结果表头从 `修改前原文片段 | 修改后片段 | 修改原因与解释` 改为 `修改前原文片段 | 修改后片段 | 修改原因 | 修改解释`，并要求“原因”只写简短标签、“解释”只解释单一改动，避免两者混写在同一单元格。
 - 移除 `AIWebQuickDeploy/start.sh`：轻量部署包不再内置自动部署脚本，统一改为“人工宝塔 Node 项目部署”模型，避免部署包误导出额外 PM2/用户归属逻辑。
 - 修正轻量部署包启动命令：`build.sh` 生成的 `AIWebQuickDeploy/package.json` 现在将 `pnpm start` 与 `pnpm start:daemon` 统一改为 `node ./dist/main.js`，删除对 `bash ./start.sh` 的隐式依赖，解决宝塔环境中删除 `start.sh` 后 `pnpm start` 直接失败的问题。
 - 更新宝塔部署说明：`AIWebQuickDeploy/README.md` 与 `docs/DEPLOYMENT.md` 删除 `start.sh` 相关文案，只保留 `dist/main.js` 的人工部署路径。
