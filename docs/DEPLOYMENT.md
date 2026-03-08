@@ -86,12 +86,17 @@ QUICK_DEPLOY_ONLY=1 ./build.sh
 - `pm2.conf.json`
 - `start.sh`
 
-目标服务器只需把整个 `AIWebQuickDeploy/` 目录上传过去，然后执行：
+目标服务器只需把整个 `AIWebQuickDeploy/` 目录上传过去。
+
+如果你使用宝塔面板，推荐直接通过“添加 Node 项目”完成部署：
 
 ```bash
-cd AIWebQuickDeploy
-chmod +x start.sh
-./start.sh
+项目目录：AIWebQuickDeploy
+启动文件：dist/main.js
+运行目录：AIWebQuickDeploy
+包管理器：pnpm
+环境变量文件：AIWebQuickDeploy/.env
+端口：使用 .env 中的 PORT（默认 9520）
 ```
 
 说明：
@@ -99,6 +104,7 @@ chmod +x start.sh
 - 部署时请自行选择一个固定的业务用户执行，并始终保持一致
 - 不要混用不同系统用户分别管理 `YutoLens` / `lens-academic`，否则 PM2 会分裂为多套进程列表
 - 本文档不预设你必须使用 `root`、`www` 或其他特定用户，按你的服务器规范执行即可
+- 如果你不是用宝塔，也可以在 `AIWebQuickDeploy/` 目录手工执行 `pnpm install --prod --frozen-lockfile` 后再用你自己的 PM2/守护方案启动 `dist/main.js`
 
 ## 4. 配置 service/.env
 

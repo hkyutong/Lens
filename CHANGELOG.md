@@ -1,6 +1,7 @@
 # 更新日志
 
 ## 0.0.21 (2026-03-07)
+- 调整轻量部署说明为宝塔优先：`AIWebQuickDeploy/README.md` 与 `docs/DEPLOYMENT.md` 现在以“宝塔 Node 项目部署”作为主路径，明确 `AIWebQuickDeploy` 的启动文件应为 `dist/main.js`、运行目录为部署包根目录，`start.sh` 仅保留为命令行兜底方式，不再作为文档中的默认部署入口。
 - 优化中英文润色表格粒度：`academic-4.0/core_functional.py` 中的 `中文润色` 与 `英文润色` 提示词改为强制按“小句/短片段”输出 Markdown 表格，列名统一为 `修改前原文片段 | 修改后片段 | 修改原因与解释`，并明确要求“一行只描述一个局部修改、单元格尽量简短”，减少一整段文本被塞进单个表格单元格的情况。
 - 调整部署文档为用户无关写法：`docs/DEPLOYMENT.md` 不再绑定 `root/www` 这类特定系统用户，改为要求部署者自行选择并始终使用同一个业务用户，避免文档层误导出交叉启动。
 - 修复轻量部署包复用旧 PM2 进程导致环境变量不刷新的问题：`build.sh` 在生成 `AIWebQuickDeploy/package.json` 时将 `pnpm start` 与 `pnpm start:daemon` 统一改为调用 `bash ./start.sh`，确保每次部署都先删除旧的 `YutoLens` 进程，再基于最新 `.env` 与 `pm2.conf.json` 重新创建进程，不再因为 `restartProcessId` 沿用旧的 `ADMIN_SERVE_ROOT`。
