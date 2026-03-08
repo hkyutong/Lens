@@ -240,12 +240,12 @@ const fileParsing = computed(() => {
 
 // 获取模型
 const activeModel = computed(() => {
-  return String(usingPlugin?.value?.parameters || configObj?.value?.modelInfo?.model || '')
+  return String(configObj?.value?.modelInfo?.model || '')
 })
 
 // 获取模型名称
 const activeModelName = computed(() => {
-  return String(usingPlugin?.value?.pluginName || configObj?.value?.modelInfo?.modelName || 'AI')
+  return String(configObj?.value?.modelInfo?.modelName || 'AI')
 })
 
 // 获取模型类型
@@ -255,7 +255,7 @@ const activeModelKeyType = computed(() => {
 
 // 获取模型头像
 const activeModelAvatar = computed(() => {
-  return String(usingPlugin?.value?.pluginImg || configObj?.value?.modelInfo?.modelAvatar || '')
+  return String(configObj?.value?.modelInfo?.modelAvatar || '')
 })
 
 /* 当前对话组是否是应用 */
@@ -690,6 +690,15 @@ const chooseBetterFinalText = (streamText: string, finalText: string) => {
   if (!current) return next
   if (current === next) return next
 
+  const polishHeaderPattern =
+    /\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*(?:修改原因与解释|修改原因\s*\|\s*修改解释)\s*\|/m
+  const countMarkdownTableRows = (value: string) =>
+    String(value || '')
+      .split('\n')
+      .filter(line => /^\s*\|/.test(String(line || '').trim())).length
+  const currentHasPolishTable = polishHeaderPattern.test(current)
+  const nextHasPolishTable = polishHeaderPattern.test(next)
+
   const currentScore = scoreTextStructure(current)
   const nextScore = scoreTextStructure(next)
   const currentHasStructuredMarkdown = /```|^\s*#{1,6}\s+|^\s*[-*]\s+|^\s*\d+[.)、]\s+|^\s*\|/m.test(
@@ -698,6 +707,13 @@ const chooseBetterFinalText = (streamText: string, finalText: string) => {
   const nextHasStructuredMarkdown = /```|^\s*#{1,6}\s+|^\s*[-*]\s+|^\s*\d+[.)、]\s+|^\s*\|/m.test(
     next
   )
+
+  if (currentHasPolishTable && nextHasPolishTable) {
+    const currentRows = countMarkdownTableRows(current)
+    const nextRows = countMarkdownTableRows(next)
+    if (currentRows > nextRows) return current
+    if (currentRows === nextRows && currentScore >= nextScore) return current
+  }
 
   // 优先保留流式阶段已经形成的结构化内容，避免 final 覆盖导致“挤成一段”。
   if (currentHasStructuredMarkdown && !nextHasStructuredMarkdown && currentScore >= nextScore) {
@@ -711,6 +727,11 @@ const chooseBetterFinalText = (streamText: string, finalText: string) => {
   if (next.length >= Math.floor(current.length * 1.15) && nextScore >= currentScore) return next
   return current
 }
+
+const hasStablePolishReasonTable = (value: string) =>
+  /\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|/m.test(
+    normalizeIncomingText(value, { trim: true })
+  )
 
 const extractTextChunk = (payload: any): string => {
   if (!payload) return ''
@@ -854,9 +875,6 @@ const onConversation = async ({
   const messageText = msg || '提问'
 
   let useModel = model || activeModel.value
-  if (usingPlugin.value?.deductType && usingPlugin.value?.deductType !== 0) {
-    useModel = usingPlugin.value?.parameters
-  }
 
   controller.value = new AbortController()
   clearLastError()
@@ -886,32 +904,14 @@ const onConversation = async ({
       // 重新生成/编辑采用同条回复覆盖，不新建 assistant 气泡。
       content: '',
       reasoningText: '',
+      model: useModel,
+      modelName: useModelName,
+      modelType: useModelType,
+      modelAvatar: useModelAvatar,
       loading: true,
       error: false,
       status: 1,
     })
-  }
-  const pruneDuplicateAssistantsForUser = (userIndex: number, keepAssistantIndex: number) => {
-    if (userIndex < 0 || keepAssistantIndex < 0) return
-    const removableIndexes: number[] = []
-    for (let idx = userIndex + 1; idx < activeList.length; idx += 1) {
-      const item = activeList[idx]
-      if (item?.role === 'user') break
-      if (item?.role === 'assistant' && idx !== keepAssistantIndex) {
-        removableIndexes.push(idx)
-      }
-    }
-    if (!removableIndexes.length) return
-    // 从后往前删除，避免索引错位
-    removableIndexes
-      .sort((a, b) => b - a)
-      .forEach(idx => {
-        chatStore.chatList.splice(idx, 1)
-      })
-    const removedBeforeKeep = removableIndexes.filter(idx => idx < keepAssistantIndex).length
-    if (removedBeforeKeep > 0) {
-      assistantIndex = keepAssistantIndex - removedBeforeKeep
-    }
   }
 
   if (overwriteReply && directReplyIndex >= 0) {
@@ -959,23 +959,15 @@ const onConversation = async ({
         }
       }
       if (assistantIndex < 0) {
-        const candidateIndexes: number[] = []
         for (let idx = targetEditIndex + 1; idx < activeList.length; idx += 1) {
           const item = activeList[idx]
           if (item?.role === 'user') break
-          if (item?.role === 'assistant') candidateIndexes.push(idx)
+          if (item?.role === 'assistant') {
+            effectiveReplyChatId = Number(activeList[idx]?.chatId || effectiveReplyChatId || 0)
+            applyAssistantOverwriteState(idx)
+            break
+          }
         }
-        const targetAssistantIndex =
-          candidateIndexes.length > 0 ? candidateIndexes[candidateIndexes.length - 1] : -1
-        if (targetAssistantIndex >= 0) {
-          effectiveReplyChatId = Number(
-            activeList[targetAssistantIndex]?.chatId || effectiveReplyChatId || 0
-          )
-          applyAssistantOverwriteState(targetAssistantIndex)
-        }
-      }
-      if (assistantIndex >= 0) {
-        pruneDuplicateAssistantsForUser(targetEditIndex, assistantIndex)
       }
     }
 
@@ -1046,10 +1038,26 @@ const onConversation = async ({
   let workflowProgress = 0
   let assistantLogId = String(effectiveReplyChatId || '')
   let streamRequestId = ''
+  let preservedStructuredContent = ''
+  let stablePolishTableSnapshot = ''
+  let academicPluginRequestName = ''
+  let academicCoreRequestName = ''
+
+  const isPolishAcademicTask = () =>
+    academicMode.value &&
+    ['中文润色', '英文润色'].includes(
+      String(academicCoreRequestName || academicPluginRequestName || '').trim()
+    )
 
   const patchCurrentAssistant = (payload: Partial<Chat.Chat>) => {
     if (assistantIndex < 0) return
-    updateGroupChatSome(assistantIndex, payload)
+    updateGroupChatSome(assistantIndex, {
+      model: useModel,
+      modelName: useModelName,
+      modelType: useModelType,
+      modelAvatar: useModelAvatar,
+      ...payload,
+    })
   }
 
   const sanitizeStreamChunk = (rawText: string) => {
@@ -1079,6 +1087,9 @@ const onConversation = async ({
     } else {
       fullText = mergeStreamText(fullText, sanitized)
       displayedText = fullText
+      if (isPolishAcademicTask() && hasStablePolishReasonTable(displayedText)) {
+        stablePolishTableSnapshot = normalizeIncomingText(displayedText, { trim: true })
+      }
       updateWorkflowContent(sanitized, fullText === sanitized)
     }
 
@@ -1140,6 +1151,12 @@ const onConversation = async ({
     // 学术后端在“中间流内容被最终结果覆盖”时会发送 resetContent。
     // 这里必须清空已拼接内容，否则会把旧中间态和最终态混在一起，破坏 Markdown 表格结构。
     if (jsonObj?.resetContent) {
+      if (isPolishAcademicTask() && fullText.trim()) {
+        preservedStructuredContent = chooseBetterFinalText(preservedStructuredContent, fullText)
+        if (!stablePolishTableSnapshot && hasStablePolishReasonTable(fullText)) {
+          stablePolishTableSnapshot = normalizeIncomingText(fullText, { trim: true })
+        }
+      }
       fullText = ''
       displayedText = ''
     }
@@ -1158,6 +1175,7 @@ const onConversation = async ({
 
     if (reasoningChunk) appendContent(reasoningChunk, 'reasoning')
     if (contentChunk) appendContent(contentChunk, 'content')
+
     if (finalChunk) {
       const normalizedFinal = normalizeIncomingText(decodeSerializedTextPayload(finalChunk), {
         trim: true,
@@ -1167,9 +1185,13 @@ const onConversation = async ({
         !containsPayloadArtifacts(normalizedFinal) &&
         (!academicMode.value || !shouldDropAcademicChunk(normalizedFinal))
       ) {
-        const preferred = academicMode.value
-          ? normalizedFinal
-          : chooseBetterFinalText(fullText, normalizedFinal)
+        const streamBaseline = stablePolishTableSnapshot || preservedStructuredContent || fullText
+        const preferred =
+          isPolishAcademicTask() && hasStablePolishReasonTable(streamBaseline)
+            ? normalizeIncomingText(streamBaseline, { trim: true })
+            : academicMode.value && !isPolishAcademicTask()
+            ? normalizedFinal
+            : chooseBetterFinalText(streamBaseline, normalizedFinal)
         fullText = preferred
         displayedText = preferred
         patchCurrentAssistant({
@@ -1293,6 +1315,8 @@ const onConversation = async ({
     const pluginName = pluginCandidate && pluginCandidate !== '不启用' ? pluginCandidate : ''
     const coreCandidate = getAcademicCoreRequestName(academicCore.value)
     const coreName = !pluginName && coreCandidate && coreCandidate !== '不启用' ? coreCandidate : ''
+    academicPluginRequestName = pluginName
+    academicCoreRequestName = coreName
     const academicFunction = pluginName ? 'plugin' : coreName ? 'basic' : 'chat'
     const academicPluginKwargsPayload = pluginName ? academicPluginKwargs.value : {}
 
@@ -1384,6 +1408,10 @@ const onConversation = async ({
     if (!hasVisibleText(displayedText) && hasVisibleText(fullText)) {
       displayedText = fullText
     }
+    if (isPolishAcademicTask() && hasStablePolishReasonTable(stablePolishTableSnapshot)) {
+      displayedText = stablePolishTableSnapshot
+      fullText = stablePolishTableSnapshot
+    }
     if (!hasVisibleText(displayedReasoningText) && hasVisibleText(fullReasoningText)) {
       displayedReasoningText = fullReasoningText
     }
@@ -1391,10 +1419,16 @@ const onConversation = async ({
     // 使用同一套清洗规则判断“可见内容”，避免 raw 文本非空但清洗后为空导致页面看起来无回复。
     const visibleContent = normalizeIncomingText(displayedText, { trim: true })
     const visibleReasoning = normalizeIncomingText(displayedReasoningText, { trim: true })
+    const preservedVisible = normalizeIncomingText(
+      stablePolishTableSnapshot || preservedStructuredContent,
+      { trim: true }
+    )
     const isErrorResponse =
       Boolean(lastError.value) || (finishReason === 'error' && !visibleContent)
     if (!visibleContent) {
-      if (fileVectorResult) {
+      if (preservedVisible) {
+        displayedText = preservedVisible
+      } else if (fileVectorResult) {
         displayedText = '文件已生成，可在下方下载。'
       } else if (isErrorResponse && lastError.value) {
         displayedText = normalizeIncomingText(lastError.value, { trim: true })
@@ -1485,10 +1519,10 @@ const handleRegenerate = async (index: number, chatId: number) => {
       msg: String(userMsg?.content || ''),
       imageUrl: userMsg?.imageUrl,
       fileUrl: userMsg?.fileUrl,
-      model: assistant?.model,
-      modelName: assistant?.modelName,
-      modelType: assistant?.modelType,
-      modelAvatar: assistant?.modelAvatar,
+      model: activeModel.value,
+      modelName: activeModelName.value,
+      modelType: activeModelKeyType.value,
+      modelAvatar: activeModelAvatar.value,
       overwriteReply: true,
       chatId: userMsg?.chatId ? String(userMsg.chatId) : undefined,
       replyChatId: targetReplyId || undefined,
@@ -1558,6 +1592,12 @@ async function fetchCurrentAppDetail(appId: number) {
 // ============== 依赖注入 ==============
 provide('onConversation', onConversation)
 provide('handleRegenerate', handleRegenerate)
+provide('getActiveConversationModelInfo', () => ({
+  model: activeModel.value,
+  modelName: activeModelName.value,
+  modelType: activeModelKeyType.value,
+  modelAvatar: activeModelAvatar.value,
+}))
 
 // Potentially expose toggleAppList if needed by other children
 // defineExpose({ toggleAppList })

@@ -115,6 +115,14 @@ const chatStore = useChatStore()
 const { isMobile } = useBasicLayout()
 const onConversation = inject<any>('onConversation')
 const handleRegenerate = inject<any>('handleRegenerate')
+const getActiveConversationModelInfo = inject<
+  () => {
+    model?: string
+    modelName?: string
+    modelType?: number
+    modelAvatar?: string
+  }
+>('getActiveConversationModelInfo', () => ({}))
 const globalStore = useGlobalStoreWithOut()
 
 const props = defineProps<Props>()
@@ -930,7 +938,20 @@ const normalizeMarkdownTables = (input: string) => {
     return current.replace(/｜/g, '|')
   }
 
-  const sourceLines = source.split('\n').map(line => toAsciiTableBars(line))
+  const normalizedSource = source
+    .split('\n')
+    .map(line => toAsciiTableBars(line))
+    .join('\n')
+  const polishReasonTablePattern =
+    /\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|/m
+  if (polishReasonTablePattern.test(normalizedSource)) {
+    return normalizedSource.replace(
+      /([^\n])\s*(\|[^\n]*修改前原文片段[^\n]*\|)/g,
+      '$1\n\n$2'
+    )
+  }
+
+  const sourceLines = normalizedSource.split('\n')
 
   const splitTableCells = (line: string) => {
     const text = String(line || '').trim()
@@ -1613,9 +1634,11 @@ async function handleEditMessage() {
       if (item?.role === 'user') break
       if (item?.role === 'assistant') {
         targetReplyIndex = idx
-        targetReplyChatId = Number(item?.chatId || targetReplyChatId || 0)
+        targetReplyChatId = Number(item?.chatId || 0)
+        break
       }
     }
+    const currentModelInfo = getActiveConversationModelInfo()
     // 提交编辑后立即退出编辑态，避免等待整段流式回复期间仍显示为编辑中。
     isEditable.value = false
     await onConversation({
@@ -1623,6 +1646,10 @@ async function handleEditMessage() {
       imageUrl: props.imageUrl,
       fileUrl: props.fileUrl,
       chatId: props.chatId,
+      model: currentModelInfo?.model,
+      modelName: currentModelInfo?.modelName,
+      modelType: currentModelInfo?.modelType,
+      modelAvatar: currentModelInfo?.modelAvatar,
       overwriteReply: true,
       editIndex: props.index,
       replyIndex: targetReplyIndex >= 0 ? targetReplyIndex : undefined,
