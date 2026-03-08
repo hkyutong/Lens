@@ -183,18 +183,60 @@ export class AcademicService {
     return Number(modelInfo.status) !== 0;
   }
 
-  private async resolveAcademicModelInfo(preferredModel: string) {
+  private normalizeAcademicModelLookup(value: string) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  private async findAcademicModelInfo(preferredModel: string, preferredModelName = '') {
+    const requestedModel = String(preferredModel || '').trim();
+    const requestedModelName = String(preferredModelName || '').trim();
+
+    if (requestedModel) {
+      const exactByModel = await this.modelsService.getCurrentModelKeyInfo(requestedModel);
+      if (exactByModel) return exactByModel;
+    }
+
+    if (!requestedModel && !requestedModelName) return null;
+
+    const normalizedCandidates = [requestedModel, requestedModelName]
+      .map(item => this.normalizeAcademicModelLookup(item))
+      .filter(Boolean);
+    if (!normalizedCandidates.length) return null;
+
+    const allModelsRaw = await this.modelsService.getAllKey();
+    const allModels = Array.isArray(allModelsRaw) ? allModelsRaw : [];
+
+    return (
+      allModels.find(item =>
+        normalizedCandidates.includes(this.normalizeAcademicModelLookup(item?.model)),
+      ) ||
+      allModels.find(item =>
+        normalizedCandidates.includes(this.normalizeAcademicModelLookup(item?.modelName)),
+      ) ||
+      null
+    );
+  }
+
+  private async resolveAcademicModelInfo(preferredModel: string, preferredModelName = '') {
     const requested = String(preferredModel || '').trim();
-    const candidateModels = [requested, 'deepseek-v3.2'].filter(Boolean);
-    for (const model of candidateModels) {
-      const modelInfo = await this.modelsService.getCurrentModelKeyInfo(model);
-      if (this.isModelEnabled(modelInfo)) {
-        return {
-          requestedModel: requested,
-          resolvedModel: String(modelInfo.model || model),
-          modelInfo,
-        };
-      }
+    const requestedDisplayName = String(preferredModelName || '').trim();
+    const explicitModelInfo = await this.findAcademicModelInfo(requested, requestedDisplayName);
+    if (this.isModelEnabled(explicitModelInfo)) {
+      return {
+        requestedModel: requested,
+        requestedModelName: requestedDisplayName,
+        resolvedModel: String(explicitModelInfo.model || requested),
+        modelInfo: explicitModelInfo,
+      };
+    }
+
+    if (requested || requestedDisplayName) {
+      return {
+        requestedModel: requested,
+        requestedModelName: requestedDisplayName,
+        resolvedModel: '',
+        modelInfo: null,
+      };
     }
 
     const baseConfig = await this.modelsService.getBaseConfig();
@@ -204,6 +246,7 @@ export class AcademicService {
       if (this.isModelEnabled(modelInfo)) {
         return {
           requestedModel: requested,
+          requestedModelName: requestedDisplayName,
           resolvedModel: String(modelInfo.model || baseModel),
           modelInfo,
         };
@@ -218,6 +261,7 @@ export class AcademicService {
       const fallbackModelInfo = enabledModels[0];
       return {
         requestedModel: requested,
+        requestedModelName: requestedDisplayName,
         resolvedModel: String(fallbackModelInfo.model || ''),
         modelInfo: fallbackModelInfo,
       };
@@ -593,10 +637,127 @@ export class AcademicService {
       .map(entry => entry.item);
   }
   private normalizeDisplayContent(text: string) {
-    return String(text || '')
+    const normalized = String(text || '')
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/\r\n/g, '\n')
       .replace(/\n{4,}/g, '\n\n\n');
+    return this.transformAcademicPolishTables(normalized);
+  }
+
+  private parseAcademicMarkdownRow(line: string) {
+    const trimmed = String(line || '').trim();
+    if (!trimmed.startsWith('|')) return [];
+    return trimmed
+      .replace(/^\|\s*/, '')
+      .replace(/\s*\|$/, '')
+      .split('|')
+      .map(cell => String(cell || '').trim());
+  }
+
+  private isAcademicMarkdownSeparator(line: string, columns: number) {
+    const cells = this.parseAcademicMarkdownRow(line);
+    if (cells.length !== columns) return false;
+    return cells.every(cell => /^:?-{3,}:?$/.test(cell));
+  }
+
+  private escapeAcademicTableCell(value: string) {
+    return String(value || '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\n+/g, '<br>')
+      .replace(/\|/g, '&#124;')
+      .trim();
+  }
+
+  private inferAcademicPolishReason(explanation: string) {
+    const text = String(explanation || '').trim();
+    if (!text) return '表达优化';
+    const rules: Array<[RegExp, string]> = [
+      [/(语法|时态|单复数|拼写|标点)/i, '语法修正'],
+      [/(术语|用词|措辞|词汇|译法)/i, '术语统一'],
+      [/(逻辑|结构|衔接|层次|顺序)/i, '结构优化'],
+      [/(学术|正式|书面|风格)/i, '学术风格'],
+      [/(简洁|冗余|重复|压缩)/i, '压缩冗余'],
+      [/(通顺|自然|流畅|表达)/i, '表达优化'],
+      [/(清晰|明确|歧义)/i, '表意更清晰'],
+    ];
+    const matched = rules.find(([pattern]) => pattern.test(text));
+    return matched?.[1] || '表达优化';
+  }
+
+  private splitAcademicPolishReasonAndExplanation(value: string) {
+    const compact = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!compact) {
+      return { reason: '表达优化', explanation: '' };
+    }
+
+    const explicit = compact.match(/^([^：:。；;]{1,24})[：:]\s*(.+)$/);
+    if (explicit?.[1] && explicit?.[2]) {
+      return {
+        reason: explicit[1].trim(),
+        explanation: explicit[2].trim(),
+      };
+    }
+
+    const sentenceMatch = compact.match(/^(.{1,24}?)(?:[。；;]\s+)(.+)$/);
+    if (sentenceMatch?.[1] && sentenceMatch?.[2]) {
+      return {
+        reason: sentenceMatch[1].trim(),
+        explanation: sentenceMatch[2].trim(),
+      };
+    }
+
+    return {
+      reason: this.inferAcademicPolishReason(compact),
+      explanation: compact,
+    };
+  }
+
+  private transformAcademicPolishTables(text: string) {
+    const lines = String(text || '').split('\n');
+    if (!lines.length) return text;
+    const out: string[] = [];
+    let changed = false;
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const current = String(lines[i] || '');
+      const next = String(lines[i + 1] || '');
+      const headerCells = this.parseAcademicMarkdownRow(current);
+      const isThreeColumnPolishHeader =
+        headerCells.length === 3 &&
+        headerCells[0] === '修改前原文片段' &&
+        headerCells[1] === '修改后片段' &&
+        headerCells[2] === '修改原因与解释' &&
+        this.isAcademicMarkdownSeparator(next, 3);
+
+      if (!isThreeColumnPolishHeader) {
+        out.push(current);
+        continue;
+      }
+
+      changed = true;
+      out.push('| 修改前原文片段 | 修改后片段 | 修改原因 | 修改解释 |');
+      out.push('| --- | --- | --- | --- |');
+      i += 1;
+
+      while (i + 1 < lines.length) {
+        const rowLine = String(lines[i + 1] || '');
+        if (!String(rowLine || '').trim().startsWith('|')) break;
+        const rowCells = this.parseAcademicMarkdownRow(rowLine);
+        if (rowCells.length < 3) break;
+        const before = this.escapeAcademicTableCell(rowCells[0]);
+        const after = this.escapeAcademicTableCell(rowCells[1]);
+        const mergedReason = rowCells.slice(2).join(' | ').trim();
+        const { reason, explanation } = this.splitAcademicPolishReasonAndExplanation(
+          mergedReason,
+        );
+        out.push(
+          `| ${before} | ${after} | ${this.escapeAcademicTableCell(reason)} | ${this.escapeAcademicTableCell(explanation)} |`,
+        );
+        i += 1;
+      }
+    }
+
+    return changed ? out.join('\n') : text;
   }
 
   private splitConcatenatedJsonObjects(value: string): string[] {
@@ -1308,10 +1469,21 @@ export class AcademicService {
       typeof openaiBaseModelConfig === 'string'
         ? openaiBaseModelConfig
         : openaiBaseModelConfig?.openaiBaseModel;
-    const requestedModelName = String(body.model || openaiBaseModel || '').trim();
-    const resolvedModel = await this.resolveAcademicModelInfo(requestedModelName);
+    const requestedModel = String(body.model || '').trim();
+    const requestedModelName = String(body.modelName || '').trim();
+    const resolvedModel = await this.resolveAcademicModelInfo(
+      requestedModel || (requestedModelName ? '' : String(openaiBaseModel || '').trim()),
+      requestedModelName,
+    );
     if (!resolvedModel) {
       throw new HttpException('系统未配置可用模型，请联系管理员', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    if (!resolvedModel.modelInfo) {
+      const displayName = resolvedModel.requestedModelName || resolvedModel.requestedModel || '当前模型';
+      throw new HttpException(
+        `所选模型“${displayName}”当前不可用，请刷新模型列表后重试`,
+        HttpStatus.BAD_REQUEST,
+      );
     }
     if (resolvedModel.requestedModel && resolvedModel.requestedModel !== resolvedModel.resolvedModel) {
       this.logger.warn(

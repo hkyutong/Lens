@@ -190,9 +190,25 @@ async function switchModel(option: any) {
     groupId: chatGroupId.value,
     config: JSON.stringify(config),
   }
-  await fetchUpdateGroupAPI(params)
+  const currentGroup = chatStore.groupList.find(item => Number(item.uuid) === Number(chatGroupId.value))
+  const previousConfig = currentGroup?.config || ''
+
   chatStore.setPreferredModel(option)
-  await chatStore.queryMyGroup()
+  if (currentGroup) {
+    currentGroup.config = params.config
+    chatStore.recordState()
+  }
+
+  try {
+    await fetchUpdateGroupAPI(params)
+    await chatStore.queryMyGroup()
+  } catch (error: any) {
+    if (currentGroup) {
+      currentGroup.config = previousConfig
+      chatStore.recordState()
+    }
+    ms.error(error?.message || '模型切换失败，请稍后重试')
+  }
   // useGlobalStore.updateModelDialog(false);
 }
 
