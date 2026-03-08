@@ -1,5 +1,8 @@
 # 更新日志
 
+## 0.0.25 (2026-03-08)
+- 回退中英文润色结果展示为稳定三列表现：`service/src/modules/academic/academic.service.ts` 移除展示层把 `修改原因与解释` 强拆成 `修改原因 | 修改解释` 的后处理，恢复为学术后端原生三列表格输出，避免生成完成后最终表格列宽失衡、解释内容挤成大段难以阅读。
+
 ## 0.0.24 (2026-03-08)
 - 修复学术模型切换不同步：`service/src/modules/academic/academic.service.ts` 取消学术链路对 `deepseek-v3.2` 的硬编码静默回退，显式选模时优先按 `model` 与 `modelName` 解析已启用模型；当前端已选择模型但后端无法解析时，直接返回清晰错误而不是偷偷改用默认模型。
 - 增加模型切换本地即时生效：`chat/src/views/chat/components/Header/index.vue` 在用户切换模型时先本地更新当前会话 `modelInfo` 并持久化，再异步回写服务端，避免“刚切换模型马上发送学术请求仍带旧模型”的竞态。
