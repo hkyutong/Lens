@@ -207,8 +207,8 @@ const fs = require('fs');
 const path = process.argv[2];
 const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
 pkg.scripts = pkg.scripts || {};
-pkg.scripts.start = 'bash ./start.sh';
-pkg.scripts['start:daemon'] = 'bash ./start.sh';
+pkg.scripts.start = 'node ./dist/main.js';
+pkg.scripts['start:daemon'] = 'node ./dist/main.js';
 fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
 NODE
   if [ -f "$SERVICE_DIR/.env.example" ]; then

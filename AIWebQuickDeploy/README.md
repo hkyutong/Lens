@@ -27,7 +27,7 @@ QUICK_DEPLOY_ONLY=1 ./build.sh
 
 ## 推荐部署方式：宝塔 Node 项目
 
-如果你使用宝塔面板，推荐直接用“添加 Node 项目”部署，不必依赖 `start.sh`。
+如果你使用宝塔面板，推荐直接用“添加 Node 项目”部署。
 
 ### 宝塔面板填写建议
 
@@ -48,14 +48,3 @@ pnpm install --prod --frozen-lockfile
 ```
 
 然后在宝塔面板里启动 Node 项目即可。
-
-## 可选方式：命令行启动
-
-如果你不是用宝塔，而是自己在命令行里启动，也可以执行：
-
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-这只是命令行兜底方式，不是宝塔部署的必选项。

@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.22 (2026-03-08)
+- 移除 `AIWebQuickDeploy/start.sh`：轻量部署包不再内置自动部署脚本，统一改为“人工宝塔 Node 项目部署”模型，避免部署包误导出额外 PM2/用户归属逻辑。
+- 修正轻量部署包启动命令：`build.sh` 生成的 `AIWebQuickDeploy/package.json` 现在将 `pnpm start` 与 `pnpm start:daemon` 统一改为 `node ./dist/main.js`，删除对 `bash ./start.sh` 的隐式依赖，解决宝塔环境中删除 `start.sh` 后 `pnpm start` 直接失败的问题。
+- 更新宝塔部署说明：`AIWebQuickDeploy/README.md` 与 `docs/DEPLOYMENT.md` 删除 `start.sh` 相关文案，只保留 `dist/main.js` 的人工部署路径。
+
 ## 0.0.21 (2026-03-07)
 - 调整轻量部署说明为宝塔优先：`AIWebQuickDeploy/README.md` 与 `docs/DEPLOYMENT.md` 现在以“宝塔 Node 项目部署”作为主路径，明确 `AIWebQuickDeploy` 的启动文件应为 `dist/main.js`、运行目录为部署包根目录，`start.sh` 仅保留为命令行兜底方式，不再作为文档中的默认部署入口。
 - 优化中英文润色表格粒度：`academic-4.0/core_functional.py` 中的 `中文润色` 与 `英文润色` 提示词改为强制按“小句/短片段”输出 Markdown 表格，列名统一为 `修改前原文片段 | 修改后片段 | 修改原因与解释`，并明确要求“一行只描述一个局部修改、单元格尽量简短”，减少一整段文本被塞进单个表格单元格的情况。

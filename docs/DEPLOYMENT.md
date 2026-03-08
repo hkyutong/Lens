@@ -84,7 +84,6 @@ QUICK_DEPLOY_ONLY=1 ./build.sh
 - `public/chat/`：前台产物
 - `package.json` / `pnpm-lock.yaml`
 - `pm2.conf.json`
-- `start.sh`
 
 目标服务器只需把整个 `AIWebQuickDeploy/` 目录上传过去。
 
