@@ -628,10 +628,7 @@ const normalizeIncomingText = (
       '$1'
     )
     .replace(/(?:academic-4\.0|gpt_log|downloadzone)\/[A-Za-z0-9_\-./]+/gi, '')
-    .replace(
-      /\/(?:www|root|home|Users|private_upload|userFiles|tmp|var)\/[A-Za-z0-9_\-./]+/g,
-      ''
-    )
+    .replace(/\/(?:www|root|home|Users|private_upload|userFiles|tmp|var)\/[A-Za-z0-9_\-./]+/g, '')
     .replace(/[A-Za-z]:\\[^\s"']+/g, '')
     .replace(/【文件路径已隐藏】|\[路径已隐藏\]/g, '')
     .replace(/(找不到任何[^\n:：]*文件)\s*[:：]\s*(?=\n|$)/g, '$1。')
@@ -683,6 +680,50 @@ const scoreTextStructure = (value: string) => {
   return score
 }
 
+const polishReasonTableHeaderPattern =
+  /^\s*\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|\s*$/m
+
+const markdownTableLinePattern = /^\s*\|.*\|\s*$/
+
+const countMarkdownTableRows = (value: string) =>
+  String(value || '')
+    .split('\n')
+    .filter(line => markdownTableLinePattern.test(String(line || '').trim())).length
+
+const extractStablePolishReasonTable = (value: string) => {
+  const normalized = normalizeIncomingText(value, { trim: true })
+  if (!normalized) return ''
+
+  const lines = normalized.split('\n')
+  const start = lines.findIndex(line => polishReasonTableHeaderPattern.test(String(line || '')))
+  if (start < 0) return ''
+
+  let end = start + 1
+  while (end < lines.length && markdownTableLinePattern.test(String(lines[end] || '').trim())) {
+    end += 1
+  }
+
+  const tableBlock = lines
+    .slice(start, end)
+    .map(line => String(line || '').trimEnd())
+    .join('\n')
+    .trim()
+
+  return countMarkdownTableRows(tableBlock) >= 3 ? tableBlock : ''
+}
+
+const pickBetterPolishTableSnapshot = (current: string, candidate: string) => {
+  const currentTable = extractStablePolishReasonTable(current)
+  const candidateTable = extractStablePolishReasonTable(candidate)
+  if (!candidateTable) return currentTable
+  if (!currentTable) return candidateTable
+
+  const currentRows = countMarkdownTableRows(currentTable)
+  const candidateRows = countMarkdownTableRows(candidateTable)
+  if (candidateRows > currentRows) return candidateTable
+  return currentTable
+}
+
 const chooseBetterFinalText = (streamText: string, finalText: string) => {
   const current = normalizeIncomingText(streamText, { trim: true })
   const next = normalizeIncomingText(finalText, { trim: true })
@@ -690,30 +731,25 @@ const chooseBetterFinalText = (streamText: string, finalText: string) => {
   if (!current) return next
   if (current === next) return next
 
-  const polishHeaderPattern =
-    /\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*(?:修改原因与解释|修改原因\s*\|\s*修改解释)\s*\|/m
-  const countMarkdownTableRows = (value: string) =>
-    String(value || '')
-      .split('\n')
-      .filter(line => /^\s*\|/.test(String(line || '').trim())).length
-  const currentHasPolishTable = polishHeaderPattern.test(current)
-  const nextHasPolishTable = polishHeaderPattern.test(next)
+  const currentPolishTable = extractStablePolishReasonTable(current)
+  const nextPolishTable = extractStablePolishReasonTable(next)
 
   const currentScore = scoreTextStructure(current)
   const nextScore = scoreTextStructure(next)
-  const currentHasStructuredMarkdown = /```|^\s*#{1,6}\s+|^\s*[-*]\s+|^\s*\d+[.)、]\s+|^\s*\|/m.test(
-    current
-  )
+  const currentHasStructuredMarkdown =
+    /```|^\s*#{1,6}\s+|^\s*[-*]\s+|^\s*\d+[.)、]\s+|^\s*\|/m.test(current)
   const nextHasStructuredMarkdown = /```|^\s*#{1,6}\s+|^\s*[-*]\s+|^\s*\d+[.)、]\s+|^\s*\|/m.test(
     next
   )
 
-  if (currentHasPolishTable && nextHasPolishTable) {
-    const currentRows = countMarkdownTableRows(current)
-    const nextRows = countMarkdownTableRows(next)
+  if (currentPolishTable && nextPolishTable) {
+    const currentRows = countMarkdownTableRows(currentPolishTable)
+    const nextRows = countMarkdownTableRows(nextPolishTable)
     if (currentRows > nextRows) return current
     if (currentRows === nextRows && currentScore >= nextScore) return current
   }
+  if (currentPolishTable && !nextPolishTable) return currentPolishTable
+  if (!currentPolishTable && nextPolishTable) return nextPolishTable
 
   // 优先保留流式阶段已经形成的结构化内容，避免 final 覆盖导致“挤成一段”。
   if (currentHasStructuredMarkdown && !nextHasStructuredMarkdown && currentScore >= nextScore) {
@@ -728,10 +764,7 @@ const chooseBetterFinalText = (streamText: string, finalText: string) => {
   return current
 }
 
-const hasStablePolishReasonTable = (value: string) =>
-  /\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|/m.test(
-    normalizeIncomingText(value, { trim: true })
-  )
+const hasStablePolishReasonTable = (value: string) => Boolean(extractStablePolishReasonTable(value))
 
 const extractTextChunk = (payload: any): string => {
   if (!payload) return ''
@@ -914,6 +947,13 @@ const onConversation = async ({
     })
   }
 
+  const truncateVisibleTailAfter = (idx: number) => {
+    if (idx < 0) return
+    const currentList = chatStore.chatList || []
+    if (idx >= currentList.length - 1) return
+    currentList.splice(idx + 1)
+  }
+
   if (overwriteReply && directReplyIndex >= 0) {
     effectiveReplyChatId = Number(activeList[directReplyIndex]?.chatId || effectiveReplyChatId || 0)
     applyAssistantOverwriteState(directReplyIndex)
@@ -986,6 +1026,10 @@ const onConversation = async ({
     useGlobalStore.updateIsChatIn(false)
     ms.error('未找到可覆盖的历史回复，请刷新后重试')
     return
+  }
+
+  if (overwriteReply && assistantIndex >= 0) {
+    truncateVisibleTailAfter(assistantIndex)
   }
 
   if (assistantIndex < 0) {
@@ -1078,8 +1122,7 @@ const onConversation = async ({
     const sanitized = alreadySanitized ? String(rawText ?? '') : sanitizeStreamChunk(rawText)
     if (!sanitized) return
     const isWhitespaceChunk = sanitized.length > 0 && sanitized.trim().length === 0
-    if (academicMode.value && !isWhitespaceChunk && shouldDropAcademicChunk(sanitized))
-      return
+    if (academicMode.value && !isWhitespaceChunk && shouldDropAcademicChunk(sanitized)) return
 
     if (target === 'reasoning') {
       fullReasoningText = mergeStreamText(fullReasoningText, sanitized)
@@ -1087,8 +1130,11 @@ const onConversation = async ({
     } else {
       fullText = mergeStreamText(fullText, sanitized)
       displayedText = fullText
-      if (isPolishAcademicTask() && hasStablePolishReasonTable(displayedText)) {
-        stablePolishTableSnapshot = normalizeIncomingText(displayedText, { trim: true })
+      if (isPolishAcademicTask()) {
+        stablePolishTableSnapshot = pickBetterPolishTableSnapshot(
+          stablePolishTableSnapshot,
+          displayedText
+        )
       }
       updateWorkflowContent(sanitized, fullText === sanitized)
     }
@@ -1153,9 +1199,10 @@ const onConversation = async ({
     if (jsonObj?.resetContent) {
       if (isPolishAcademicTask() && fullText.trim()) {
         preservedStructuredContent = chooseBetterFinalText(preservedStructuredContent, fullText)
-        if (!stablePolishTableSnapshot && hasStablePolishReasonTable(fullText)) {
-          stablePolishTableSnapshot = normalizeIncomingText(fullText, { trim: true })
-        }
+        stablePolishTableSnapshot = pickBetterPolishTableSnapshot(
+          stablePolishTableSnapshot,
+          fullText
+        )
       }
       fullText = ''
       displayedText = ''
@@ -1186,12 +1233,17 @@ const onConversation = async ({
         (!academicMode.value || !shouldDropAcademicChunk(normalizedFinal))
       ) {
         const streamBaseline = stablePolishTableSnapshot || preservedStructuredContent || fullText
+        const lockedPolishTable = isPolishAcademicTask()
+          ? stablePolishTableSnapshot ||
+            extractStablePolishReasonTable(normalizedFinal) ||
+            extractStablePolishReasonTable(streamBaseline)
+          : ''
         const preferred =
-          isPolishAcademicTask() && hasStablePolishReasonTable(streamBaseline)
-            ? normalizeIncomingText(streamBaseline, { trim: true })
+          isPolishAcademicTask() && lockedPolishTable
+            ? lockedPolishTable
             : academicMode.value && !isPolishAcademicTask()
-            ? normalizedFinal
-            : chooseBetterFinalText(streamBaseline, normalizedFinal)
+              ? normalizedFinal
+              : chooseBetterFinalText(streamBaseline, normalizedFinal)
         fullText = preferred
         displayedText = preferred
         patchCurrentAssistant({
@@ -1408,9 +1460,15 @@ const onConversation = async ({
     if (!hasVisibleText(displayedText) && hasVisibleText(fullText)) {
       displayedText = fullText
     }
-    if (isPolishAcademicTask() && hasStablePolishReasonTable(stablePolishTableSnapshot)) {
-      displayedText = stablePolishTableSnapshot
-      fullText = stablePolishTableSnapshot
+    const lockedPolishTable = isPolishAcademicTask()
+      ? stablePolishTableSnapshot ||
+        extractStablePolishReasonTable(fullText) ||
+        extractStablePolishReasonTable(displayedText)
+      : ''
+    if (lockedPolishTable) {
+      stablePolishTableSnapshot = lockedPolishTable
+      displayedText = lockedPolishTable
+      fullText = lockedPolishTable
     }
     if (!hasVisibleText(displayedReasoningText) && hasVisibleText(fullReasoningText)) {
       displayedReasoningText = fullReasoningText
@@ -1420,8 +1478,10 @@ const onConversation = async ({
     const visibleContent = normalizeIncomingText(displayedText, { trim: true })
     const visibleReasoning = normalizeIncomingText(displayedReasoningText, { trim: true })
     const preservedVisible = normalizeIncomingText(
-      stablePolishTableSnapshot || preservedStructuredContent,
-      { trim: true }
+      lockedPolishTable || preservedStructuredContent,
+      {
+        trim: true,
+      }
     )
     const isErrorResponse =
       Boolean(lastError.value) || (finishReason === 'error' && !visibleContent)
@@ -1498,7 +1558,20 @@ const handleDelete = async (item: Chat.Chat) => {
   }
 }
 
-const handleRegenerate = async (index: number, chatId: number) => {
+const handleEditConversation = async (payload: Record<string, any>) => {
+  return onConversation(payload)
+}
+
+const handleRegenerate = async (
+  index: number,
+  chatId: number,
+  modelInfo?: {
+    model?: string
+    modelName?: string
+    modelType?: number
+    modelAvatar?: string
+  }
+) => {
   if (isStreaming.value || isRegenerating.value) return
   const list = dataSources.value || []
   const assistant = list[index]
@@ -1515,14 +1588,14 @@ const handleRegenerate = async (index: number, chatId: number) => {
 
   isRegenerating.value = true
   try {
-    await onConversation({
+    await handleEditConversation({
       msg: String(userMsg?.content || ''),
       imageUrl: userMsg?.imageUrl,
       fileUrl: userMsg?.fileUrl,
-      model: activeModel.value,
-      modelName: activeModelName.value,
-      modelType: activeModelKeyType.value,
-      modelAvatar: activeModelAvatar.value,
+      model: modelInfo?.model || activeModel.value,
+      modelName: modelInfo?.modelName || activeModelName.value,
+      modelType: modelInfo?.modelType || activeModelKeyType.value,
+      modelAvatar: modelInfo?.modelAvatar || activeModelAvatar.value,
       overwriteReply: true,
       chatId: userMsg?.chatId ? String(userMsg.chatId) : undefined,
       replyChatId: targetReplyId || undefined,
@@ -1592,6 +1665,7 @@ async function fetchCurrentAppDetail(appId: number) {
 // ============== 依赖注入 ==============
 provide('onConversation', onConversation)
 provide('handleRegenerate', handleRegenerate)
+provide('handleEditConversation', handleEditConversation)
 provide('getActiveConversationModelInfo', () => ({
   model: activeModel.value,
   modelName: activeModelName.value,

@@ -1,6 +1,13 @@
 # 更新日志
 
+## 0.0.27 (2026-03-09)
+- 修复中英文润色“生成过程是稳定三列表、结束后又跳成拥挤布局”：`chat/src/views/chat/chatBase.vue` 与 `service/src/modules/academic/academic.service.ts` 现在只锁定连续且完整的三列表 `修改前原文片段 | 修改后片段 | 修改原因与解释`，完成态优先保留该稳定表格，不再用后端汇总大段文本覆盖流式结果。
+- 修复重新生成与编辑未跟随当前前端选模：`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Message/Text/index.vue` 与 `service/src/modules/chat/chat.service.ts` 统一显式携带当前 `model/modelName/modelType/modelAvatar`，后端在用户已选模型但配置不可用时直接报错，不再静默回退到默认模型。
+- 修复重新生成与编辑误覆盖后续消息链：`chat/src/views/chat/chatBase.vue` 与 `chat/src/views/chat/components/Message/Text/index.vue` 现在只在前端可见列表中裁剪被编辑/重生回复之后的消息，不再误把整段历史回复覆盖到当前气泡里；后端历史记录不删除，只重写当前用户消息对应的第一条 assistant 回复。
+
 ## 0.0.26 (2026-03-08)
+- 修复中英文润色“刷新页面后表格重新挤成一团”：`service/src/modules/academic/academic.service.ts` 在学术流式阶段检测到稳定的三列表 `修改前原文片段 | 修改后片段 | 修改原因与解释` 后，会优先把该稳定版本持久化到聊天记录，避免刷新后又回退成学术后端最终汇总的大段文本。
+- 修复重新生成/编辑后后续聊天记录仍然残留：`chat/src/views/chat/chatBase.vue` 与 `chat/src/views/chat/components/Message/Text/index.vue` 在触发编辑或重生前，先删除当前回复之后的持久化分支消息并同步裁剪本地列表，只保留被编辑用户消息及其即将重写的回复，不再让后续旧对话继续显示。
 - 修复中英文润色“生成时表格正常、生成完成后跳一下变拥挤”：`chat/src/views/chat/chatBase.vue` 为润色任务新增稳定三列表快照，一旦流式阶段已经出现正确的 `修改前原文片段 | 修改后片段 | 修改原因与解释` 表格，完成态将直接沿用该快照，不再被学术后端最终汇总文本覆盖，避免第三列解释内容在结束时重新挤成大段。
 - 修复重新生成/编辑覆盖错误回复的问题：`chat/src/views/chat/chatBase.vue` 与 `chat/src/views/chat/components/Message/Text/index.vue` 统一改为只覆盖“被编辑用户消息后的第一条 assistant 回复”，不再误选后续回复导致下面聊天记录整体消失。
 - 修复重新生成/编辑未跟随当前模型：`chat/src/views/chat/chatBase.vue` 通过 `provide` 暴露当前会话选中模型信息，`chat/src/views/chat/components/Message/Text/index.vue` 在点击重新生成/编辑时显式携带当前模型、模型名、模型类型与头像，确保前端切换模型后后端即时同步使用。

@@ -115,6 +115,7 @@ const chatStore = useChatStore()
 const { isMobile } = useBasicLayout()
 const onConversation = inject<any>('onConversation')
 const handleRegenerate = inject<any>('handleRegenerate')
+const handleEditConversation = inject<any>('handleEditConversation')
 const getActiveConversationModelInfo = inject<
   () => {
     model?: string
@@ -144,9 +145,9 @@ let mermaidTheme = ''
 
 const cleanupLeakedMermaidArtifacts = () => {
   // mermaid 在语法异常时可能把临时渲染节点遗留在 body，造成“炸弹”错误图常驻页面
-  document.querySelectorAll('body > div[id^="dmermaid-"], body > iframe[id^="imermaid-"]').forEach(
-    node => node.remove()
-  )
+  document
+    .querySelectorAll('body > div[id^="dmermaid-"], body > iframe[id^="imermaid-"]')
+    .forEach(node => node.remove())
 }
 
 const getMermaidDownloadBaseName = () => {
@@ -171,7 +172,9 @@ const triggerBlobDownload = (blob: Blob, fileName: string) => {
 
 const parseNumericSize = (value: string | null | undefined) => {
   if (!value) return 0
-  const matched = String(value).trim().match(/^\s*([\d.]+)/)
+  const matched = String(value)
+    .trim()
+    .match(/^\s*([\d.]+)/)
   if (!matched) return 0
   const parsed = Number(matched[1])
   return Number.isFinite(parsed) ? parsed : 0
@@ -887,9 +890,17 @@ const normalizeMermaidMarkdown = (input: string) => {
     const isMermaidContinuation = (line: string) => {
       const text = String(line || '').trim()
       if (!text) return false
-      if (/^(?:%%|style\b|classDef\b|class\b|click\b|linkStyle\b|subgraph\b|end\b|direction\b)/i.test(text))
+      if (
+        /^(?:%%|style\b|classDef\b|class\b|click\b|linkStyle\b|subgraph\b|end\b|direction\b)/i.test(
+          text
+        )
+      )
         return true
-      if (/^(?:[A-Za-z][A-Za-z0-9_]*\s*(?:-->|==>|-.->|---)|[A-Za-z][A-Za-z0-9_]*\s*[\[\(\{])/i.test(text))
+      if (
+        /^(?:[A-Za-z][A-Za-z0-9_]*\s*(?:-->|==>|-.->|---)|[A-Za-z][A-Za-z0-9_]*\s*[\[\(\{])/i.test(
+          text
+        )
+      )
         return true
       return /(?:-->|==>|-.->|---)/.test(text)
     }
@@ -945,10 +956,7 @@ const normalizeMarkdownTables = (input: string) => {
   const polishReasonTablePattern =
     /\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|/m
   if (polishReasonTablePattern.test(normalizedSource)) {
-    return normalizedSource.replace(
-      /([^\n])\s*(\|[^\n]*修改前原文片段[^\n]*\|)/g,
-      '$1\n\n$2'
-    )
+    return normalizedSource.replace(/([^\n])\s*(\|[^\n]*修改前原文片段[^\n]*\|)/g, '$1\n\n$2')
   }
 
   const sourceLines = normalizedSource.split('\n')
@@ -1013,7 +1021,8 @@ const normalizeMarkdownTables = (input: string) => {
         const next2Index = findNextNonEmptyIndexIn(sourceLines, nextIndex + 1)
         const next2 = next2Index < sourceLines.length ? String(sourceLines[next2Index] || '') : ''
         const nextCells = splitTableCells(next)
-        const canSplitNormalHeader = maybeHeaderCells.length >= 2 && tableSeparatorPattern.test(next)
+        const canSplitNormalHeader =
+          maybeHeaderCells.length >= 2 && tableSeparatorPattern.test(next)
         const canSplitSplitHeader =
           maybeHeaderCells.length === 1 &&
           nextCells.length === 1 &&
@@ -1167,7 +1176,8 @@ const normalizeMarkdownTables = (input: string) => {
         }
         if (cells.length === 1 && cursor + 1 < tableLines.length) {
           const nextRowIndex = findNextNonEmptyIndex(cursor + 1)
-          const nextRow = nextRowIndex < tableLines.length ? String(tableLines[nextRowIndex] || '') : ''
+          const nextRow =
+            nextRowIndex < tableLines.length ? String(tableLines[nextRowIndex] || '') : ''
           if (isTableLike(nextRow) && !tableSeparatorPattern.test(nextRow)) {
             const nextCells = splitTableCells(nextRow)
             if (nextCells.length === 1) {
@@ -1220,7 +1230,8 @@ const normalizeMarkdownTables = (input: string) => {
         ) {
           const left = cleanupCell(currentCells[0] || '')
           const right = cleanupCell(nextCells[0] || '')
-          const isHeaderPair = /^(?:文件路径|filepath)$/i.test(left) && /^(?:功能描述|description)$/i.test(right)
+          const isHeaderPair =
+            /^(?:文件路径|filepath)$/i.test(left) && /^(?:功能描述|description)$/i.test(right)
           if (left && right && !isHeaderPair) {
             result.push(`| ${left} | ${right} |`)
             const maybeSeparatorIdx = findNextNonEmpty(nextIdx + 1)
@@ -1254,7 +1265,8 @@ const normalizeMarkdownTables = (input: string) => {
       let prevIndex = output.length - 1
       while (prevIndex >= 0 && !String(output[prevIndex] || '').trim()) prevIndex -= 1
       let nextIndex = i + 1
-      while (nextIndex < sourceLines.length && !String(sourceLines[nextIndex] || '').trim()) nextIndex += 1
+      while (nextIndex < sourceLines.length && !String(sourceLines[nextIndex] || '').trim())
+        nextIndex += 1
       const prev = prevIndex >= 0 ? String(output[prevIndex] || '') : ''
       const next = nextIndex < sourceLines.length ? String(sourceLines[nextIndex] || '') : ''
       if (/^\s*\|/.test(prev) && /^\s*\|/.test(next)) continue
@@ -1483,10 +1495,7 @@ const text = computed(() => {
         '$1'
       )
       .replace(/(?:academic-4\.0|gpt_log|downloadzone)\/[A-Za-z0-9_\-./]+/gi, '')
-      .replace(
-        /\/(?:www|root|home|Users|private_upload|userFiles|tmp|var)\/[A-Za-z0-9_\-./]+/g,
-        ''
-      )
+      .replace(/\/(?:www|root|home|Users|private_upload|userFiles|tmp|var)\/[A-Za-z0-9_\-./]+/g, '')
       .replace(/[A-Za-z]:\\[^\s"']+/g, '')
       .replace(/【文件路径已隐藏】|\[路径已隐藏\]/g, '')
       .replace(/(找不到任何[^\n:：]*文件)\s*[:：]\s*(?=\n|$)/g, '$1。')
@@ -1641,7 +1650,9 @@ async function handleEditMessage() {
     const currentModelInfo = getActiveConversationModelInfo()
     // 提交编辑后立即退出编辑态，避免等待整段流式回复期间仍显示为编辑中。
     isEditable.value = false
-    await onConversation({
+    const runConversation =
+      typeof handleEditConversation === 'function' ? handleEditConversation : onConversation
+    await runConversation({
       msg: tempEditableContent,
       imageUrl: props.imageUrl,
       fileUrl: props.fileUrl,
@@ -1666,7 +1677,8 @@ async function handleEditMessage() {
 const triggerRegenerate = () => {
   if (isStreamIn.value || props.loading) return
   if (typeof handleRegenerate === 'function') {
-    handleRegenerate(props.index, props.chatId)
+    const currentModelInfo = getActiveConversationModelInfo()
+    handleRegenerate(props.index, props.chatId, currentModelInfo)
   }
 }
 
