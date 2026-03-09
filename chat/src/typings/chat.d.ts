@@ -95,6 +95,8 @@ declare namespace Chat {
     currentAcademicPlugin?: any
     currentAcademicCore?: any
     preferredModel?: any
+    hiddenReplyChatIdsByGroup?: Record<number, number[]>
+    hiddenReplyTailAnchorByGroup?: Record<number, number>
     prompt?: string
     currentPlugin?: {
       // 可选，存储当前使用的插件信息

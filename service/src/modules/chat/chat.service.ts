@@ -209,34 +209,19 @@ export class ChatService {
     }
 
     if (!currentRequestModelKey) {
-      Logger.debug('未找到当前模型key，切换至全局模型', 'ChatService');
-      currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(openaiBaseModel);
-      const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
-
-      // 假设 groupInfo.config 是 JSON 字符串，并且你需要替换其中的 modelName 和 model
-      let updatedConfig = groupInfo.config;
-      try {
-        const parsedConfig = JSON.parse(groupInfo.config);
-        if (parsedConfig.modelInfo) {
-          parsedConfig.modelInfo.modelName = currentRequestModelKey.modelName; // 替换为你需要的模型名称
-          parsedConfig.modelInfo.model = currentRequestModelKey.model; // 替换为你需要的模型
-          updatedConfig = JSON.stringify(parsedConfig);
-        }
-      } catch (error) {
-        Logger.error('模型配置解析失败', error);
-        throw new HttpException('配置解析错误！', HttpStatus.BAD_REQUEST);
+      const requestedModel = String(model || '').trim();
+      if (requestedModel) {
+        throw new HttpException(
+          `当前所选模型「${requestedModel}」暂不可用，请重新选择后再试！`,
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
-      await this.chatGroupService.update(
-        {
-          groupId,
-          title: groupInfo.title,
-          isSticky: false,
-          config: updatedConfig,
-          fileUrl: fileUrl,
-        },
-        req,
-      );
+      Logger.debug('未找到当前模型key，使用全局默认模型', 'ChatService');
+      currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(openaiBaseModel);
+      if (!currentRequestModelKey) {
+        throw new HttpException('未找到可用模型，请检查模型配置！', HttpStatus.BAD_REQUEST);
+      }
     }
 
     const {

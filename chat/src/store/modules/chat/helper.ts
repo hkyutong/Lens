@@ -22,6 +22,8 @@ export function defaultState(): Chat.ChatState {
     currentAcademicPlugin: undefined,
     currentAcademicCore: undefined,
     preferredModel: null,
+    hiddenReplyChatIdsByGroup: {},
+    hiddenReplyTailAnchorByGroup: {},
     prompt: '',
     reasoningText: '',
   }
@@ -32,8 +34,19 @@ export function getLocalState(): Chat.ChatState {
   return { ...defaultState(), ...localState }
 }
 
-export function setLocalState({ active }: Chat.ChatState) {
-  ss.set(LOCAL_NAME, { ...ss.get(LOCAL_NAME), active })
+export function setLocalState({
+  active,
+  preferredModel,
+  hiddenReplyChatIdsByGroup,
+  hiddenReplyTailAnchorByGroup,
+}: Chat.ChatState) {
+  ss.set(LOCAL_NAME, {
+    ...ss.get(LOCAL_NAME),
+    active,
+    preferredModel: preferredModel || null,
+    hiddenReplyChatIdsByGroup: hiddenReplyChatIdsByGroup || {},
+    hiddenReplyTailAnchorByGroup: hiddenReplyTailAnchorByGroup || {},
+  })
 }
 
 export function formatChatPre(data: any): any {

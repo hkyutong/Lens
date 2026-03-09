@@ -441,7 +441,7 @@ export const useChatStore = defineStore('chat-store', {
 
         // 检查响应数据并更新 chatList
         if (res && Array.isArray(res.data)) {
-          this.chatList = res.data.map((item: any) => ({
+          const normalizedList = res.data.map((item: any) => ({
             ...item,
             fileUrl: item.fileUrl ?? item.file_url ?? '',
             imageUrl: item.imageUrl ?? item.image_url ?? '',
@@ -449,6 +449,7 @@ export const useChatStore = defineStore('chat-store', {
             networkSearchResult: item.networkSearchResult ?? item.network_search_result ?? '',
             fileVectorResult: item.fileVectorResult ?? item.file_vector_result ?? '',
           }))
+          this.chatList = this.applyHiddenReplyFilter(normalizedList, Number(this.active))
         } else {
           this.chatList = [] // 如果没有数据，确保 chatList 为空数组
         }
@@ -527,6 +528,67 @@ export const useChatStore = defineStore('chat-store', {
       this.recordState()
     },
 
+    getHiddenReplyChatIds(groupId: number) {
+      const current = this.hiddenReplyChatIdsByGroup || {}
+      return (current[groupId] || []).map(id => Number(id)).filter(id => id > 0)
+    },
+
+    getHiddenReplyTailAnchor(groupId: number) {
+      const current = this.hiddenReplyTailAnchorByGroup || {}
+      const anchorId = Number(current[groupId] || 0)
+      return anchorId > 0 ? anchorId : 0
+    },
+
+    applyHiddenReplyFilter(list: Chat.Chat[], groupId: number) {
+      const anchorId = this.getHiddenReplyTailAnchor(groupId)
+      let visibleList = Array.isArray(list) ? [...list] : []
+      if (anchorId > 0) {
+        const anchorIndex = visibleList.findIndex(item => Number(item?.chatId || 0) === anchorId)
+        if (anchorIndex >= 0) {
+          visibleList = visibleList.slice(0, anchorIndex + 1)
+        }
+      }
+      const hiddenIds = new Set(this.getHiddenReplyChatIds(groupId))
+      if (!hiddenIds.size) return visibleList
+      return visibleList.filter(item => !hiddenIds.has(Number(item?.chatId || 0)))
+    },
+
+    rememberHiddenReplyTail(groupId: number, chatIds: number[], anchorChatId?: number) {
+      if (!groupId) return
+      const normalizedIds = Array.from(
+        new Set(chatIds.map(id => Number(id)).filter(id => id > 0))
+      )
+      const normalizedAnchorId = Number(anchorChatId || 0)
+      const current = this.hiddenReplyChatIdsByGroup || {}
+      const currentAnchors = this.hiddenReplyTailAnchorByGroup || {}
+      this.hiddenReplyChatIdsByGroup = {
+        ...current,
+        [groupId]: Array.from(new Set([...(current[groupId] || []), ...normalizedIds])),
+      }
+      this.hiddenReplyTailAnchorByGroup = normalizedAnchorId
+        ? {
+            ...currentAnchors,
+            [groupId]: normalizedAnchorId,
+          }
+        : currentAnchors
+      this.recordState()
+    },
+
+    clearHiddenReplyTail(groupId?: number) {
+      if (!groupId) {
+        this.hiddenReplyChatIdsByGroup = {}
+        this.hiddenReplyTailAnchorByGroup = {}
+      } else {
+        const current = { ...(this.hiddenReplyChatIdsByGroup || {}) }
+        const currentAnchors = { ...(this.hiddenReplyTailAnchorByGroup || {}) }
+        delete current[groupId]
+        delete currentAnchors[groupId]
+        this.hiddenReplyChatIdsByGroup = current
+        this.hiddenReplyTailAnchorByGroup = currentAnchors
+      }
+      this.recordState()
+    },
+
     async setPrompt(prompt: string) {
       this.prompt = prompt
       this.recordState()
@@ -542,6 +604,7 @@ export const useChatStore = defineStore('chat-store', {
       if (!this.active) return
 
       await fetchDelChatLogByGroupIdAPI({ groupId: this.active })
+      this.clearHiddenReplyTail(Number(this.active))
       await this.queryActiveChatLogList()
     },
 
@@ -553,6 +616,8 @@ export const useChatStore = defineStore('chat-store', {
       this.chatList = []
       this.groupList = []
       this.active = 0
+      this.hiddenReplyChatIdsByGroup = {}
+      this.hiddenReplyTailAnchorByGroup = {}
       this.recordState()
     },
   },

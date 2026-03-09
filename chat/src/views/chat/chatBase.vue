@@ -258,6 +258,15 @@ const activeModelAvatar = computed(() => {
   return String(configObj?.value?.modelInfo?.modelAvatar || '')
 })
 
+const preferredModelConfig = computed(() => chatStore.preferredModel || null)
+
+const getCurrentConversationModelInfo = () => ({
+  model: preferredModelConfig.value?.value || activeModel.value,
+  modelName: preferredModelConfig.value?.label || activeModelName.value,
+  modelType: preferredModelConfig.value?.keyType || activeModelKeyType.value,
+  modelAvatar: preferredModelConfig.value?.modelAvatar || activeModelAvatar.value,
+})
+
 /* 当前对话组是否是应用 */
 const activeAppId = computed(() => activeGroupInfo?.value?.appId || 0)
 
@@ -901,13 +910,14 @@ const onConversation = async ({
     await chatStore.queryMyGroup()
   }
 
-  const useModelName = modelName || activeModelName.value
-  const useModelType = modelType || activeModelKeyType.value || 1
-  const useModelAvatar = modelAvatar || activeModelAvatar.value
+  const currentConversationModel = getCurrentConversationModelInfo()
+  const useModelName = modelName || currentConversationModel.modelName
+  const useModelType = modelType || currentConversationModel.modelType || 1
+  const useModelAvatar = modelAvatar || currentConversationModel.modelAvatar
   const useAppId = appId || activeAppId.value
   const messageText = msg || '提问'
 
-  let useModel = model || activeModel.value
+  let useModel = model || currentConversationModel.model
 
   controller.value = new AbortController()
   clearLastError()
@@ -947,10 +957,16 @@ const onConversation = async ({
     })
   }
 
-  const truncateVisibleTailAfter = (idx: number) => {
+  const hideVisibleTailAfter = (idx: number) => {
     if (idx < 0) return
     const currentList = chatStore.chatList || []
+    const anchorChatId = Number(currentList[idx]?.chatId || 0)
     if (idx >= currentList.length - 1) return
+    const hiddenIds = currentList
+      .slice(idx + 1)
+      .map(item => Number(item?.chatId || 0))
+      .filter(id => id > 0)
+    chatStore.rememberHiddenReplyTail(Number(activeGroupId.value), hiddenIds, anchorChatId)
     currentList.splice(idx + 1)
   }
 
@@ -1029,14 +1045,14 @@ const onConversation = async ({
   }
 
   if (overwriteReply && assistantIndex >= 0) {
-    truncateVisibleTailAfter(assistantIndex)
+    hideVisibleTailAfter(assistantIndex)
   }
 
   if (assistantIndex < 0) {
     addGroupChat({
       content: messageText,
       model: useModel,
-      modelName: modelName,
+      modelName: useModelName,
       modelType: useModelType,
       role: 'user',
       fileUrl: requestFileUrl,
@@ -1084,6 +1100,7 @@ const onConversation = async ({
   let streamRequestId = ''
   let preservedStructuredContent = ''
   let stablePolishTableSnapshot = ''
+  let freezePolishTable = false
   let academicPluginRequestName = ''
   let academicCoreRequestName = ''
 
@@ -1238,14 +1255,19 @@ const onConversation = async ({
             extractStablePolishReasonTable(normalizedFinal) ||
             extractStablePolishReasonTable(streamBaseline)
           : ''
-        const preferred =
-          isPolishAcademicTask() && lockedPolishTable
-            ? lockedPolishTable
-            : academicMode.value && !isPolishAcademicTask()
+        if (isPolishAcademicTask() && lockedPolishTable) {
+          freezePolishTable = true
+          stablePolishTableSnapshot = lockedPolishTable
+          fullText = lockedPolishTable
+          displayedText = lockedPolishTable
+        } else {
+          const preferred =
+            academicMode.value && !isPolishAcademicTask()
               ? normalizedFinal
               : chooseBetterFinalText(streamBaseline, normalizedFinal)
-        fullText = preferred
-        displayedText = preferred
+          fullText = preferred
+          displayedText = preferred
+        }
         patchCurrentAssistant({
           chatId: assistantLogId ? Number(assistantLogId) : undefined,
           content: displayedText,
@@ -1466,16 +1488,24 @@ const onConversation = async ({
         extractStablePolishReasonTable(displayedText)
       : ''
     if (lockedPolishTable) {
+      freezePolishTable = true
       stablePolishTableSnapshot = lockedPolishTable
       displayedText = lockedPolishTable
       fullText = lockedPolishTable
+    }
+    if (freezePolishTable && stablePolishTableSnapshot) {
+      displayedText = stablePolishTableSnapshot
+      fullText = stablePolishTableSnapshot
     }
     if (!hasVisibleText(displayedReasoningText) && hasVisibleText(fullReasoningText)) {
       displayedReasoningText = fullReasoningText
     }
 
     // 使用同一套清洗规则判断“可见内容”，避免 raw 文本非空但清洗后为空导致页面看起来无回复。
-    const visibleContent = normalizeIncomingText(displayedText, { trim: true })
+    const visibleContent = normalizeIncomingText(
+      freezePolishTable && stablePolishTableSnapshot ? stablePolishTableSnapshot : displayedText,
+      { trim: true }
+    )
     const visibleReasoning = normalizeIncomingText(displayedReasoningText, { trim: true })
     const preservedVisible = normalizeIncomingText(
       lockedPolishTable || preservedStructuredContent,
@@ -1588,14 +1618,15 @@ const handleRegenerate = async (
 
   isRegenerating.value = true
   try {
+    const currentModelInfo = getCurrentConversationModelInfo()
     await handleEditConversation({
       msg: String(userMsg?.content || ''),
       imageUrl: userMsg?.imageUrl,
       fileUrl: userMsg?.fileUrl,
-      model: modelInfo?.model || activeModel.value,
-      modelName: modelInfo?.modelName || activeModelName.value,
-      modelType: modelInfo?.modelType || activeModelKeyType.value,
-      modelAvatar: modelInfo?.modelAvatar || activeModelAvatar.value,
+      model: currentModelInfo.model,
+      modelName: currentModelInfo.modelName,
+      modelType: currentModelInfo.modelType,
+      modelAvatar: currentModelInfo.modelAvatar,
       overwriteReply: true,
       chatId: userMsg?.chatId ? String(userMsg.chatId) : undefined,
       replyChatId: targetReplyId || undefined,
@@ -1666,12 +1697,7 @@ async function fetchCurrentAppDetail(appId: number) {
 provide('onConversation', onConversation)
 provide('handleRegenerate', handleRegenerate)
 provide('handleEditConversation', handleEditConversation)
-provide('getActiveConversationModelInfo', () => ({
-  model: activeModel.value,
-  modelName: activeModelName.value,
-  modelType: activeModelKeyType.value,
-  modelAvatar: activeModelAvatar.value,
-}))
+provide('getActiveConversationModelInfo', getCurrentConversationModelInfo)
 
 // Potentially expose toggleAppList if needed by other children
 // defineExpose({ toggleAppList })

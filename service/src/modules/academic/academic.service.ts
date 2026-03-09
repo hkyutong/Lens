@@ -47,6 +47,7 @@ interface AcademicStreamState {
   hasStreamContent: boolean;
   tracebackMode: boolean;
   fullReasoning: string;
+  stablePolishContent: string;
   fileVectorResult: string;
   networkSearchResult: string;
   promptReference: string;
@@ -184,7 +185,9 @@ export class AcademicService {
   }
 
   private normalizeAcademicModelLookup(value: string) {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '')
+      .trim()
+      .toLowerCase();
   }
 
   private async findAcademicModelInfo(preferredModel: string, preferredModelName = '') {
@@ -643,6 +646,66 @@ export class AcademicService {
       .replace(/\n{4,}/g, '\n\n\n');
   }
 
+  private extractStablePolishReasonTable(text: string) {
+    const source = this.repairBrokenMarkdownTables(
+      this.normalizeDisplayContent(this.sanitizeAcademicOutput(text || '')),
+    );
+    if (!source) return '';
+
+    const lines = source.split('\n');
+    const headerPattern =
+      /^\s*\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|\s*$/;
+
+    let bestTable = '';
+
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!headerPattern.test(String(lines[i] || '').trim())) continue;
+
+      const tableLines: string[] = [];
+      const maybeTitle = String(lines[i - 1] || '').trim();
+      if (/^修改对照表[:：]?$/.test(maybeTitle)) {
+        tableLines.push(maybeTitle);
+      }
+
+      tableLines.push(String(lines[i] || '').trim());
+
+      let separatorConsumed = false;
+      let rowCount = 0;
+
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const current = String(lines[j] || '');
+        const trimmed = current.trim();
+
+        if (!trimmed) {
+          if (separatorConsumed && rowCount > 0) break;
+          continue;
+        }
+
+        if (!separatorConsumed) {
+          if (this.isAcademicMarkdownTableSeparator(trimmed)) {
+            tableLines.push(trimmed);
+            separatorConsumed = true;
+            continue;
+          }
+          break;
+        }
+
+        if (!/^\s*\|/.test(trimmed)) break;
+        tableLines.push(trimmed);
+        rowCount += 1;
+      }
+
+      if (separatorConsumed && rowCount > 0) {
+        const candidate = tableLines.join('\n').trim();
+        if (candidate.length > bestTable.length) {
+          bestTable = candidate;
+        }
+      }
+    }
+
+    return bestTable;
+  }
+
   private splitConcatenatedJsonObjects(value: string): string[] {
     const raw = String(value || '').trim();
     if (!raw) return [];
@@ -683,6 +746,13 @@ export class AcademicService {
   }
 
   private pickBestAcademicOutput(state: AcademicStreamState) {
+    const stablePolishText = this.extractStablePolishReasonTable(
+      state.stablePolishContent || state.fullContent || '',
+    );
+    if (stablePolishText) {
+      return stablePolishText;
+    }
+
     const contentText = this.normalizeDisplayContent(
       this.sanitizeAcademicOutput(state.fullContent || ''),
     );
@@ -692,6 +762,21 @@ export class AcademicService {
     );
     if (reasoningText) return reasoningText;
     return contentText || reasoningText || '';
+  }
+
+  private preserveStablePolishDisplay(
+    state: AcademicStreamState,
+    candidate: string,
+    fallbackSource = '',
+  ) {
+    const stablePolishText = this.extractStablePolishReasonTable(
+      state.stablePolishContent || candidate || fallbackSource || state.fullContent || '',
+    );
+    if (stablePolishText) {
+      state.stablePolishContent = stablePolishText;
+      return stablePolishText;
+    }
+    return candidate;
   }
 
   private extractTextFromSerializedContent(value: string) {
@@ -723,11 +808,12 @@ export class AcademicService {
       }
       if (Array.isArray(node.choices)) {
         const fromChoices = this.joinAcademicTextSegments(
-          node.choices.map((choice: any) =>
-            pullText(choice?.delta?.content) ||
-            pullText(choice?.message?.content) ||
-            pullText(choice?.content) ||
-            pullText(choice?.text),
+          node.choices.map(
+            (choice: any) =>
+              pullText(choice?.delta?.content) ||
+              pullText(choice?.message?.content) ||
+              pullText(choice?.content) ||
+              pullText(choice?.text),
           ),
         );
         if (fromChoices) return fromChoices;
@@ -820,7 +906,10 @@ export class AcademicService {
     normalized = this.stripAcademicInlineBoilerplate(normalized);
     normalized = this.sanitizeAcademicDelta(normalized);
     if (!normalized.trim()) return '';
-    if (this.hasSerializedPayloadMarkers(normalized) || this.isLikelyAcademicJsonResidue(normalized))
+    if (
+      this.hasSerializedPayloadMarkers(normalized) ||
+      this.isLikelyAcademicJsonResidue(normalized)
+    )
       return '';
     if (this.isAcademicTraceNoise(normalized)) return '';
     if (this.isAcademicHeartbeatText(normalized)) return '';
@@ -852,6 +941,7 @@ export class AcademicService {
       hasStreamContent: false,
       tracebackMode: false,
       fullReasoning: '',
+      stablePolishContent: '',
       fileVectorResult: '',
       networkSearchResult: '',
       promptReference: '',
@@ -1280,7 +1370,11 @@ export class AcademicService {
     if (/^[_-]*files[_-]*/i.test(source)) return false;
     if (/^[a-zA-Z]:[\\/]/.test(source)) return true;
     if (source.startsWith('/')) return true;
-    if (/^(?:private_upload|gpt_log|downloadzone|public\/file|file\/dev\/userFiles|academic-4\.0)\//i.test(source)) {
+    if (
+      /^(?:private_upload|gpt_log|downloadzone|public\/file|file\/dev\/userFiles|academic-4\.0)\//i.test(
+        source,
+      )
+    ) {
       return true;
     }
     return /[\\/]/.test(source);
@@ -1362,13 +1456,17 @@ export class AcademicService {
       throw new HttpException('系统未配置可用模型，请联系管理员', HttpStatus.INTERNAL_SERVER_ERROR);
     }
     if (!resolvedModel.modelInfo) {
-      const displayName = resolvedModel.requestedModelName || resolvedModel.requestedModel || '当前模型';
+      const displayName =
+        resolvedModel.requestedModelName || resolvedModel.requestedModel || '当前模型';
       throw new HttpException(
         `所选模型“${displayName}”当前不可用，请刷新模型列表后重试`,
         HttpStatus.BAD_REQUEST,
       );
     }
-    if (resolvedModel.requestedModel && resolvedModel.requestedModel !== resolvedModel.resolvedModel) {
+    if (
+      resolvedModel.requestedModel &&
+      resolvedModel.requestedModel !== resolvedModel.resolvedModel
+    ) {
       this.logger.warn(
         JSON.stringify({
           event: 'academic_model_fallback',
@@ -1630,6 +1728,7 @@ export class AcademicService {
       hasStreamContent: false,
       tracebackMode: false,
       fullReasoning: '',
+      stablePolishContent: '',
       fileVectorResult: '',
       networkSearchResult: '',
       promptReference: '',
@@ -2016,6 +2115,7 @@ export class AcademicService {
 
           const contentForOutput = this.pickBestAcademicOutput(state);
           let finalContent = await buildDisplayContent(contentForOutput, !state.streamError);
+          finalContent = this.preserveStablePolishDisplay(state, finalContent, contentForOutput);
           const shouldRetryOnEmptyError =
             !controller.signal.aborted &&
             Boolean(state.streamError) &&
@@ -2029,6 +2129,11 @@ export class AcademicService {
               );
               const retryOutput = this.pickBestAcademicOutput(retryState);
               let retryContent = await buildDisplayContent(retryOutput, !retryState.streamError);
+              retryContent = this.preserveStablePolishDisplay(
+                retryState,
+                retryContent,
+                retryOutput,
+              );
               if (!this.isMeaningfulAcademicContent(retryContent) && retryState.fileVectorResult) {
                 retryContent = '文件已生成，可在下方下载。';
               }
@@ -2044,6 +2149,8 @@ export class AcademicService {
                 state.promptReference = retryState.promptReference || state.promptReference;
                 state.toolCalls = retryState.toolCalls || state.toolCalls;
                 state.finishReason = retryState.finishReason || state.finishReason;
+                state.stablePolishContent =
+                  retryState.stablePolishContent || state.stablePolishContent;
                 state.streamError = '';
                 finalContent = retryContent;
                 this.logger.log(
@@ -2272,6 +2379,7 @@ export class AcademicService {
             this.pickBestAcademicOutput(state),
             false,
           );
+          fallbackContent = this.preserveStablePolishDisplay(state, fallbackContent);
           if (isArxivPlugin) {
             fallbackContent = await this.ensureArxivSummary(
               fallbackContent || state.fullContent || '',
@@ -2308,6 +2416,7 @@ export class AcademicService {
         clearMaxDurationTimer();
         clearForceCloseTimer();
         let partialContent = await buildDisplayContent(this.pickBestAcademicOutput(state), false);
+        partialContent = this.preserveStablePolishDisplay(state, partialContent);
         if (isArxivPlugin) {
           partialContent = await this.ensureArxivSummary(
             partialContent || state.fullContent || '',
@@ -2477,6 +2586,7 @@ export class AcademicService {
         err?.stack,
       );
       let fallbackContent = await buildDisplayContent(this.pickBestAcademicOutput(state), false);
+      fallbackContent = this.preserveStablePolishDisplay(state, fallbackContent);
       if (isArxivPlugin) {
         fallbackContent = await this.ensureArxivSummary(
           fallbackContent || state.fullContent || '',
@@ -2542,7 +2652,11 @@ export class AcademicService {
     if (/^\s*File\s+"\.\//i.test(normalized)) return true;
     if (/^\s*File\s+"[^"\n]+"\s*,\s*line\s+\d+[^\n]*$/i.test(normalized)) return true;
     if (/^\s*BrokenPipeError:/i.test(normalized)) return true;
-    if (/^\s*(?:During handling of the above exception|The above exception was the direct cause)/i.test(normalized))
+    if (
+      /^\s*(?:During handling of the above exception|The above exception was the direct cause)/i.test(
+        normalized,
+      )
+    )
       return true;
     if (/^\s*[\^~]+\s*$/i.test(normalized)) return true;
     if (/^OSError:\s*\[Errno\s*\d+\]/i.test(normalized)) return true;
@@ -2565,7 +2679,9 @@ export class AcademicService {
   }
 
   private shouldStartAcademicTracebackMode(text: string) {
-    const normalized = String(text || '').replace(/[​⁠﻿]/g, '').trim();
+    const normalized = String(text || '')
+      .replace(/[​⁠﻿]/g, '')
+      .trim();
     if (!normalized) return false;
     if (/Traceback\s*\(most recent call last\):/i.test(normalized)) return true;
     if (/在执行过程中遭遇问题.*Traceback/i.test(normalized)) return true;
@@ -2574,11 +2690,17 @@ export class AcademicService {
   }
 
   private shouldEndAcademicTracebackMode(text: string) {
-    const normalized = String(text || '').replace(/[​⁠﻿]/g, '').trim();
+    const normalized = String(text || '')
+      .replace(/[​⁠﻿]/g, '')
+      .trim();
     if (!normalized) return false;
     if (/```/.test(normalized)) return true;
     if (/^\s*警告，文本过长将进行截断，Token溢出数[:：]\s*\d+/i.test(normalized)) return true;
-    if (/^(?:以下|总体而言|总之|摘要[:：]|论文标题[:：]|结论[:：]|总结[:：]|最终|收到|文件已生成|学术服务)/i.test(normalized))
+    if (
+      /^(?:以下|总体而言|总之|摘要[:：]|论文标题[:：]|结论[:：]|总结[:：]|最终|收到|文件已生成|学术服务)/i.test(
+        normalized,
+      )
+    )
       return true;
     return false;
   }
@@ -2923,7 +3045,10 @@ export class AcademicService {
     // 3) 清理常见 Python/requests/urllib3 错误链路残留行。
     normalized = normalized
       .replace(/^\s*File\s+"[^"\n]+"\s*,\s*line\s+\d+[^\n]*$/gim, '')
-      .replace(/^\s*The above exception was the direct cause of the following exception:\s*$/gim, '')
+      .replace(
+        /^\s*The above exception was the direct cause of the following exception:\s*$/gim,
+        '',
+      )
       .replace(/^\s*During handling of the above exception, another exception occurred:\s*$/gim, '')
       .replace(/^\s*(?:urllib3|requests|http\.client)\.[^\n]*$/gim, '')
       .replace(/^\s*(?:warnings?)?[，,\s]*在执行过程中遭遇问题[，,\s]*Traceback[:：]?\s*$/gim, '')
@@ -2955,13 +3080,19 @@ export class AcademicService {
       .replace(/\b(?:(?:函数)?插件作者|(?:函数)?插件贡献者)\s*\[[^\]]*]\s*/gi, '')
       .replace(/^\s*函数插件功能[？?]\s*$/gim, '')
       .replace(/\b(?:PDF_Summary|Word_Summary|PDF_QA)\s*[。.:：]\s*/gi, '')
-      .replace(/\b(?:Request timeout\.\s*Network error\.?\s*Please check proxy settings in config\.py\.?)/gi, '')
+      .replace(
+        /\b(?:Request timeout\.\s*Network error\.?\s*Please check proxy settings in config\.py\.?)/gi,
+        '',
+      )
       .replace(
         /网络错误[，,。\s]*检查代理服务器是否可用[，,。\s]*以及代理设置的格式是否正确[，,。\s]*格式须是\[协议\]:\/\/\[地址\]:\[端口][，,。\s]*缺一不可[。.]?/gi,
         '',
       )
       .replace(/Please check proxy settings in config\.py\.?/gi, '')
-      .replace(/(?:Unable to connect to proxy|ProxyError|Max retries exceeded with url)[^\n]*/gi, '')
+      .replace(
+        /(?:Unable to connect to proxy|ProxyError|Max retries exceeded with url)[^\n]*/gi,
+        '',
+      )
       .replace(/^\s*waiting\s+gpt\s+response\.?\s*$/gim, '')
       .replace(/^\s*Request timeout\.[^\n]*$/gim, '')
       .replace(/^\s*学术服务响应超时[，,。]?\s*请稍后重试\s*$/gim, '')
@@ -3097,9 +3228,7 @@ export class AcademicService {
   }
 
   private isAcademicMarkdownTableSeparator(line: string) {
-    return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(
-      String(line || ''),
-    );
+    return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(String(line || ''));
   }
 
   private splitAcademicMarkdownTableCells(line: string) {
@@ -3172,7 +3301,8 @@ export class AcademicService {
           const nextIndex = findNextNonEmptyIndex(sourceLines, i + 1);
           const next = nextIndex < sourceLines.length ? String(sourceLines[nextIndex] || '') : '';
           const next2Index = findNextNonEmptyIndex(sourceLines, nextIndex + 1);
-          const next2 = next2Index < sourceLines.length ? String(sourceLines[next2Index] || '') : '';
+          const next2 =
+            next2Index < sourceLines.length ? String(sourceLines[next2Index] || '') : '';
           const nextCells = this.splitAcademicMarkdownTableCells(next);
           const canSplitNormalHeader =
             maybeHeaderCells.length >= 2 && this.isAcademicMarkdownTableSeparator(next);
@@ -3258,10 +3388,7 @@ export class AcademicService {
               const nextCells = this.splitAcademicMarkdownTableCells(nextRow);
               if (nextCells.length === 1) {
                 out.push(
-                  this.normalizeAcademicMarkdownTableRow(
-                    [cells[0], nextCells[0]],
-                    expectedColumns,
-                  ),
+                  this.normalizeAcademicMarkdownTableRow([cells[0], nextCells[0]], expectedColumns),
                 );
                 cursor = nextRowIndex + 1;
                 continue;
@@ -3399,7 +3526,9 @@ export class AcademicService {
   private sanitizeAcademicDeltaText(text: string) {
     if (!text) return '';
     const normalized = this.stripAcademicNoiseLines(
-      String(text || '').replace(/[​⁠﻿]/g, '').replace(/\r\n/g, '\n'),
+      String(text || '')
+        .replace(/[​⁠﻿]/g, '')
+        .replace(/\r\n/g, '\n'),
     );
     const cleaned = this.stripAcademicTracebackSections(normalized);
     return this.stripAcademicInlineBoilerplate(cleaned);
@@ -3448,12 +3577,15 @@ export class AcademicService {
       .replace(/"\s*}\s*]\s*}\s*/g, '')
       .replace(/"\s*}\s*]\s*,?\s*/g, '')
       .replace(/^\s*"content"\s*:\s*\[\s*\{\s*"type"\s*:\s*"text"\s*,\s*"text"\s*:\s*"/gim, '')
-      .replace(/^\s*"?(?:chatId|finishReason|promptReference|networkSearchResult|fileVectorResult|tool_calls)"?\s*:\s*[^,\n]+,?\s*$/gim, '')
-      .replace(/^\s*"?(?:full_reasoning_content|reasoning_content)"?\s*:\s*"(?:\\.|[^"])*",?\s*$/gim, '')
       .replace(
-        /^\s*"userBalance"\s*:\s*\{[\s\S]*?\}\s*,?\s*$/gim,
+        /^\s*"?(?:chatId|finishReason|promptReference|networkSearchResult|fileVectorResult|tool_calls)"?\s*:\s*[^,\n]+,?\s*$/gim,
         '',
       )
+      .replace(
+        /^\s*"?(?:full_reasoning_content|reasoning_content)"?\s*:\s*"(?:\\.|[^"])*",?\s*$/gim,
+        '',
+      )
+      .replace(/^\s*"userBalance"\s*:\s*\{[\s\S]*?\}\s*,?\s*$/gim, '')
       .replace(/[ \t]*\n[ \t]*/g, '\n')
       .replace(/\n{4,}/g, '\n\n\n');
 
@@ -3466,8 +3598,10 @@ export class AcademicService {
       String(text).replace(/[​⁠﻿]/g, '').replace(/\r\n/g, '\n'),
     );
     normalized = this.stripAcademicTracebackSections(normalized);
-    normalized = this.stripAcademicInlineBoilerplate(normalized)
-      .replace(/Lens Report\s*｜\s*昱镜报告/g, 'Lens Report｜昱镜报告');
+    normalized = this.stripAcademicInlineBoilerplate(normalized).replace(
+      /Lens Report\s*｜\s*昱镜报告/g,
+      'Lens Report｜昱镜报告',
+    );
     normalized = this.dedupeAcademicTruncationWarnings(normalized);
     if (!normalized.length) return '';
     return normalized;
@@ -3646,7 +3780,9 @@ export class AcademicService {
     const headingCount = (source.match(/^\s{0,3}#{1,6}\s+/gm) || []).length;
     const listCount = (source.match(/^\s*(?:[-*+]|\d+\.)\s+/gm) || []).length;
     const codeFenceCount = (source.match(/```/g) || []).length;
-    return lineBreaks * 2 + tableLines * 16 + headingCount * 8 + listCount * 6 + codeFenceCount * 10;
+    return (
+      lineBreaks * 2 + tableLines * 16 + headingCount * 8 + listCount * 6 + codeFenceCount * 10
+    );
   }
 
   private isAcademicTextClearlyWorse(candidate: string, existing: string) {
@@ -3778,7 +3914,8 @@ export class AcademicService {
     ) {
       return true;
     }
-    if (/^对整个Latex项目进行(?:润色|纠错|翻译)/i.test(normalized) && normalized.length < 260) return true;
+    if (/^对整个Latex项目进行(?:润色|纠错|翻译)/i.test(normalized) && normalized.length < 260)
+      return true;
     if (/^将PDF转换为Latex项目/i.test(normalized) && normalized.length < 260) return true;
     if (
       /(正在提取摘要并下载pdf文档|下载arxiv论文并翻译摘要|读取并摘要arxiv论文|arxiv论文下载|正在获取文献名|下载中)/i.test(
@@ -3963,6 +4100,10 @@ export class AcademicService {
       if (!merged.length) return;
       state.fullContent = merged;
       state.hasStreamContent = true;
+      const stablePolishMatch = this.extractStablePolishReasonTable(state.fullContent || '');
+      if (stablePolishMatch) {
+        state.stablePolishContent = stablePolishMatch;
+      }
     };
     const appendSanitizedContent = (text: any) => {
       const raw = String(text ?? '');
@@ -4084,13 +4225,15 @@ export class AcademicService {
               ) {
                 return this.extractTextFromSerializedContent(item.text);
               }
-              if (typeof item === 'object' && item.content) return extractOpenAIContent(item.content);
+              if (typeof item === 'object' && item.content)
+                return extractOpenAIContent(item.content);
               return '';
             }),
           );
         }
         if (typeof value === 'object') {
-          if (typeof value.text === 'string') return this.extractTextFromSerializedContent(value.text);
+          if (typeof value.text === 'string')
+            return this.extractTextFromSerializedContent(value.text);
           if (value.content) return extractOpenAIContent(value.content);
         }
         return '';
@@ -4108,16 +4251,19 @@ export class AcademicService {
       };
       const choiceContent = Array.isArray(payload.choices)
         ? this.joinAcademicTextSegments(
-            payload.choices.map((choice: any) =>
-              extractOpenAIContent(choice?.delta?.content) ||
-              extractOpenAIContent(choice?.message?.content) ||
-              extractOpenAIContent(choice?.content),
+            payload.choices.map(
+              (choice: any) =>
+                extractOpenAIContent(choice?.delta?.content) ||
+                extractOpenAIContent(choice?.message?.content) ||
+                extractOpenAIContent(choice?.content),
             ),
           )
         : '';
       const outputContent = Array.isArray(payload.output)
         ? this.joinAcademicTextSegments(
-            payload.output.map((item: any) => extractOpenAIContent(item?.content) || extractOpenAIContent(item)),
+            payload.output.map(
+              (item: any) => extractOpenAIContent(item?.content) || extractOpenAIContent(item),
+            ),
           )
         : '';
       const primaryContent = this.pickPrimaryAcademicText([
