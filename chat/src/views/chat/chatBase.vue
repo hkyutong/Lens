@@ -694,31 +694,102 @@ const polishReasonTableHeaderPattern =
 
 const markdownTableLinePattern = /^\s*\|.*\|\s*$/
 
+const splitMarkdownTableCells = (line: string) => {
+  const text = String(line || '').trim()
+  if (!text.startsWith('|') || !text.endsWith('|')) return []
+  let body = text.slice(1, -1)
+  const cells: string[] = []
+  let current = ''
+  let escaped = false
+  for (const char of body) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      current += char
+      escaped = true
+      continue
+    }
+    if (char === '|') {
+      cells.push(current.trim())
+      current = ''
+      continue
+    }
+    current += char
+  }
+  cells.push(current.trim())
+  return cells
+}
+
 const countMarkdownTableRows = (value: string) =>
   String(value || '')
     .split('\n')
-    .filter(line => markdownTableLinePattern.test(String(line || '').trim())).length
+    .map(line => String(line || '').trim())
+    .filter(line => markdownTableLinePattern.test(line))
+    .filter(line => {
+      const cells = splitMarkdownTableCells(line)
+      if (cells.length !== 3) return false
+      if (cells[0] === '修改前原文片段' && cells[1] === '修改后片段' && cells[2] === '修改原因与解释')
+        return false
+      return !/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(line)
+    }).length
 
 const extractStablePolishReasonTable = (value: string) => {
   const normalized = normalizeIncomingText(value, { trim: true })
   if (!normalized) return ''
 
-  const lines = normalized.split('\n')
-  const start = lines.findIndex(line => polishReasonTableHeaderPattern.test(String(line || '')))
-  if (start < 0) return ''
+  const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
+  let bestTable = ''
+  let bestRowCount = 0
 
-  let end = start + 1
-  while (end < lines.length && markdownTableLinePattern.test(String(lines[end] || '').trim())) {
-    end += 1
+  for (let i = 0; i < lines.length; i += 1) {
+    const headerLine = String(lines[i] || '').trim()
+    const headerCells = splitMarkdownTableCells(headerLine)
+    if (
+      headerCells.length !== 3 ||
+      headerCells[0] !== '修改前原文片段' ||
+      headerCells[1] !== '修改后片段' ||
+      headerCells[2] !== '修改原因与解释'
+    ) {
+      continue
+    }
+
+    const tableLines = ['| 修改前原文片段 | 修改后片段 | 修改原因与解释 |']
+    let separatorConsumed = false
+    let rowCount = 0
+
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const trimmed = String(lines[j] || '').trim()
+      if (!trimmed) {
+        if (separatorConsumed && rowCount > 0) break
+        continue
+      }
+
+      if (!separatorConsumed) {
+        if (/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(trimmed)) {
+          tableLines.push('| --- | --- | --- |')
+          separatorConsumed = true
+          continue
+        }
+        break
+      }
+
+      if (!markdownTableLinePattern.test(trimmed)) break
+      const rowCells = splitMarkdownTableCells(trimmed)
+      if (rowCells.length !== 3) break
+      tableLines.push(`| ${rowCells.join(' | ')} |`)
+      rowCount += 1
+    }
+
+    if (separatorConsumed && rowCount > bestRowCount) {
+      bestTable = tableLines.join('\n')
+      bestRowCount = rowCount
+    }
   }
 
-  const tableBlock = lines
-    .slice(start, end)
-    .map(line => String(line || '').trimEnd())
-    .join('\n')
-    .trim()
-
-  return countMarkdownTableRows(tableBlock) >= 3 ? tableBlock : ''
+  return bestRowCount > 0 ? bestTable : ''
 }
 
 const pickBetterPolishTableSnapshot = (current: string, candidate: string) => {

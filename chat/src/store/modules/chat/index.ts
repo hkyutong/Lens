@@ -540,17 +540,27 @@ export const useChatStore = defineStore('chat-store', {
     },
 
     applyHiddenReplyFilter(list: Chat.Chat[], groupId: number) {
+      const fullList = Array.isArray(list) ? [...list] : []
       const anchorId = this.getHiddenReplyTailAnchor(groupId)
-      let visibleList = Array.isArray(list) ? [...list] : []
-      if (anchorId > 0) {
-        const anchorIndex = visibleList.findIndex(item => Number(item?.chatId || 0) === anchorId)
-        if (anchorIndex >= 0) {
-          visibleList = visibleList.slice(0, anchorIndex + 1)
-        }
-      }
       const hiddenIds = new Set(this.getHiddenReplyChatIds(groupId))
-      if (!hiddenIds.size) return visibleList
-      return visibleList.filter(item => !hiddenIds.has(Number(item?.chatId || 0)))
+      if (!anchorId || !hiddenIds.size) return fullList
+
+      const anchorIndex = fullList.findIndex(item => Number(item?.chatId || 0) === anchorId)
+      if (anchorIndex < 0) {
+        this.clearHiddenReplyTail(groupId)
+        return fullList
+      }
+
+      const tailList = fullList.slice(anchorIndex + 1)
+      if (!tailList.length) return fullList.slice(0, anchorIndex + 1)
+
+      const hasUnexpectedTail = tailList.some(item => !hiddenIds.has(Number(item?.chatId || 0)))
+      if (hasUnexpectedTail) {
+        this.clearHiddenReplyTail(groupId)
+        return fullList
+      }
+
+      return fullList.slice(0, anchorIndex + 1)
     },
 
     rememberHiddenReplyTail(groupId: number, chatIds: number[], anchorChatId?: number) {
@@ -563,7 +573,7 @@ export const useChatStore = defineStore('chat-store', {
       const currentAnchors = this.hiddenReplyTailAnchorByGroup || {}
       this.hiddenReplyChatIdsByGroup = {
         ...current,
-        [groupId]: Array.from(new Set([...(current[groupId] || []), ...normalizedIds])),
+        [groupId]: normalizedIds,
       }
       this.hiddenReplyTailAnchorByGroup = normalizedAnchorId
         ? {

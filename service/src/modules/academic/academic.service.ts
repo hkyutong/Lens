@@ -647,20 +647,25 @@ export class AcademicService {
   }
 
   private extractStablePolishReasonTable(text: string) {
-    const source = this.repairBrokenMarkdownTables(
-      this.normalizeDisplayContent(this.sanitizeAcademicOutput(text || '')),
-    );
+    const source = this.normalizeDisplayContent(this.sanitizeAcademicOutput(text || ''));
     if (!source) return '';
 
-    const lines = source.split('\n');
-    const headerPattern =
-      /^\s*\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|\s*$/;
+    const lines = source.split('\n').map(line => String(line || '').trimEnd());
 
     let bestTable = '';
     let bestRowCount = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
-      if (!headerPattern.test(String(lines[i] || '').trim())) continue;
+      const headerLine = String(lines[i] || '').trim();
+      const headerCells = this.splitAcademicMarkdownTableCells(headerLine);
+      if (
+        headerCells.length !== 3 ||
+        headerCells[0] !== '修改前原文片段' ||
+        headerCells[1] !== '修改后片段' ||
+        headerCells[2] !== '修改原因与解释'
+      ) {
+        continue;
+      }
 
       const tableLines: string[] = [];
       const maybeTitle = String(lines[i - 1] || '').trim();
@@ -668,14 +673,13 @@ export class AcademicService {
         tableLines.push(maybeTitle);
       }
 
-      tableLines.push(String(lines[i] || '').trim());
+      tableLines.push('| 修改前原文片段 | 修改后片段 | 修改原因与解释 |');
 
       let separatorConsumed = false;
       let rowCount = 0;
 
       for (let j = i + 1; j < lines.length; j += 1) {
-        const current = String(lines[j] || '');
-        const trimmed = current.trim();
+        const trimmed = String(lines[j] || '').trim();
 
         if (!trimmed) {
           if (separatorConsumed && rowCount > 0) break;
@@ -684,15 +688,17 @@ export class AcademicService {
 
         if (!separatorConsumed) {
           if (this.isAcademicMarkdownTableSeparator(trimmed)) {
-            tableLines.push(trimmed);
+            tableLines.push('| --- | --- | --- |');
             separatorConsumed = true;
             continue;
           }
           break;
         }
 
-        if (!/^\s*\|/.test(trimmed)) break;
-        tableLines.push(trimmed);
+        if (!/^\s*\|.*\|\s*$/.test(trimmed)) break;
+        const rowCells = this.splitAcademicMarkdownTableCells(trimmed);
+        if (rowCells.length !== 3) break;
+        tableLines.push(this.normalizeAcademicMarkdownTableRow(rowCells, 3));
         rowCount += 1;
       }
 
@@ -710,15 +716,23 @@ export class AcademicService {
 
   private countStablePolishReasonTableRows(text: string) {
     if (!text) return 0;
-    const headerPattern =
-      /^\s*\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|\s*$/;
     return String(text)
       .split('\n')
       .map(line => String(line || '').trim())
       .filter(Boolean)
-      .filter(line => /^\s*\|/.test(line))
-      .filter(line => !headerPattern.test(line))
-      .filter(line => !this.isAcademicMarkdownTableSeparator(line)).length;
+      .filter(line => /^\s*\|.*\|\s*$/.test(line))
+      .filter(line => {
+        const cells = this.splitAcademicMarkdownTableCells(line);
+        if (cells.length !== 3) return false;
+        if (
+          cells[0] === '修改前原文片段' &&
+          cells[1] === '修改后片段' &&
+          cells[2] === '修改原因与解释'
+        ) {
+          return false;
+        }
+        return !this.isAcademicMarkdownTableSeparator(line);
+      }).length;
   }
 
   private pickBetterStablePolishTableSnapshot(current: string, candidate: string) {
