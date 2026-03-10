@@ -657,6 +657,7 @@ export class AcademicService {
       /^\s*\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|\s*$/;
 
     let bestTable = '';
+    let bestRowCount = 0;
 
     for (let i = 0; i < lines.length; i += 1) {
       if (!headerPattern.test(String(lines[i] || '').trim())) continue;
@@ -697,13 +698,37 @@ export class AcademicService {
 
       if (separatorConsumed && rowCount > 0) {
         const candidate = tableLines.join('\n').trim();
-        if (candidate.length > bestTable.length) {
+        if (rowCount > bestRowCount) {
           bestTable = candidate;
+          bestRowCount = rowCount;
         }
       }
     }
 
     return bestTable;
+  }
+
+  private countStablePolishReasonTableRows(text: string) {
+    if (!text) return 0;
+    const headerPattern =
+      /^\s*\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|\s*$/;
+    return String(text)
+      .split('\n')
+      .map(line => String(line || '').trim())
+      .filter(Boolean)
+      .filter(line => /^\s*\|/.test(line))
+      .filter(line => !headerPattern.test(line))
+      .filter(line => !this.isAcademicMarkdownTableSeparator(line)).length;
+  }
+
+  private pickBetterStablePolishTableSnapshot(current: string, candidate: string) {
+    const currentTable = this.extractStablePolishReasonTable(current || '');
+    const candidateTable = this.extractStablePolishReasonTable(candidate || '');
+    if (!candidateTable) return currentTable;
+    if (!currentTable) return candidateTable;
+    const currentRows = this.countStablePolishReasonTableRows(currentTable);
+    const candidateRows = this.countStablePolishReasonTableRows(candidateTable);
+    return candidateRows > currentRows ? candidateTable : currentTable;
   }
 
   private splitConcatenatedJsonObjects(value: string): string[] {
@@ -746,9 +771,7 @@ export class AcademicService {
   }
 
   private pickBestAcademicOutput(state: AcademicStreamState) {
-    const stablePolishText = this.extractStablePolishReasonTable(
-      state.stablePolishContent || state.fullContent || '',
-    );
+    const stablePolishText = String(state.stablePolishContent || '').trim();
     if (stablePolishText) {
       return stablePolishText;
     }
@@ -769,14 +792,29 @@ export class AcademicService {
     candidate: string,
     fallbackSource = '',
   ) {
-    const stablePolishText = this.extractStablePolishReasonTable(
-      state.stablePolishContent || candidate || fallbackSource || state.fullContent || '',
+    const existingStable = String(state.stablePolishContent || '').trim();
+    if (existingStable) {
+      return existingStable;
+    }
+    const stablePolishText = this.pickBetterStablePolishTableSnapshot(
+      '',
+      candidate || fallbackSource || state.fullContent || '',
     );
     if (stablePolishText) {
       state.stablePolishContent = stablePolishText;
       return stablePolishText;
     }
     return candidate;
+  }
+
+  private resolvePersistedAcademicContent(
+    state: AcademicStreamState,
+    preferredContent: string,
+    fallbackContent = '',
+  ) {
+    const stablePolishText = String(state.stablePolishContent || '').trim();
+    if (stablePolishText) return stablePolishText;
+    return preferredContent || fallbackContent || state.fullContent || '';
   }
 
   private extractTextFromSerializedContent(value: string) {
@@ -1665,15 +1703,19 @@ export class AcademicService {
             reason === 'idle_timeout'
               ? '学术服务响应超时，请稍后重试'
               : '学术服务处理超时，请稍后重试';
+          const persistedFallbackContent = this.resolvePersistedAcademicContent(
+            state,
+            fallbackContent,
+          );
           try {
             await this.chatLogService.updateChatLog(assistantLogId, {
-              content: fallbackContent,
+              content: persistedFallbackContent,
               status: 4,
             });
           } catch (_error) {}
           res.write(
             `${JSON.stringify({
-              finalContent: fallbackContent,
+              finalContent: persistedFallbackContent,
               requestId,
               finishReason: 'error',
             })}\n`,
@@ -2256,6 +2298,11 @@ export class AcademicService {
           const hasRenderableOutput = Boolean(
             this.isMeaningfulAcademicContent(finalContent) || state.fileVectorResult,
           );
+          const persistedFinalContent = this.resolvePersistedAcademicContent(
+            state,
+            finalContent,
+            contentForOutput,
+          );
           if (state.streamError && hasRenderableOutput) {
             this.logger.warn(
               JSON.stringify({
@@ -2273,8 +2320,13 @@ export class AcademicService {
               finalContent =
                 this.getSafeAcademicErrorMessage(state.streamError) || '学术服务处理失败，请重试';
             }
+            const persistedErrorContent = this.resolvePersistedAcademicContent(
+              state,
+              finalContent,
+              contentForOutput,
+            );
             await this.chatLogService.updateChatLog(assistantLogId, {
-              content: finalContent || state.fullContent || '',
+              content: persistedErrorContent,
               reasoning_content: state.fullReasoning || null,
               tool_calls: state.toolCalls || null,
               fileVectorResult: state.fileVectorResult || null,
@@ -2284,7 +2336,7 @@ export class AcademicService {
             });
             res.write(
               `${JSON.stringify({
-                finalContent: finalContent || state.fullContent || '',
+                finalContent: persistedErrorContent,
                 requestId,
                 finishReason: 'error',
               })}\n`,
@@ -2314,7 +2366,7 @@ export class AcademicService {
           });
 
           await this.chatLogService.updateChatLog(assistantLogId, {
-            content: finalContent || state.fullContent,
+            content: persistedFinalContent,
             reasoning_content: state.fullReasoning,
             tool_calls: state.toolCalls,
             fileVectorResult: state.fileVectorResult || null,
@@ -2343,7 +2395,7 @@ export class AcademicService {
           );
           res.write(
             `${JSON.stringify({
-              finalContent: finalContent || state.fullContent || '',
+              finalContent: persistedFinalContent,
               requestId,
               finishReason: 'stop',
             })}\n`,
@@ -2390,8 +2442,12 @@ export class AcademicService {
             fallbackContent =
               this.getSafeAcademicErrorMessage(err?.message) || '学术服务处理失败，请重试';
           }
+          const persistedFallbackContent = this.resolvePersistedAcademicContent(
+            state,
+            fallbackContent,
+          );
           await this.chatLogService.updateChatLog(assistantLogId, {
-            content: fallbackContent,
+            content: persistedFallbackContent,
             reasoning_content: state.fullReasoning || null,
             tool_calls: state.toolCalls || null,
             fileVectorResult: state.fileVectorResult || null,
@@ -2401,7 +2457,7 @@ export class AcademicService {
           });
           res.write(
             `${JSON.stringify({
-              finalContent: fallbackContent,
+              finalContent: persistedFallbackContent,
               requestId,
               finishReason: 'error',
             })}\n`,
@@ -2482,9 +2538,14 @@ export class AcademicService {
         if (abortedByUpstream && hasRenderablePartial) {
           const gracefulContent =
             partialContent || (state.fileVectorResult ? '文件已生成，可在下方下载。' : '');
+          const persistedGracefulContent = this.resolvePersistedAcademicContent(
+            state,
+            gracefulContent,
+            partialContent,
+          );
           const promptTokens = await getTokenCount(prompt || '');
           const completionTokens = await getTokenCount(
-            `${state.fullReasoning}${gracefulContent || state.fullContent || ''}`,
+            `${state.fullReasoning}${persistedGracefulContent}`,
           );
           let charge = deduct * (usingDeepThinking ? deductDeepThink : 1);
           if (isTokenBased === true) {
@@ -2499,7 +2560,7 @@ export class AcademicService {
             totalTokens: promptTokens + completionTokens,
           });
           await this.chatLogService.updateChatLog(assistantLogId, {
-            content: gracefulContent || state.fullContent || '',
+            content: persistedGracefulContent,
             reasoning_content: state.fullReasoning || null,
             tool_calls: state.toolCalls || null,
             fileVectorResult: state.fileVectorResult || null,
@@ -2526,7 +2587,7 @@ export class AcademicService {
           );
           res.write(
             `${JSON.stringify({
-              finalContent: gracefulContent || state.fullContent || '',
+              finalContent: persistedGracefulContent,
               requestId,
               finishReason: 'stop',
             })}\n`,
@@ -2553,8 +2614,12 @@ export class AcademicService {
           fallbackContent =
             this.getSafeAcademicErrorMessage(error?.message) || '学术服务处理失败，请重试';
         }
+        const persistedFallbackContent = this.resolvePersistedAcademicContent(
+          state,
+          fallbackContent,
+        );
         await this.chatLogService.updateChatLog(assistantLogId, {
-          content: fallbackContent,
+          content: persistedFallbackContent,
           reasoning_content: state.fullReasoning || null,
           tool_calls: state.toolCalls || null,
           fileVectorResult: state.fileVectorResult || null,
@@ -2564,7 +2629,7 @@ export class AcademicService {
         });
         res.write(
           `${JSON.stringify({
-            finalContent: fallbackContent,
+            finalContent: persistedFallbackContent,
             requestId,
             finishReason: 'error',
           })}\n`,
@@ -2597,8 +2662,9 @@ export class AcademicService {
         fallbackContent =
           this.getSafeAcademicErrorMessage(err?.message) || '学术服务处理失败，请重试';
       }
+      const persistedFallbackContent = this.resolvePersistedAcademicContent(state, fallbackContent);
       await this.chatLogService.updateChatLog(assistantLogId, {
-        content: fallbackContent,
+        content: persistedFallbackContent,
         reasoning_content: state.fullReasoning || null,
         tool_calls: state.toolCalls || null,
         fileVectorResult: state.fileVectorResult || null,
@@ -2608,7 +2674,7 @@ export class AcademicService {
       });
       res.write(
         `${JSON.stringify({
-          finalContent: fallbackContent,
+          finalContent: persistedFallbackContent,
           requestId,
           finishReason: 'error',
         })}\n`,
@@ -4100,7 +4166,10 @@ export class AcademicService {
       if (!merged.length) return;
       state.fullContent = merged;
       state.hasStreamContent = true;
-      const stablePolishMatch = this.extractStablePolishReasonTable(state.fullContent || '');
+      const stablePolishMatch = this.pickBetterStablePolishTableSnapshot(
+        state.stablePolishContent || '',
+        state.fullContent || '',
+      );
       if (stablePolishMatch) {
         state.stablePolishContent = stablePolishMatch;
       }

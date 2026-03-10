@@ -1,5 +1,8 @@
 # 更新日志
 
+## 0.0.28 (2026-03-10)
+- 修复中英文润色“刷新页面后表格重新挤在一起”：`service/src/modules/academic/academic.service.ts` 现在将流式阶段形成的稳定三列表 `修改前原文片段 | 修改后片段 | 修改原因与解释` 作为只增不减的快照保存，并在正常结束、超时、上游中断与异常分支统一优先用该快照回包和落库，避免后续汇总文本再次污染历史记录。
+
 ## 0.0.27 (2026-03-09)
 - 修复中英文润色“生成过程是稳定三列表、结束后又跳成拥挤布局”：`chat/src/views/chat/chatBase.vue` 与 `service/src/modules/academic/academic.service.ts` 现在只锁定连续且完整的三列表 `修改前原文片段 | 修改后片段 | 修改原因与解释`，完成态优先保留该稳定表格，不再用后端汇总大段文本覆盖流式结果。
 - 修复重新生成与编辑未跟随当前前端选模：`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Message/Text/index.vue` 与 `service/src/modules/chat/chat.service.ts` 统一显式携带当前 `model/modelName/modelType/modelAvatar`，后端在用户已选模型但配置不可用时直接报错，不再静默回退到默认模型。
