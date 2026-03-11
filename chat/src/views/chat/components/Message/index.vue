@@ -9,7 +9,7 @@ import { useGlobalStoreWithOut } from '@/store'
 import { copyText } from '@/utils/format'
 
 interface Props {
-  chatId?: number
+  chatId?: number | string
   dateTime?: string
   content?: string
   model?: string
@@ -51,11 +51,6 @@ interface Props {
 
 // 添加计算属性判断是否是用户消息
 const isUserMessage = computed(() => props.role === 'user')
-
-// 添加判断是否应显示工作流状态框
-const showWorkflowCard = computed(() => {
-  return !isUserMessage.value && props.isWorkflowMessage
-})
 
 interface Emit {
   (ev: 'regenerate'): void

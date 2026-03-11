@@ -4,7 +4,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { ExpandRight } from '@icon-park/vue-next'
 import type { CSSProperties } from 'vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import List from './List.vue'
 
 const useGlobalStore = useGlobalStoreWithOut()
@@ -89,7 +89,7 @@ function openSettings(tab?: number) {
 <template>
   <div>
     <div
-      class="fixed top-0 left-0 z-40 h-full transition-all duration-500 ease-in-out side-panel"
+      class="fixed top-0 left-0 z-40 h-full transition-transform duration-500 ease-in-out side-panel"
       :class="[
         isMobile ? 'w-[260px]' : 'w-[260px]',
         collapsed ? '-translate-x-full' : 'translate-x-0',
@@ -97,7 +97,7 @@ function openSettings(tab?: number) {
       :style="getMobileClass"
     >
       <div
-        class="flex flex-col h-full bg-opacity dark:bg-gray-900 select-none side-surface"
+        class="flex flex-col h-full bg-[var(--bg-sidebar)] dark:bg-[#080808] select-none side-surface"
         :style="mobileSafeArea"
       >
         <main class="flex flex-col h-full flex-1">
@@ -110,7 +110,7 @@ function openSettings(tab?: number) {
             </div>
             <button
               type="button"
-              class="btn-icon btn-icon-collapse btn-md"
+              class="btn-icon btn-icon-collapse btn-md text-gray-700 dark:text-gray-100"
               @click="handleUpdateCollapsed"
               aria-label="折叠侧边栏"
             >
@@ -122,7 +122,7 @@ function openSettings(tab?: number) {
             <List />
           </div>
 
-          <div class="px-5 py-4 border-t border-gray-200/70 dark:border-gray-800/70">
+          <div class="px-5 py-4">
             <div v-if="isLogin" class="flex items-center justify-between gap-3">
               <button
                 type="button"
@@ -143,7 +143,7 @@ function openSettings(tab?: number) {
                 </div>
               </button>
             </div>
-            <div v-else class="text-sm text-gray-600 leading-6">
+            <div v-else class="text-sm text-gray-600 leading-6 dark:text-gray-300">
               不要失去访问权限<br />
               登录后可同步项目和记录
               <div class="mt-3">

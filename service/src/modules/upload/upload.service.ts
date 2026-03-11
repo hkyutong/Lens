@@ -188,7 +188,10 @@ export class UploadService implements OnModuleInit {
 
   private async streamRemoteUploadedFile(sourceUrl: string, targetName: string, res: Response) {
     const timeoutMs = Math.max(Number(process.env.UPLOAD_FILE_PROXY_TIMEOUT_MS || 45000), 3000);
-    const maxBytes = Math.max(Number(process.env.UPLOAD_FILE_PROXY_MAX_BYTES || 50 * 1024 * 1024), 1024 * 1024);
+    const maxBytes = Math.max(
+      Number(process.env.UPLOAD_FILE_PROXY_MAX_BYTES || 50 * 1024 * 1024),
+      1024 * 1024,
+    );
     const response = await axios.get(sourceUrl, {
       responseType: 'stream',
       timeout: timeoutMs,

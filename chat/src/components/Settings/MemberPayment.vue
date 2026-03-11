@@ -91,7 +91,6 @@ const plat = computed(() => {
 })
 const countdownRef = ref<ReturnType<typeof setInterval> | null>(null)
 const remainingTime = ref(60)
-const isCountingDown = ref(false)
 
 const isRedirectPay = computed(() => {
   const { payEpayApiPayUrl, payDuluPayRedirect } = authStore.globalConfig

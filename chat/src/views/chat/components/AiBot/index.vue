@@ -5,7 +5,6 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import defaultPreset from '@/assets/defaultPreset.json'
 import { useAuthStore, useChatStore } from '@/store'
 import { computed, inject, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 
 const onConversation = inject<any>('onConversation')
 const authStore = useAuthStore()
@@ -13,7 +12,6 @@ const chatStore = useChatStore()
 const groupSources = computed(() => chatStore.groupList || [])
 const { isMobile } = useBasicLayout()
 const randomItems = ref()
-const route = useRoute()
 
 const isHideDefaultPreset = computed(
   () => Number(authStore.globalConfig?.isHideDefaultPreset) === 1

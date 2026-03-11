@@ -49,7 +49,6 @@ const useGlobalStore = useGlobalStoreWithOut()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const emit = defineEmits<Emit>()
-const siteName = authStore.globalConfig?.siteName || 'YutoLens'
 const ms = message()
 const isFile = ref(true)
 const fileInput = ref()
@@ -1026,37 +1025,6 @@ const handleDocumentDrop = (event: DragEvent) => {
   // 如果不是拖到了指定的上传区域，阻止默认行为
   if (!isDragging.value) {
     event.preventDefault()
-  }
-}
-
-// 添加文件处理的新函数，对特定按钮区域的拖放文件进行处理
-const handleFileDropOnButton = async (event: DragEvent, fileType: 'image' | 'document') => {
-  const files = event.dataTransfer?.files
-  if (!files || files.length === 0) return
-
-  const fileArray = Array.from(files)
-  const filteredFiles =
-    fileType === 'image'
-      ? fileArray.filter(file => file.type.startsWith('image/'))
-      : fileArray.filter(file => !file.type.startsWith('image/'))
-
-  if (filteredFiles.length === 0) {
-    // 提示用户拖放的文件类型与目标不匹配
-    if (fileType === 'image') {
-      ms.warning('请拖放图片文件到图片上传按钮')
-    } else {
-      ms.warning('请拖放文档文件到文件上传按钮')
-    }
-    return
-  }
-
-  // 处理符合条件的文件
-  for (const file of filteredFiles) {
-    if (fileType === 'image') {
-      await processImageFile(file)
-    } else {
-      await processDocumentFile(file)
-    }
   }
 }
 

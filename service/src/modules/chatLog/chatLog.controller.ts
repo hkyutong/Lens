@@ -14,6 +14,7 @@ import { QueryByAppIdDto } from './dto/queryByAppId.dto';
 import { QuerMyChatLogDto } from './dto/queryMyChatLog.dto';
 import { QuerySingleChatDto } from './dto/querySingleChat.dto';
 import { recDrawImgDto } from './dto/recDrawImg.dto';
+import { SyncDisplayContentDto } from './dto/syncDisplayContent.dto';
 
 @Controller('chatLog')
 @ApiTags('chatLog')
@@ -97,5 +98,13 @@ export class ChatLogController {
   @UseGuards(JwtAuthGuard)
   querySingleChat(@Req() req: Request, @Query() params: QuerySingleChatDto) {
     return this.chatLogService.querySingleChat(req, params);
+  }
+
+  @Post('syncDisplayContent')
+  @ApiOperation({ summary: '同步前端最终展示内容到聊天记录' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  syncDisplayContent(@Req() req: Request, @Body() body: SyncDisplayContentDto) {
+    return this.chatLogService.syncDisplayContent(req, body);
   }
 }

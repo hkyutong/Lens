@@ -3,11 +3,9 @@ import { fetchGetPackageAPI, fetchUseCramiAPI } from '@/api/crami'
 import { fetchOrderBuyAPI } from '@/api/order'
 import { fetchSignInAPI, fetchSignLogAPI } from '@/api/signin'
 import { fetchGetJsapiTicketAPI } from '@/api/user'
-import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { message } from '@/utils/message'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 
 import type { ResData } from '@/api/types'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
@@ -25,7 +23,6 @@ const packageList = ref<Pkg[]>([])
 const ms = message()
 const dialogLoading = ref(false)
 const model3Name = computed(() => authStore.globalConfig.model3Name || t('goods.basicModelQuota'))
-const { isMobile } = useBasicLayout()
 const model4Name = computed(
   () => authStore.globalConfig.model4Name || t('goods.advancedModelQuota')
 )
@@ -331,13 +328,6 @@ async function useCrami() {
 
 // 由于globalConfig可能没有showCrami属性，这里默认为true显示卡密兑换
 const showCrami = ref(true)
-
-const router = useRouter()
-const showGoodsDialog = ref(false)
-
-const openGoodsDialog = () => {
-  showGoodsDialog.value = true
-}
 
 // 签到相关状态和方法
 const signInData = ref<{ signInDate: string; isSigned: boolean }[]>([])

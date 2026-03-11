@@ -1,13 +1,19 @@
 import { ss } from '@/utils/storage'
 
 function detectEnvironment() {
-  if (typeof process !== 'undefined' && process?.type === 'renderer') return 'electron'
-  else if (typeof wx !== 'undefined') return 'wechat'
-  else if (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches)
-    return 'webApp'
-  else if (/(Android|webOS|iPhone|iPad|iPod|BlackBerry|Windows Phone)/i.test(navigator.userAgent))
+  const globalObj = globalThis as typeof globalThis & {
+    process?: { type?: string }
+    wx?: unknown
+  }
+
+  if (globalObj.process?.type === 'renderer') return 'electron'
+  if (typeof globalObj.wx !== 'undefined') return 'wechat'
+  if (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) {
+    return 'web'
+  }
+  if (/(Android|webOS|iPhone|iPad|iPod|BlackBerry|Windows Phone)/i.test(navigator.userAgent))
     return 'mobile'
-  else return 'webBrowser'
+  return 'web'
 }
 
 const LOCAL_NAME = 'appSetting'

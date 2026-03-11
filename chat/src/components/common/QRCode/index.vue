@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { useQRCode } from '@vueuse/integrations/useQRCode'
-/*
-  参考文档：https://vueuse.org/integrations/useQRCode/
-  https://www.npmjs.com/package/qrcode#qr-code-options
-*/
+import QRCode from 'qrcode'
+import { ref, watch } from 'vue'
+
 interface Props {
   value?: string // 扫描后的文本或地址
   size?: number // 二维码大小
@@ -31,18 +29,29 @@ const props = withDefaults(defineProps<Props>(), {
   errorLevel: 'H', // 可选 L M Q H
 })
 
-// `qrcode` will be a ref of data URL
-const qrcode = useQRCode(props.value, {
-  errorCorrectionLevel: props.errorLevel,
-  type: 'image/png',
-  quality: 1,
-  margin: 3,
-  scale: props.scale, // 8px per modules(black dots)
-  color: {
-    dark: props.color, // 像素点颜色
-    light: props.backgroundColor, // 背景色
+const qrcode = ref('')
+
+watch(
+  () => [props.value, props.errorLevel, props.scale, props.color, props.backgroundColor] as const,
+  async () => {
+    try {
+      qrcode.value = await QRCode.toDataURL(props.value, {
+        errorCorrectionLevel: props.errorLevel as 'L' | 'M' | 'Q' | 'H',
+        type: 'image/png',
+        quality: 1,
+        margin: 3,
+        scale: props.scale,
+        color: {
+          dark: props.color,
+          light: props.backgroundColor,
+        },
+      })
+    } catch (_error) {
+      qrcode.value = ''
+    }
   },
-})
+  { immediate: true }
+)
 </script>
 
 <template>

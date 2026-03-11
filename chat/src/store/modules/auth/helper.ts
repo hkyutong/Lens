@@ -33,6 +33,53 @@ export interface UserBalance {
   expirationTime: Date
 }
 
+export interface UserInfo {
+  username: string
+  email: string
+  role: string
+  id: number
+  avatar?: string
+  sign?: string
+  isBindWx: boolean
+  consecutiveDays: number
+  nickname: string
+}
+
+export function defaultUserInfo(): UserInfo {
+  return {
+    username: '',
+    email: '',
+    role: '',
+    id: 0,
+    avatar: '',
+    sign: '',
+    isBindWx: false,
+    consecutiveDays: 0,
+    nickname: '',
+  }
+}
+
+export function defaultUserBalance(): UserBalance {
+  return {
+    isMember: false,
+    model3Count: 0,
+    model4Count: 0,
+    drawMjCount: 0,
+    memberModel3Count: 0,
+    memberModel4Count: 0,
+    memberDrawMjCount: 0,
+    useModel3Count: 0,
+    useModel4Count: 0,
+    useModel3Token: 0,
+    useModel4Token: 0,
+    useDrawMjToken: 0,
+    sumModel3Count: 0,
+    sumModel4Count: 0,
+    sumDrawMjCount: 0,
+    expirationTime: new Date(0),
+  }
+}
+
 export interface GlobalConfig {
   siteName: string
   siteUrl: string
@@ -124,17 +171,7 @@ export interface AuthState {
   loginDialog: boolean
   globalConfigLoading: boolean
   loadInit: boolean
-  userInfo: {
-    username: string
-    email: string
-    role: string
-    id: number
-    avatar?: string
-    sign?: string
-    isBindWx: boolean
-    consecutiveDays: number
-    nickname: string
-  }
+  userInfo: UserInfo
   userBalance: UserBalance
   globalConfig: GlobalConfig
 }

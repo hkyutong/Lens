@@ -12,16 +12,14 @@ export const useAppStore = defineStore('app-store', {
     },
 
     setTheme(theme: Theme) {
-      localStorage.theme = theme
-      this.theme = theme
-      window.theme = theme
+      const normalizedTheme: Theme = theme === 'dark' ? 'dark' : 'light'
+      localStorage.theme = normalizedTheme
+      this.theme = normalizedTheme
+      window.theme = normalizedTheme
       this.recordState()
-      // 切换暗黑模式逻辑
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
+      document.documentElement.dataset.theme = normalizedTheme
+      document.documentElement.classList.toggle('dark', normalizedTheme === 'dark')
+      document.documentElement.style.colorScheme = normalizedTheme
     },
 
     setLanguage(language: Language) {

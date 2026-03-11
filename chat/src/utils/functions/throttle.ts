@@ -12,7 +12,7 @@ export function throttle<T extends any[]>(
 
     if (!timeoutId) {
       timeoutId = setTimeout(() => {
-        func.apply(this, lastArgs)
+        func(...lastArgs)
         timeoutId = null
       }, delay)
     }

@@ -97,7 +97,7 @@ async function handleSendCaptcha() {
     const params: any = { phone }
     let res: any
     res = await fetchSendSms(params)
-    const { success, message } = res
+    const { success } = res
     if (success) {
       ms.success(res.data)
       // 记录重新发送倒计时

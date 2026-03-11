@@ -31,9 +31,11 @@ function detectSystemTheme() {
   const theme = storedTheme || (prefersDarkScheme.matches ? 'dark' : 'light')
   localStorage.setItem('theme', theme)
   document.documentElement.classList.toggle('dark', theme === 'dark')
+  document.documentElement.style.colorScheme = theme
 
   // 设置 data-theme 方式的主题系统
   document.documentElement.dataset.theme = theme
+  window.theme = theme as 'dark' | 'light'
 }
 
 const authStore = useAuthStoreWithout()

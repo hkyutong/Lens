@@ -15,7 +15,7 @@ export const useAppCatStore = defineStore('app-cat-store', {
     },
 
     async queryMineApps() {
-      const res = await fetchQueryMineAppsAPI()
+      const res: any = await fetchQueryMineAppsAPI()
       this.mineApps = res?.data?.rows || []
     },
   },

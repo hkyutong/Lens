@@ -113,7 +113,7 @@ export function get<T = any>({
   signal,
   beforeRequest,
   afterRequest,
-}: HttpOption): Promise<Response<T>> {
+}: HttpOption): Promise<any> {
   return http<T>({
     url,
     method,
@@ -134,7 +134,7 @@ export function post<T = any>({
   signal,
   beforeRequest,
   afterRequest,
-}: HttpOption): Promise<Response<T>> {
+}: HttpOption): Promise<any> {
   return http<T>({
     url,
     method,

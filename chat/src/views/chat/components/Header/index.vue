@@ -7,7 +7,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
 import { Brightness, CheckOne, Close, DarkMode, ExpandLeft, Right } from '@icon-park/vue-next'
-import { computed, inject, onMounted, ref, Ref, watch } from 'vue'
+import { computed, onMounted, ref, Ref, watch } from 'vue'
 
 interface ModelOption {
   label: string
@@ -53,7 +53,6 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 const modelOptions: Ref<ModelOption[]> = ref([])
 const appDetail: any = ref(null)
-const dataSources = computed(() => chatStore.groupList || [])
 const collapsed = computed(() => appStore.siderCollapsed)
 const chatGroupId = computed(() => chatStore.active)
 const darkMode = computed(() => appStore.theme === 'dark')
@@ -62,11 +61,7 @@ const { isMobile } = useBasicLayout()
 const isHovering = ref(false)
 const isMenuOpen = ref(false)
 const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
-const listSources = computed(() => chatStore.chatList || [])
 const ms = message()
-const emit = defineEmits<{
-  (e: 'toggle-app-list'): void
-}>()
 
 // 计算预览器状态
 const isPreviewerVisible = computed(
@@ -135,10 +130,6 @@ const notSwitchModel = computed(() => {
   )
 })
 
-const createNewChatGroup = inject('createNewChatGroup', () =>
-  Promise.resolve()
-) as () => Promise<void>
-
 async function handleUpdateCollapsed() {
   appStore.setSiderCollapsed(!collapsed.value)
 }
@@ -190,7 +181,9 @@ async function switchModel(option: any) {
     groupId: chatGroupId.value,
     config: JSON.stringify(config),
   }
-  const currentGroup = chatStore.groupList.find(item => Number(item.uuid) === Number(chatGroupId.value))
+  const currentGroup = chatStore.groupList.find(
+    item => Number(item.uuid) === Number(chatGroupId.value)
+  )
   const previousConfig = currentGroup?.config || ''
 
   chatStore.setPreferredModel(option)
@@ -261,23 +254,9 @@ const currentExternalLink = computed(() => {
   return (typeof link === 'object' ? link : {}) as ExternalLink
 })
 
-// 打开文本编辑器
-const openTextEditor = () => {
-  useGlobalStore.updateTextEditor(true)
-}
-
 // 添加一个新的方法来处理模型选择
 function handleModelSelect(option: any) {
   switchModel(option)
-}
-
-function openSettings(tab?: number) {
-  if (isMobile.value) {
-    useGlobalStore.updateMobileSettingsDialog(true, tab)
-    appStore.setSiderCollapsed(true)
-  } else {
-    useGlobalStore.updateSettingsDialog(true, tab)
-  }
 }
 </script>
 

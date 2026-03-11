@@ -32,7 +32,7 @@ export function fetchCollectAppAPI<T>(data: { appId: number }): Promise<T> {
 }
 
 /* 查询单个分类 */
-export function fetchQueryOneCatAPI<T>(data): Promise<T> {
+export function fetchQueryOneCatAPI<T>(data: { id: number }): Promise<T> {
   return get<T>({
     url: '/app/queryOneCat',
     data,

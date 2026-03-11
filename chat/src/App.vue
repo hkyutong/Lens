@@ -20,7 +20,6 @@ useGlobalStore.updateFingerprint(client.getFingerprint())
 const defaultFavicon = '/favicon.svg'
 const faviconPath = computed(() => authStore.globalConfig?.clientFaviconPath || defaultFavicon)
 const isAutoOpenNotice = computed(() => Number(authStore.globalConfig?.isAutoOpenNotice) === 1)
-const isLogin = computed(() => authStore.isLogin)
 const wechatSilentLoginStatus = computed(
   () => Number(authStore.globalConfig?.wechatSilentLoginStatus) === 1
 )
@@ -110,7 +109,6 @@ function clearAllCache(forceClear = false) {
       })
     })
   }
-
 }
 
 async function loadBaiduCode() {

@@ -88,7 +88,7 @@ function finalizeLogin(token: string) {
 async function getSeneStr() {
   try {
     const params = {}
-    const res: ResData = await fetchGetQRSceneStrAPI(params)
+    const res = (await fetchGetQRSceneStrAPI(params)) as ResData
     if (res.success) {
       sceneStr.value = res.data
       await getQrCodeUrl()
@@ -102,9 +102,9 @@ async function getSeneStr() {
 async function loginBySnece() {
   if (!sceneStr.value) return
   try {
-    const res: ResData = await fetchLoginBySceneStrAPI({
+    const res = (await fetchLoginBySceneStrAPI({
       sceneStr: sceneStr.value,
-    })
+    })) as ResData
     if (res.success && res.data) {
       if (!agreedToPolicies.value) {
         pendingToken.value = res.data
@@ -124,7 +124,7 @@ async function getQrCodeUrl() {
   clearLoginTimer()
   loading.value = true // 开始加载
   try {
-    const res: ResData = await fetchGetQRCodeAPI({ sceneStr: sceneStr.value })
+    const res = (await fetchGetQRCodeAPI({ sceneStr: sceneStr.value })) as ResData
     if (res.success) {
       activeCount.value = true
       await loadImage(res.data)

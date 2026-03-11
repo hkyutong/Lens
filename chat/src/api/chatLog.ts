@@ -52,3 +52,15 @@ export function fetchQuerySingleChatLogAPI<T>(data: { chatId: number }): Promise
     data,
   })
 }
+
+/* 同步前端最终展示内容 */
+export function fetchSyncDisplayContentAPI<T>(data: {
+  chatId: number
+  content: string
+  reasoningText?: string
+}): Promise<T> {
+  return post<T>({
+    url: '/chatlog/syncDisplayContent',
+    data,
+  })
+}

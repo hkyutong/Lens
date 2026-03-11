@@ -278,7 +278,15 @@ export class UserBalanceService {
     if (!type) {
       throw new HttpException('不支持的扣费类型', HttpStatus.BAD_REQUEST);
     }
-    const keys: Record<1 | 2 | 3, { member: keyof UserBalanceEntity; nonMember: keyof UserBalanceEntity; token: keyof UserBalanceEntity; countKey?: keyof UserBalanceEntity }> = {
+    const keys: Record<
+      1 | 2 | 3,
+      {
+        member: keyof UserBalanceEntity;
+        nonMember: keyof UserBalanceEntity;
+        token: keyof UserBalanceEntity;
+        countKey?: keyof UserBalanceEntity;
+      }
+    > = {
       1: {
         member: 'memberModel3Count',
         nonMember: 'model3Count',
@@ -324,7 +332,10 @@ export class UserBalanceService {
 
       if (normalizedAmount >= 0) {
         if (memberBalance + nonMemberBalance < normalizedAmount) {
-          throw new HttpException('积分不足，继续体验服务，请按需选购套餐！', HttpStatus.PAYMENT_REQUIRED);
+          throw new HttpException(
+            '积分不足，继续体验服务，请按需选购套餐！',
+            HttpStatus.PAYMENT_REQUIRED,
+          );
         }
         let remaining = normalizedAmount;
         const deductFromMember = Math.min(nextMember, remaining);

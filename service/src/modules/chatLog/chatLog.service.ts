@@ -20,6 +20,7 @@ import { recDrawImgDto } from './dto/recDrawImg.dto';
 import { JwtPayload } from 'src/types/express';
 import { ModelsService } from '../models/models.service';
 import { QuerySingleChatDto } from './dto/querySingleChat.dto';
+import { SyncDisplayContentDto } from './dto/syncDisplayContent.dto';
 
 @Injectable()
 export class ChatLogService {
@@ -50,6 +51,518 @@ export class ChatLogService {
     await new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  private splitMarkdownTableCells(line: string) {
+    const text = String(line || '').trim();
+    if (!text.startsWith('|')) return [];
+    let body = text.slice(1);
+    if (body.endsWith('|')) body = body.slice(0, -1);
+    const cells: string[] = [];
+    let current = '';
+    let escaped = false;
+    for (const char of body) {
+      if (escaped) {
+        current += char;
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        current += char;
+        escaped = true;
+        continue;
+      }
+      if (char === '|') {
+        cells.push(current.trim());
+        current = '';
+        continue;
+      }
+      current += char;
+    }
+    cells.push(current.trim());
+    return cells;
+  }
+
+  private isMarkdownTableSeparator(line: string) {
+    return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(
+      String(line || ''),
+    );
+  }
+
+  private normalizeMarkdownTableRow(cells: string[], expectedColumns = 3) {
+    const normalizedCells = (cells || []).map(item => String(item || '').trim());
+    const size = Math.max(2, expectedColumns || 0);
+    if (normalizedCells.length > size) {
+      const head = normalizedCells.slice(0, size - 1);
+      const tail = normalizedCells.slice(size - 1).join(' ');
+      normalizedCells.splice(0, normalizedCells.length, ...head, tail);
+    }
+    while (normalizedCells.length < size) normalizedCells.push('');
+    return `| ${normalizedCells.slice(0, size).join(' | ')} |`;
+  }
+
+  private normalizeLeakedPolishControlText(value: string) {
+    return String(value || '')
+      .replace(/[‘’“”"'`*_]/g, '')
+      .replace(/[：:；;，,。.!！?？]/g, '')
+      .replace(/\s+/g, '');
+  }
+
+  private getStablePolishRowKey(before: string, after: string) {
+    return `${this.normalizeLeakedPolishControlText(before)}\u0000${this.normalizeLeakedPolishControlText(after)}`;
+  }
+
+  private readonly stablePolishReasonCuePattern =
+    /^(?:将|把|增加|删除|改为|省略|直接使用|体现|突出|避免|保留|添加|调整|补齐|更换|优化|用词|语气|强调|通过|采用|概括|引出|去除(?:冗余)?|简化(?:表达|表述)|删除冗余描述|合并和简化要求|此句表达已较清晰|未作修改|补充[“"]|用[“"]|为[“"]|使用(?:更|[“"'A-Za-z])|改为主动建议句式|“[^”]+”比“[^”]+”|“[^”]+”改为“[^”]+”|“)/;
+
+  private isLikelyStablePolishReasonSegment(value: string) {
+    return this.stablePolishReasonCuePattern.test(String(value || '').trim());
+  }
+
+  private isLikelyStablePolishSnippetSegment(value: string) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (this.isLeakedPolishControlCell(text)) return false;
+    return !this.isLikelyStablePolishReasonSegment(text);
+  }
+
+  private explodeMergedStablePolishRows(candidate: {
+    before: string;
+    after: string;
+    reason: string;
+  }) {
+    const reason = String(candidate.reason || '').trim();
+    const segments = reason
+      .split(/\s+/)
+      .map(item => String(item || '').trim())
+      .filter(Boolean);
+    if (segments.length < 4) return [{ ...candidate, reason }];
+
+    const rows: Array<{ before: string; after: string; reason: string }> = [];
+    const currentReasonParts = [segments[0]];
+    let cursor = 1;
+
+    while (cursor < segments.length) {
+      const before = String(segments[cursor] || '').trim();
+      const after = String(segments[cursor + 1] || '').trim();
+      const reasonStart = String(segments[cursor + 2] || '').trim();
+      const hasEmbeddedRow =
+        cursor + 2 < segments.length &&
+        this.isLikelyStablePolishSnippetSegment(before) &&
+        this.isLikelyStablePolishSnippetSegment(after) &&
+        this.isLikelyStablePolishReasonSegment(reasonStart);
+
+      if (!hasEmbeddedRow) {
+        currentReasonParts.push(before);
+        cursor += 1;
+        continue;
+      }
+
+      const reasonParts = [reasonStart];
+      cursor += 3;
+      while (cursor < segments.length) {
+        const nextBefore = String(segments[cursor] || '').trim();
+        const nextAfter = String(segments[cursor + 1] || '').trim();
+        const nextReasonStart = String(segments[cursor + 2] || '').trim();
+        const nextIsEmbeddedRow =
+          cursor + 2 < segments.length &&
+          this.isLikelyStablePolishSnippetSegment(nextBefore) &&
+          this.isLikelyStablePolishSnippetSegment(nextAfter) &&
+          this.isLikelyStablePolishReasonSegment(nextReasonStart);
+        if (nextIsEmbeddedRow) break;
+        reasonParts.push(nextBefore);
+        cursor += 1;
+      }
+
+      rows.push({
+        before,
+        after,
+        reason: reasonParts.join(' ').trim(),
+      });
+    }
+
+    return [
+      {
+        before: candidate.before,
+        after: candidate.after,
+        reason: currentReasonParts.join(' ').trim(),
+      },
+      ...rows,
+    ].filter(row => row.before && row.after && row.reason);
+  }
+
+  private isLeakedPolishControlCell(value: string) {
+    const normalized = this.normalizeLeakedPolishControlText(value);
+    if (!normalized) return false;
+    return [
+      /^(?:列名|表头)(?:必须)?(?:严格)?为$/i,
+      /^表格列名(?:必须)?(?:严格)?为$/i,
+      /^(?:确保|每一行只允许)每?一行只描述一个局部修改$/i,
+      /^不要把多个句子或多处改动合并成一行$/i,
+      /^每个单元格(?:内容)?(?:将)?尽量简短只摘录必要片段(?:不要整段照抄)?$/i,
+      /^第三列只解释这一处修改说明要简洁准确$/i,
+      /Markdown表格/i,
+      /^请先用中文提供文本的更正版本然后输出一个Markdown表格$/i,
+      /^我将首先用中文提供文本的更正版本然后输出一个Markdown表格$/i,
+    ].some(pattern => pattern.test(normalized));
+  }
+
+  private extractEmbeddedStablePolishRow(reason: string) {
+    const segments = String(reason || '')
+      .split(/\s+/)
+      .map(item => String(item || '').trim())
+      .filter(Boolean);
+    if (segments.length < 4) return null;
+
+    let tailIndex = -1;
+    for (let idx = 2; idx < segments.length; idx += 1) {
+      if (this.stablePolishReasonCuePattern.test(segments[idx])) {
+        tailIndex = idx;
+        break;
+      }
+    }
+    if (tailIndex < 3) return null;
+
+    const middle = segments.slice(1, tailIndex);
+    let splitIndex = -1;
+    if (middle.length === 2) {
+      splitIndex = 1;
+    } else {
+      for (let idx = 1; idx < middle.length; idx += 1) {
+        const previous = middle.slice(0, idx).join(' ');
+        const current = String(middle[idx] || '');
+        if (/[A-Za-z]/.test(current) && !/[A-Za-z]/.test(previous)) {
+          splitIndex = idx;
+          break;
+        }
+      }
+      if (splitIndex < 0 && middle.length === 3) {
+        splitIndex = 1;
+      }
+    }
+    if (splitIndex < 1 || splitIndex >= middle.length) return null;
+
+    const before = middle.slice(0, splitIndex).join(' ').trim();
+    const after = middle.slice(splitIndex).join(' ').trim();
+    const leadingReason = String(segments[0] || '').trim();
+    const tailReason = segments.slice(tailIndex).join(' ').trim();
+    if (!before || !after || !leadingReason || !tailReason) return null;
+    return {
+      leadingReason,
+      embeddedRow: {
+        before,
+        after,
+        reason: tailReason,
+      },
+    };
+  }
+
+  private trimStablePolishReasonOverflow(
+    reason: string,
+    upcomingRows: Array<{ before: string; after: string; reason: string }>,
+  ) {
+    let output = String(reason || '').trim();
+    if (!output) return '';
+    let cutIndex = -1;
+    for (const row of upcomingRows) {
+      const candidates = [row.before, row.after]
+        .map(item => String(item || '').trim())
+        .filter(Boolean);
+      for (const candidate of candidates) {
+        const idx = output.indexOf(candidate);
+        if (idx > 0 && (cutIndex < 0 || idx < cutIndex)) {
+          cutIndex = idx;
+        }
+      }
+      if (cutIndex > 0) break;
+    }
+    if (cutIndex > 0) {
+      output = output.slice(0, cutIndex).trim();
+    }
+    return output.replace(/\s{2,}/g, ' ');
+  }
+
+  private collectRecoveredStablePolishRows(text: string) {
+    const source = String(text || '');
+    if (!source) return [];
+    const lines = source.split('\n').map(line => String(line || '').trimEnd());
+    const headerIndex = lines.findIndex(line => {
+      const headerCells = this.splitMarkdownTableCells(String(line || '').trim());
+      return (
+        headerCells.length === 3 &&
+        headerCells[0] === '修改前原文片段' &&
+        headerCells[1] === '修改后片段' &&
+        headerCells[2] === '修改原因与解释'
+      );
+    });
+    if (headerIndex < 0) return [];
+
+    let separatorIndex = -1;
+    for (let idx = headerIndex + 1; idx < lines.length; idx += 1) {
+      const trimmed = String(lines[idx] || '').trim();
+      if (!trimmed) continue;
+      if (this.isMarkdownTableSeparator(trimmed)) {
+        separatorIndex = idx;
+        break;
+      }
+      break;
+    }
+    if (separatorIndex < 0) return [];
+
+    const rawRows: Array<{ before: string; after: string; reason: string }> = [];
+    for (let idx = separatorIndex + 1; idx < lines.length; idx += 1) {
+      const trimmed = String(lines[idx] || '').trim();
+      if (!trimmed || !/^\s*\|.*\|\s*$/.test(trimmed)) continue;
+      const rowCells = this.splitMarkdownTableCells(trimmed);
+      if (rowCells.length !== 3) continue;
+      rawRows.push({
+        before: String(rowCells[0] || '').trim(),
+        after: String(rowCells[1] || '').trim(),
+        reason: String(rowCells[2] || '').trim(),
+      });
+    }
+
+    const recovered: Array<{ before: string; after: string; reason: string }> = [];
+    const seen = new Set<string>();
+    for (let idx = 0; idx < rawRows.length; idx += 1) {
+      const row = rawRows[idx];
+      if (!row.before || !row.after) continue;
+      if (this.isLeakedPolishControlCell(row.before) || this.isLeakedPolishControlCell(row.after)) {
+        continue;
+      }
+      const pushRow = (
+        candidate: { before: string; after: string; reason: string },
+        depth = 0,
+        skipSequentialSplit = false,
+      ) => {
+        if (depth > 4) return;
+        const reason = depth
+          ? String(candidate.reason || '').trim()
+          : this.trimStablePolishReasonOverflow(candidate.reason, rawRows.slice(idx + 1, idx + 4));
+        if (!reason) return;
+        if (
+          !candidate.before ||
+          !candidate.after ||
+          this.isLeakedPolishControlCell(candidate.before) ||
+          this.isLeakedPolishControlCell(candidate.after)
+        ) {
+          return;
+        }
+        if (!skipSequentialSplit) {
+          const explodedRows = this.explodeMergedStablePolishRows({
+            before: candidate.before,
+            after: candidate.after,
+            reason,
+          });
+          if (explodedRows.length > 1) {
+            explodedRows.forEach(rowItem => pushRow(rowItem, depth + 1, true));
+            return;
+          }
+        }
+        const splitResult = this.extractEmbeddedStablePolishRow(reason);
+        const finalReason = String(splitResult?.leadingReason || reason).trim();
+        const rowKey = this.getStablePolishRowKey(candidate.before, candidate.after);
+        if (!seen.has(rowKey) && finalReason) {
+          seen.add(rowKey);
+          recovered.push({
+            before: candidate.before,
+            after: candidate.after,
+            reason: finalReason,
+          });
+        }
+        if (splitResult?.embeddedRow) {
+          pushRow(splitResult.embeddedRow, depth + 1);
+        }
+      };
+      pushRow(row);
+    }
+
+    return recovered;
+  }
+
+  private buildRecoveredStablePolishTable(text: string) {
+    const source = String(text || '');
+    const rows = this.collectRecoveredStablePolishRows(source);
+    if (!rows.length) return '';
+
+    const lines = source.split('\n').map(line => String(line || '').trimEnd());
+    const headerIndex = lines.findIndex(line => {
+      const headerCells = this.splitMarkdownTableCells(String(line || '').trim());
+      return (
+        headerCells.length === 3 &&
+        headerCells[0] === '修改前原文片段' &&
+        headerCells[1] === '修改后片段' &&
+        headerCells[2] === '修改原因与解释'
+      );
+    });
+    const maybeTitle = String(lines[headerIndex - 1] || '').trim();
+    const tableLines = [
+      /^修改对照表[:：]?$/.test(maybeTitle) ? maybeTitle : '',
+      '| 修改前原文片段 | 修改后片段 | 修改原因与解释 |',
+      '| --- | --- | --- |',
+      ...rows.map(row => `| ${row.before} | ${row.after} | ${row.reason} |`),
+    ].filter(Boolean);
+    return tableLines.join('\n');
+  }
+
+  private stripLeadingStablePolishOverflowBlock(text: string) {
+    const lines = String(text || '').split('\n');
+    let firstMeaningfulIndex = 0;
+    while (firstMeaningfulIndex < lines.length && !String(lines[firstMeaningfulIndex] || '').trim()) {
+      firstMeaningfulIndex += 1;
+    }
+    if (firstMeaningfulIndex >= lines.length) return '';
+    if (!String(lines[firstMeaningfulIndex] || '').trim().startsWith('|')) {
+      return String(text || '').trimStart();
+    }
+    let cursor = firstMeaningfulIndex;
+    while (cursor < lines.length) {
+      const trimmed = String(lines[cursor] || '').trim();
+      if (!trimmed) {
+        cursor += 1;
+        continue;
+      }
+      if (!trimmed.startsWith('|')) break;
+      cursor += 1;
+    }
+    return lines.slice(cursor).join('\n').trimStart();
+  }
+
+  private replacePolishReasonTableWithRecoveredSnapshot(text: string) {
+    const source = String(text || '');
+    const snapshot = this.buildRecoveredStablePolishTable(source);
+    if (!snapshot) return source;
+    const lines = source.split('\n').map(line => String(line || '').trimEnd());
+    const headerIndex = lines.findIndex(line => {
+      const headerCells = this.splitMarkdownTableCells(String(line || '').trim());
+      return (
+        headerCells.length === 3 &&
+        headerCells[0] === '修改前原文片段' &&
+        headerCells[1] === '修改后片段' &&
+        headerCells[2] === '修改原因与解释'
+      );
+    });
+    if (headerIndex < 0) return source;
+
+    const maybeTitle = String(lines[headerIndex - 1] || '').trim();
+    const start = /^修改对照表[:：]?$/.test(maybeTitle) ? Math.max(0, headerIndex - 1) : headerIndex;
+    let end = headerIndex + 1;
+    let separatorSeen = false;
+    for (let idx = headerIndex + 1; idx < lines.length; idx += 1) {
+      const trimmed = String(lines[idx] || '').trim();
+      if (!trimmed) {
+        if (separatorSeen) {
+          end = idx;
+          break;
+        }
+        continue;
+      }
+      if (!separatorSeen) {
+        if (this.isMarkdownTableSeparator(trimmed)) {
+          separatorSeen = true;
+          end = idx + 1;
+          continue;
+        }
+        end = idx;
+        break;
+      }
+      if (!trimmed.startsWith('|')) {
+        end = idx;
+        break;
+      }
+      end = idx + 1;
+    }
+    const prefix = lines.slice(0, start).join('\n').trimEnd();
+    const suffix = this.stripLeadingStablePolishOverflowBlock(lines.slice(end).join('\n'));
+    return [prefix, snapshot, suffix]
+      .filter(section => String(section || '').trim())
+      .join('\n\n')
+      .trim();
+  }
+
+  private stripLeakedPolishDisplayNoise(value: string) {
+    const source = String(value || '');
+    if (
+      !source ||
+      !/(修改前原文片段\s*\|.*修改原因与解释|Markdown\s*表格|第三列只解释这一处修改|每一行只允许描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短|(?:列名|表头)(?:必须)?(?:严格)?为)/i.test(
+        source,
+      )
+    ) {
+      return source;
+    }
+
+    const normalized = source
+      .replace(
+        /^[^\S\r\n>]*\|?\s*(?:列名|表头)(?:必须)?(?:严格)?为[:：]\s*\|?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|?\s*$/gim,
+        '',
+      )
+      .replace(
+        /(?:列名|表头)(?:必须)?(?:严格)?为[:：]\s*\|?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|?/gi,
+        '',
+      )
+      .replace(
+        /^[^\n]*Markdown\s*表格[^\n]*(?:修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)[^\n]*$/gim,
+        '',
+      )
+      .replace(
+        /(?:然后)?输出一个\s*Markdown\s*表格(?:列名|表头)?(?:必须)?(?:严格)?为[:：]?\s*`?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*`?/gi,
+        '',
+      )
+      .replace(/表格(?:会)?按[“"'`]?小句\/短片段[”"'`]?的粒度拆分[，,、 ]*/gi, '')
+      .replace(/(?:确保每一行只描述一个局部修改|每一行只允许描述一个局部修改)[，,、 ]*/gi, '')
+      .replace(
+        /每个单元格(?:内容)?(?:将)?尽量简短，只摘录必要片段(?:，?不要整段照抄)?[；;，,、 ]*/gi,
+        '',
+      )
+      .replace(/第三列只解释这一处修改，说明要简洁准确[:：]?\s*/gi, '');
+
+    const lines = normalized.split('\n');
+    const output: string[] = [];
+    const seenRows = new Set<string>();
+
+    for (const line of lines) {
+      const trimmed = String(line || '').trim();
+      if (!trimmed) {
+        output.push(line);
+        continue;
+      }
+      if (
+        /Markdown\s*表格/i.test(trimmed) &&
+        /(修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)/.test(
+          trimmed,
+        )
+      ) {
+        continue;
+      }
+      if (!trimmed.startsWith('|')) {
+        if (this.isLeakedPolishControlCell(trimmed)) continue;
+        output.push(line);
+        continue;
+      }
+
+      const cells = this.splitMarkdownTableCells(trimmed);
+      if (cells.length === 3) {
+        if (this.isLeakedPolishControlCell(cells[0]) || this.isLeakedPolishControlCell(cells[1])) {
+          continue;
+        }
+        const normalizedRow = this.normalizeMarkdownTableRow(cells, 3);
+        const isHeader =
+          cells[0] === '修改前原文片段' &&
+          cells[1] === '修改后片段' &&
+          cells[2] === '修改原因与解释';
+        if (!isHeader && !this.isMarkdownTableSeparator(trimmed)) {
+          if (seenRows.has(normalizedRow)) continue;
+          seenRows.add(normalizedRow);
+        }
+        output.push(normalizedRow);
+        continue;
+      }
+
+      output.push(line);
+    }
+
+    const cleaned = output.join('\n').replace(/\n{4,}/g, '\n\n\n');
+    return this.replacePolishReasonTableWithRecoveredSnapshot(cleaned);
+  }
+
   private sanitizeDisplayText(value: any) {
     if (value === null || value === undefined) return '';
     let text = String(value || '');
@@ -69,6 +582,8 @@ export class ChatLogService {
       .replace(/(找不到任何[^\n:：]*文件)\s*[:：]\s*(?=\n|$)/g, '$1。')
       .replace(/(找不到本地项目或(?:无权访问|无法处理))\s*[:：]\s*(?=\n|$)/g, '$1。')
       .replace(/(解析项目)\s*[:：]\s*(?=\n|$)/g, '$1')
+      .replace(/｜/g, '|');
+    text = this.stripLeakedPolishDisplayNoise(text)
       .replace(/[ \t]{2,}/g, ' ')
       .replace(/\n{4,}/g, '\n\n\n');
     return text;
@@ -100,6 +615,38 @@ export class ChatLogService {
       }
     }
     return { affected: 0, error: String(lastError?.message || lastError || '') };
+  }
+
+  async syncDisplayContent(req: Request, body: SyncDisplayContentDto) {
+    const userId = req.user.id;
+    const chatId = Number(body?.chatId || 0);
+    if (!chatId) return '请输入正确的聊天ID';
+
+    const chatLog = await this.chatLogEntity.findOne({
+      where: {
+        id: chatId,
+        userId,
+        isDelete: false,
+      },
+    });
+    if (!chatLog) return '未找到该消息';
+    if (chatLog.role !== 'assistant') return '仅支持同步助手消息';
+
+    const content = String(body?.content || '').replace(/\r\n/g, '\n').trim();
+    const reasoningText =
+      body?.reasoningText === undefined || body?.reasoningText === null
+        ? undefined
+        : String(body.reasoningText || '').replace(/\r\n/g, '\n').trim();
+    if (!content) return '展示内容不能为空';
+
+    const nextContent = this.sanitizeDisplayText(content) || content;
+    const nextReasoning =
+      reasoningText === undefined ? undefined : this.sanitizeDisplayText(reasoningText);
+    await this.updateChatLog(chatId, {
+      content: nextContent,
+      ...(nextReasoning !== undefined ? { reasoning_content: nextReasoning || null } : {}),
+    });
+    return '同步成功';
   }
 
   async findOneChatLog(id) {
@@ -546,16 +1093,32 @@ export class ChatLogService {
         return '未找到该消息';
       }
 
+      const rawContent =
+        chatLog.content || (chatLog.role === 'assistant' ? chatLog.answer : chatLog.prompt) || '';
+      const rawReasoning = chatLog.reasoning_content || '';
+      const sanitizedContent = this.sanitizeDisplayText(rawContent);
+      const sanitizedReasoning = this.sanitizeDisplayText(rawReasoning);
+      const normalizedStoredContent = String(rawContent || '').replace(/\r\n/g, '\n').trim();
+      const normalizedStoredReasoning = String(rawReasoning || '').replace(/\r\n/g, '\n').trim();
+      if (
+        chatLog.role === 'assistant' &&
+        ((sanitizedContent && sanitizedContent !== normalizedStoredContent) ||
+          sanitizedReasoning !== normalizedStoredReasoning)
+      ) {
+        await this.updateChatLog(chatLog.id, {
+          ...(sanitizedContent ? { content: sanitizedContent } : {}),
+          reasoning_content: sanitizedReasoning || null,
+        });
+      }
+
       // 格式化查询结果
       const formattedResult = {
         id: chatLog.id,
         action: chatLog.action || '',
         taskData: chatLog.taskData || '',
         chatId: chatLog.id, // 保持兼容性
-        content: this.sanitizeDisplayText(
-          chatLog.content || (chatLog.role === 'assistant' ? chatLog.answer : chatLog.prompt) || '',
-        ),
-        reasoningText: this.sanitizeDisplayText(chatLog.reasoning_content || ''),
+        content: sanitizedContent,
+        reasoningText: sanitizedReasoning,
         tool_calls: chatLog.tool_calls || '',
         role: chatLog.role || 'assistant',
         status: chatLog.status || 0,

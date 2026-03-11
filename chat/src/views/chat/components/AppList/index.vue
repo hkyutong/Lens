@@ -5,7 +5,7 @@ import type { ResData } from '@/api/types'
 // 移除DynamicFormModal组件的导入
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
-import { useAppCatStore, useAuthStoreWithout, useChatStore, useGlobalStoreWithOut } from '@/store'
+import { useAppCatStore, useAuthStoreWithout, useGlobalStoreWithOut } from '@/store'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { message } from '@/utils/message'
 import { Left, Right, Search, Star, VipOne } from '@icon-park/vue-next'
@@ -53,7 +53,6 @@ const useGlobalStore = useGlobalStoreWithOut()
 const ms = message()
 const appCatStore = useAppCatStore()
 const keyword = ref('')
-const chatStore = useChatStore()
 
 const catId = computed(() => appCatStore.catId)
 const appList = ref<App[]>([])
@@ -113,8 +112,6 @@ async function handleCollect(app: App) {
 }
 
 async function handleRunApp(app: App) {
-  const appIdAsNumber = Number(app.id)
-
   const appCats = app.catName?.split(',').map(cat => cat.trim()) || []
   const isMemberApp = appCats.some(catName => isMemberCategory(catName))
 
@@ -232,7 +229,7 @@ onMounted(() => {
 <template>
   <!-- 应用列表 -->
   <div
-    class="bg-[var(--bg-body)] dark:bg-gray-900 flex flex-col h-full w-full"
+    class="bg-[var(--bg-body)] dark:bg-[#080808] flex flex-col h-full w-full"
     :class="[isMobile ? 'px-2 py-2' : 'pb-3']"
   >
     <div

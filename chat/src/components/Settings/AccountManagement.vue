@@ -53,9 +53,6 @@ const wechatRegisterStatus = computed(
 )
 const phoneLoginStatus = computed(() => Number(authStore.globalConfig.phoneLoginStatus) === 1)
 const openIdentity = computed(() => Number(authStore.globalConfig.openIdentity) === 1)
-const oldWechatMigrationStatus = computed(
-  () => Number(authStore.globalConfig.oldWechatMigrationStatus) === 1
-)
 
 // 登录状态检测
 const isLogin = computed(() => authStore.isLogin)
@@ -201,10 +198,6 @@ const email = computed(() => userInfo.value.email || '')
 const avatarLetters = computed(() => {
   const base = (email.value.split('@')[0] || username.value || 'user').trim()
   return base.slice(0, 2).toUpperCase()
-})
-const displayEmailPrefix = computed(() => {
-  const base = (email.value.split('@')[0] || username.value || 'user').trim()
-  return base.slice(0, 3)
 })
 const username = computed(() => userInfo.value.username || '')
 const phone = computed(() => userInfo.value.phone || '')
@@ -417,14 +410,6 @@ const startCountdown = () => {
 }
 
 // 停止倒计时
-const stopCountdown = () => {
-  if (countdownRef.value) {
-    clearInterval(countdownRef.value)
-    countdownRef.value = null
-    isCountingDown.value = false
-  }
-}
-
 // 手机认证验证
 function handlePhoneSubmit() {
   if (agreedToUserAgreement.value === false && globalConfig.value.isAutoOpenAgreement === '1') {
@@ -532,22 +517,6 @@ async function bindWxBySnece() {
     }
   } catch (error) {
     console.error('绑定微信失败:', error)
-  }
-}
-
-// 倒计时结束处理
-function handleTimeDown() {
-  if (wxBindTimer.value !== null) {
-    clearInterval(wxBindTimer.value)
-    wxBindTimer.value = null
-  }
-  getSeneStr()
-  // 使用自定义重置方法替换reset
-  if (countdownRef.value) {
-    clearInterval(countdownRef.value)
-    countdownRef.value = null
-    isCountingDown.value = false
-    remainingTime.value = 60
   }
 }
 

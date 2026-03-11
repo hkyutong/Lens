@@ -1,6 +1,6 @@
 declare namespace Chat {
   interface Chat {
-    chatId?: number
+    chatId?: number | string
     content: string
     canvasText?: string
     modelType?: number
@@ -133,7 +133,7 @@ declare namespace Chat {
     appId?: number
     extraParam?: any
     fileUrl?: string
-    chatId?: number
+    chatId?: number | string
     taskId?: string
     imageUrl?: string
     regenerate?: boolean

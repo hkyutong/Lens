@@ -4,7 +4,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore } from '@/store'
 import { message } from '@/utils/message'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import SliderCaptcha from './SliderCaptcha.vue'
 
 interface Props {

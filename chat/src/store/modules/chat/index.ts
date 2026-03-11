@@ -542,32 +542,16 @@ export const useChatStore = defineStore('chat-store', {
     applyHiddenReplyFilter(list: Chat.Chat[], groupId: number) {
       const fullList = Array.isArray(list) ? [...list] : []
       const anchorId = this.getHiddenReplyTailAnchor(groupId)
-      const hiddenIds = new Set(this.getHiddenReplyChatIds(groupId))
-      if (!anchorId || !hiddenIds.size) return fullList
-
-      const anchorIndex = fullList.findIndex(item => Number(item?.chatId || 0) === anchorId)
-      if (anchorIndex < 0) {
+      const hiddenIds = this.getHiddenReplyChatIds(groupId)
+      if (anchorId || hiddenIds.length) {
         this.clearHiddenReplyTail(groupId)
-        return fullList
       }
-
-      const tailList = fullList.slice(anchorIndex + 1)
-      if (!tailList.length) return fullList.slice(0, anchorIndex + 1)
-
-      const hasUnexpectedTail = tailList.some(item => !hiddenIds.has(Number(item?.chatId || 0)))
-      if (hasUnexpectedTail) {
-        this.clearHiddenReplyTail(groupId)
-        return fullList
-      }
-
-      return fullList.slice(0, anchorIndex + 1)
+      return fullList
     },
 
     rememberHiddenReplyTail(groupId: number, chatIds: number[], anchorChatId?: number) {
       if (!groupId) return
-      const normalizedIds = Array.from(
-        new Set(chatIds.map(id => Number(id)).filter(id => id > 0))
-      )
+      const normalizedIds = Array.from(new Set(chatIds.map(id => Number(id)).filter(id => id > 0)))
       const normalizedAnchorId = Number(anchorChatId || 0)
       const current = this.hiddenReplyChatIdsByGroup || {}
       const currentAnchors = this.hiddenReplyTailAnchorByGroup || {}

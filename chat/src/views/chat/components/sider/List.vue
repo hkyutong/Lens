@@ -76,7 +76,7 @@ async function handleDelete(params: Chat.History) {
       <div class="mb-3 space-y-2">
         <button
           type="button"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-transparent hover:bg-black/5 text-gray-800 dark:hover:bg-white/5"
+          class="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-transparent text-gray-800 hover:bg-black/5 dark:text-gray-100 dark:hover:bg-white/5"
           @click="handleNewChat"
         >
           <EditTwo size="18" />
@@ -84,7 +84,7 @@ async function handleDelete(params: Chat.History) {
         </button>
         <button
           type="button"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-transparent hover:bg-black/5 text-gray-800 dark:hover:bg-white/5"
+          class="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-transparent text-gray-800 hover:bg-black/5 dark:text-gray-100 dark:hover:bg-white/5"
           @click="handleOpenAppCenter"
         >
           <ApplicationTwo size="18" />

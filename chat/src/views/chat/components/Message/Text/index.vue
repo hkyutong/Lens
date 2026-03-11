@@ -67,7 +67,7 @@ const injectThemeStyles = () => {
 }
 
 interface Props {
-  chatId?: number
+  chatId?: number | string
   index: number
   isUserMessage?: boolean
   content?: string
@@ -729,7 +729,7 @@ const handlePlay = async () => {
     if (!props.chatId || !props.content) return
 
     const res = (await fetchTtsAPIProcess({
-      chatId: props.chatId,
+      chatId: Number(props.chatId),
       prompt: props.content,
     })) as TtsResponse
 
@@ -933,6 +933,147 @@ const normalizeMermaidMarkdown = (input: string) => {
 }
 
 const tableSeparatorPattern = /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/
+const markdownTableLinePattern = /^\s*\|.*\|\s*$/
+const leakedPolishControlCellPatterns = [
+  /^(?:列名|表头)(?:必须)?(?:严格)?为$/i,
+  /^表格列名(?:必须)?(?:严格)?为$/i,
+  /^(?:确保|每一行只允许)每?一行只描述一个局部修改$/i,
+  /^不要把多个句子或多处改动合并成一行$/i,
+  /^每个单元格(?:内容)?(?:将)?尽量简短只摘录必要片段(?:不要整段照抄)?$/i,
+  /^第三列只解释这一处修改说明要简洁准确$/i,
+  /Markdown表格/i,
+  /^请先用中文提供文本的更正版本然后输出一个Markdown表格$/i,
+  /^我将首先用中文提供文本的更正版本然后输出一个Markdown表格$/i,
+]
+const normalizeLeakedPolishControlText = (value: string) =>
+  String(value || '')
+    .replace(/[‘’“”"'`*_]/g, '')
+    .replace(/[：:；;，,。.!！?？]/g, '')
+    .replace(/\s+/g, '')
+
+const isLeakedPolishControlCell = (value: string) => {
+  const normalized = normalizeLeakedPolishControlText(value)
+  if (!normalized) return false
+  return leakedPolishControlCellPatterns.some(pattern => pattern.test(normalized))
+}
+
+const splitLeakedPolishTableCells = (line: string) => {
+  const text = String(line || '').trim()
+  if (!text.startsWith('|')) return [] as string[]
+  let body = text.slice(1)
+  if (body.endsWith('|')) body = body.slice(0, -1)
+  const cells: string[] = []
+  let current = ''
+  let escaped = false
+  for (const char of body) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      current += char
+      escaped = true
+      continue
+    }
+    if (char === '|') {
+      cells.push(current.trim())
+      current = ''
+      continue
+    }
+    current += char
+  }
+  cells.push(current.trim())
+  return cells
+}
+
+const stripLeakedPolishTableInstructionRows = (input: string) => {
+  const source = String(input || '')
+  if (!source) return ''
+  const lines = source.split('\n')
+  const output: string[] = []
+  const seenRows = new Set<string>()
+
+  for (const line of lines) {
+    const trimmed = String(line || '').trim()
+    if (!trimmed) {
+      output.push(line)
+      continue
+    }
+    if (
+      /Markdown\s*表格/i.test(trimmed) &&
+      /(修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)/.test(trimmed)
+    ) {
+      continue
+    }
+    if (!trimmed.startsWith('|')) {
+      if (isLeakedPolishControlCell(trimmed)) continue
+      output.push(line)
+      continue
+    }
+
+    const cells = splitLeakedPolishTableCells(trimmed)
+    if (cells.length === 3) {
+      if (isLeakedPolishControlCell(cells[0]) || isLeakedPolishControlCell(cells[1])) {
+        continue
+      }
+      const normalizedRow = `| ${cells.join(' | ')} |`
+      const isHeader =
+        cells[0] === '修改前原文片段' &&
+        cells[1] === '修改后片段' &&
+        cells[2] === '修改原因与解释'
+      if (!isHeader && !tableSeparatorPattern.test(trimmed)) {
+        if (seenRows.has(normalizedRow)) continue
+        seenRows.add(normalizedRow)
+      }
+      output.push(normalizedRow)
+      continue
+    }
+
+    output.push(line)
+  }
+
+  return output.join('\n').replace(/\n{4,}/g, '\n\n\n')
+}
+
+const stripLeakedPolishTableInstructions = (input: string) =>
+  (() => {
+    const source = String(input || '')
+    if (!source) return ''
+    if (
+      !/(修改前原文片段\s*\|.*修改原因与解释|Markdown\s*表格|第三列只解释这一处修改|每一行只允许描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短|(?:列名|表头)(?:必须)?(?:严格)?为)/i.test(
+        source
+      )
+    ) {
+      return source
+    }
+    const normalized = source
+      .replace(
+        /^[^\S\r\n>]*\|?\s*(?:列名|表头)(?:必须)?(?:严格)?为[:：]\s*\|?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|?\s*$/gim,
+        ''
+      )
+      .replace(
+        /(?:列名|表头)(?:必须)?(?:严格)?为[:：]\s*\|?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|?/gi,
+        ''
+      )
+      .replace(
+        /^[^\n]*Markdown\s*表格[^\n]*(?:修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)[^\n]*$/gim,
+        ''
+      )
+      .replace(
+        /(?:然后)?输出一个\s*Markdown\s*表格(?:列名|表头)?(?:必须)?(?:严格)?为[:：]?\s*`?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*`?/gi,
+        ''
+      )
+      .replace(/表格(?:会)?按[“"'`]?小句\/短片段[”"'`]?的粒度拆分[，,、 ]*/gi, '')
+      .replace(/(?:确保每一行只描述一个局部修改|每一行只允许描述一个局部修改)[，,、 ]*/gi, '')
+      .replace(
+        /每个单元格(?:内容)?(?:将)?尽量简短，只摘录必要片段(?:，?不要整段照抄)?[；;，,、 ]*/gi,
+        ''
+      )
+      .replace(/第三列只解释这一处修改，说明要简洁准确[:：]?\s*/gi, '')
+    return stripLeakedPolishTableInstructionRows(normalized)
+  })()
+
 const normalizeMarkdownTables = (input: string) => {
   // 学术插件常见异常：
   // 1) 表格前换行被吞，出现 “句子| 表头...”
@@ -1281,6 +1422,420 @@ const normalizeMarkdownTables = (input: string) => {
   return normalized
 }
 
+const splitStablePolishTableCells = (line: string) => {
+  const text = String(line || '').trim()
+  if (!text.startsWith('|') || !text.endsWith('|')) return []
+  const body = text.slice(1, -1)
+  const cells: string[] = []
+  let current = ''
+  let escaped = false
+  for (const char of body) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      current += char
+      escaped = true
+      continue
+    }
+    if (char === '|') {
+      cells.push(current.trim())
+      current = ''
+      continue
+    }
+    current += char
+  }
+  cells.push(current.trim())
+  return cells
+}
+
+type StablePolishRow = {
+  before: string
+  after: string
+  reason: string
+}
+
+const getStablePolishRowKey = (before: string, after: string) =>
+  `${normalizeLeakedPolishControlText(before)}\u0000${normalizeLeakedPolishControlText(after)}`
+
+const stablePolishReasonCuePattern =
+  /^(?:将|把|增加|删除|改为|省略|直接使用|体现|突出|避免|保留|添加|调整|补齐|更换|优化|用词|语气|强调|通过|采用|概括|引出|去除(?:冗余)?|简化(?:表达|表述)|删除冗余描述|合并和简化要求|此句表达已较清晰|未作修改|补充[“"]|用[“"]|为[“"]|使用(?:更|[“"'A-Za-z])|改为主动建议句式|“[^”]+”比“[^”]+”|“[^”]+”改为“[^”]+”|“)/
+
+const isLikelyStablePolishReasonSegment = (value: string) =>
+  stablePolishReasonCuePattern.test(String(value || '').trim())
+
+const isLikelyStablePolishSnippetSegment = (value: string) => {
+  const text = String(value || '').trim()
+  if (!text) return false
+  if (isLeakedPolishControlCell(text)) return false
+  return !isLikelyStablePolishReasonSegment(text)
+}
+
+const explodeMergedStablePolishRows = (candidate: StablePolishRow) => {
+  const reason = String(candidate.reason || '').trim()
+  const segments = reason
+    .split(/\s+/)
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  if (segments.length < 4) return [{ ...candidate, reason }]
+
+  const rows: StablePolishRow[] = []
+  const currentReasonParts = [segments[0]]
+  let cursor = 1
+
+  while (cursor < segments.length) {
+    const before = String(segments[cursor] || '').trim()
+    const after = String(segments[cursor + 1] || '').trim()
+    const reasonStart = String(segments[cursor + 2] || '').trim()
+    const hasEmbeddedRow =
+      cursor + 2 < segments.length &&
+      isLikelyStablePolishSnippetSegment(before) &&
+      isLikelyStablePolishSnippetSegment(after) &&
+      isLikelyStablePolishReasonSegment(reasonStart)
+
+    if (!hasEmbeddedRow) {
+      currentReasonParts.push(before)
+      cursor += 1
+      continue
+    }
+
+    const reasonParts = [reasonStart]
+    cursor += 3
+    while (cursor < segments.length) {
+      const nextBefore = String(segments[cursor] || '').trim()
+      const nextAfter = String(segments[cursor + 1] || '').trim()
+      const nextReasonStart = String(segments[cursor + 2] || '').trim()
+      const nextIsEmbeddedRow =
+        cursor + 2 < segments.length &&
+        isLikelyStablePolishSnippetSegment(nextBefore) &&
+        isLikelyStablePolishSnippetSegment(nextAfter) &&
+        isLikelyStablePolishReasonSegment(nextReasonStart)
+      if (nextIsEmbeddedRow) break
+      reasonParts.push(nextBefore)
+      cursor += 1
+    }
+
+    rows.push({
+      before,
+      after,
+      reason: reasonParts.join(' ').trim(),
+    })
+  }
+
+  return [
+    {
+      before: candidate.before,
+      after: candidate.after,
+      reason: currentReasonParts.join(' ').trim(),
+    },
+    ...rows,
+  ].filter(row => row.before && row.after && row.reason)
+}
+
+const extractEmbeddedStablePolishRow = (reason: string) => {
+  const segments = String(reason || '')
+    .split(/\s+/)
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  if (segments.length < 4) return null
+
+  let tailIndex = -1
+  for (let idx = 2; idx < segments.length; idx += 1) {
+    if (stablePolishReasonCuePattern.test(segments[idx])) {
+      tailIndex = idx
+      break
+    }
+  }
+  if (tailIndex < 3) return null
+
+  const middle = segments.slice(1, tailIndex)
+  let splitIndex = -1
+  if (middle.length === 2) {
+    splitIndex = 1
+  } else {
+    for (let idx = 1; idx < middle.length; idx += 1) {
+      const previous = middle.slice(0, idx).join(' ')
+      const current = String(middle[idx] || '')
+      if (/[A-Za-z]/.test(current) && !/[A-Za-z]/.test(previous)) {
+        splitIndex = idx
+        break
+      }
+    }
+    if (splitIndex < 0 && middle.length === 3) {
+      splitIndex = 1
+    }
+  }
+  if (splitIndex < 1 || splitIndex >= middle.length) return null
+
+  const before = middle.slice(0, splitIndex).join(' ').trim()
+  const after = middle.slice(splitIndex).join(' ').trim()
+  const leadingReason = String(segments[0] || '').trim()
+  const tailReason = segments.slice(tailIndex).join(' ').trim()
+  if (!before || !after || !leadingReason || !tailReason) return null
+  return {
+    leadingReason,
+    embeddedRow: {
+      before,
+      after,
+      reason: tailReason,
+    } as StablePolishRow,
+  }
+}
+
+const trimStablePolishReasonOverflow = (reason: string, upcomingRows: StablePolishRow[]) => {
+  let output = String(reason || '').trim()
+  if (!output) return ''
+  let cutIndex = -1
+  for (const row of upcomingRows) {
+    const candidates = [row.before, row.after].map(item => String(item || '').trim()).filter(Boolean)
+    for (const candidate of candidates) {
+      const idx = output.indexOf(candidate)
+      if (idx > 0 && (cutIndex < 0 || idx < cutIndex)) {
+        cutIndex = idx
+      }
+    }
+    if (cutIndex > 0) break
+  }
+  if (cutIndex > 0) {
+    output = output.slice(0, cutIndex).trim()
+  }
+  return output.replace(/\s{2,}/g, ' ')
+}
+
+const collectRecoveredStablePolishRows = (value: string) => {
+  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  if (!normalized.trim()) return [] as StablePolishRow[]
+
+  const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
+  const headerIndex = lines.findIndex(line => {
+    const headerCells = splitStablePolishTableCells(String(line || '').trim())
+    return (
+      headerCells.length === 3 &&
+      headerCells[0] === '修改前原文片段' &&
+      headerCells[1] === '修改后片段' &&
+      headerCells[2] === '修改原因与解释'
+    )
+  })
+  if (headerIndex < 0) return [] as StablePolishRow[]
+
+  let separatorIndex = -1
+  for (let idx = headerIndex + 1; idx < lines.length; idx += 1) {
+    const trimmed = String(lines[idx] || '').trim()
+    if (!trimmed) continue
+    if (tableSeparatorPattern.test(trimmed)) {
+      separatorIndex = idx
+      break
+    }
+    break
+  }
+  if (separatorIndex < 0) return [] as StablePolishRow[]
+
+  const rawRows: StablePolishRow[] = []
+  for (let idx = separatorIndex + 1; idx < lines.length; idx += 1) {
+    const trimmed = String(lines[idx] || '').trim()
+    if (!trimmed || !markdownTableLinePattern.test(trimmed)) continue
+    const rowCells = splitStablePolishTableCells(trimmed)
+    if (rowCells.length !== 3) continue
+    rawRows.push({
+      before: String(rowCells[0] || '').trim(),
+      after: String(rowCells[1] || '').trim(),
+      reason: String(rowCells[2] || '').trim(),
+    })
+  }
+
+  const recovered: StablePolishRow[] = []
+  const seen = new Set<string>()
+  for (let idx = 0; idx < rawRows.length; idx += 1) {
+    const row = rawRows[idx]
+    if (!row.before || !row.after) continue
+    if (isLeakedPolishControlCell(row.before) || isLeakedPolishControlCell(row.after)) continue
+    const pushRow = (candidate: StablePolishRow, depth = 0, skipSequentialSplit = false) => {
+      if (depth > 4) return
+      const reason = depth
+        ? String(candidate.reason || '').trim()
+        : trimStablePolishReasonOverflow(candidate.reason, rawRows.slice(idx + 1, idx + 4))
+      if (!reason) return
+      if (
+        !candidate.before ||
+        !candidate.after ||
+        isLeakedPolishControlCell(candidate.before) ||
+        isLeakedPolishControlCell(candidate.after)
+      ) {
+        return
+      }
+      if (!skipSequentialSplit) {
+        const explodedRows = explodeMergedStablePolishRows({
+          before: candidate.before,
+          after: candidate.after,
+          reason,
+        })
+        if (explodedRows.length > 1) {
+          explodedRows.forEach(rowItem => pushRow(rowItem, depth + 1, true))
+          return
+        }
+      }
+      const splitResult = extractEmbeddedStablePolishRow(reason)
+      const finalReason = String(splitResult?.leadingReason || reason).trim()
+      const rowKey = getStablePolishRowKey(candidate.before, candidate.after)
+      if (!seen.has(rowKey) && finalReason) {
+        seen.add(rowKey)
+        recovered.push({
+          before: candidate.before,
+          after: candidate.after,
+          reason: finalReason,
+        })
+      }
+      if (splitResult?.embeddedRow) {
+        pushRow(splitResult.embeddedRow, depth + 1)
+      }
+    }
+    pushRow(row)
+  }
+
+  return recovered
+}
+
+const buildRecoveredStablePolishTable = (value: string) => {
+  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  const rows = collectRecoveredStablePolishRows(normalized)
+  if (!rows.length) return ''
+
+  const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
+  const headerIndex = lines.findIndex(line => {
+    const headerCells = splitStablePolishTableCells(String(line || '').trim())
+    return (
+      headerCells.length === 3 &&
+      headerCells[0] === '修改前原文片段' &&
+      headerCells[1] === '修改后片段' &&
+      headerCells[2] === '修改原因与解释'
+    )
+  })
+  const maybeTitle = String(lines[headerIndex - 1] || '').trim()
+  const tableLines = [
+    /^修改对照表[:：]?$/.test(maybeTitle) ? maybeTitle : '',
+    '| 修改前原文片段 | 修改后片段 | 修改原因与解释 |',
+    '| --- | --- | --- |',
+    ...rows.map(row => `| ${row.before} | ${row.after} | ${row.reason} |`),
+  ].filter(Boolean)
+  return tableLines.join('\n')
+}
+
+const stripLeadingStablePolishOverflowBlock = (value: string) => {
+  const lines = String(value || '').split('\n')
+  let firstMeaningfulIndex = 0
+  while (firstMeaningfulIndex < lines.length && !String(lines[firstMeaningfulIndex] || '').trim()) {
+    firstMeaningfulIndex += 1
+  }
+  if (firstMeaningfulIndex >= lines.length) return ''
+  if (!String(lines[firstMeaningfulIndex] || '').trim().startsWith('|')) {
+    return String(value || '').trimStart()
+  }
+  let cursor = firstMeaningfulIndex
+  while (cursor < lines.length) {
+    const trimmed = String(lines[cursor] || '').trim()
+    if (!trimmed) {
+      cursor += 1
+      continue
+    }
+    if (!trimmed.startsWith('|')) break
+    cursor += 1
+  }
+  return lines.slice(cursor).join('\n').trimStart()
+}
+
+const extractStablePolishReasonTable = (value: string) => {
+  return buildRecoveredStablePolishTable(value)
+}
+
+const findStablePolishReasonTableRange = (value: string) => {
+  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  if (!normalized.trim()) return null
+
+  const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
+  let bestMatch: {
+    start: number
+    end: number
+    rowCount: number
+  } | null = null
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const headerLine = String(lines[i] || '').trim()
+    const headerCells = splitStablePolishTableCells(headerLine)
+    if (
+      headerCells.length !== 3 ||
+      headerCells[0] !== '修改前原文片段' ||
+      headerCells[1] !== '修改后片段' ||
+      headerCells[2] !== '修改原因与解释'
+    ) {
+      continue
+    }
+
+    const maybeTitle = String(lines[i - 1] || '').trim()
+    const start = /^修改对照表[:：]?$/.test(maybeTitle) ? Math.max(0, i - 1) : i
+
+    let separatorConsumed = false
+    let rowCount = 0
+    let end = i + 1
+
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const trimmed = String(lines[j] || '').trim()
+      if (!trimmed) {
+        if (separatorConsumed && rowCount > 0) {
+          end = j
+          break
+        }
+        continue
+      }
+      if (!separatorConsumed) {
+        if (tableSeparatorPattern.test(trimmed)) {
+          separatorConsumed = true
+          end = j + 1
+          continue
+        }
+        end = j
+        break
+      }
+      if (!markdownTableLinePattern.test(trimmed)) {
+        end = j
+        break
+      }
+      const rowCells = splitStablePolishTableCells(trimmed)
+      if (rowCells.length !== 3) {
+        end = j
+        break
+      }
+      rowCount += 1
+      end = j + 1
+    }
+
+    if (!separatorConsumed || rowCount <= 0) continue
+    if (!bestMatch || rowCount > bestMatch.rowCount) {
+      bestMatch = { start, end, rowCount }
+    }
+  }
+
+  return bestMatch
+}
+
+const replacePolishReasonTableWithStableSnapshot = (value: string, stableTable?: string) => {
+  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  const snapshot = String(stableTable || '').trim() || extractStablePolishReasonTable(normalized)
+  if (!snapshot) return normalized
+
+  const match = findStablePolishReasonTableRange(normalized)
+  if (!match) {
+    return normalized.trim() || snapshot
+  }
+
+  const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
+  const prefix = lines.slice(0, match.start).join('\n').trimEnd()
+  const suffix = stripLeadingStablePolishOverflowBlock(lines.slice(match.end).join('\n'))
+  const sections = [prefix, snapshot, suffix].filter(section => String(section || '').trim())
+  return sections.join('\n\n').trim()
+}
+
 const defaultFenceRenderer = mdi.renderer.rules.fence?.bind(mdi.renderer.rules)
 mdi.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
@@ -1538,6 +2093,13 @@ const text = computed(() => {
   }
   let value = sanitizeDisplayText(props.content || '')
   value = normalizeMarkdownTables(value)
+  value = stripLeakedPolishTableInstructions(value)
+  if (!props.isUserMessage) {
+    const stablePolishReasonTable = extractStablePolishReasonTable(value)
+    if (stablePolishReasonTable) {
+      value = replacePolishReasonTableWithStableSnapshot(value, stablePolishReasonTable)
+    }
+  }
   value = normalizeMermaidMarkdown(value)
 
   let modifiedValue = value

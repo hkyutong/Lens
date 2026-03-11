@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useAuthStore, useGlobalStoreWithOut } from '@/store'
+import { useGlobalStoreWithOut } from '@/store'
 import 'md-editor-v3/lib/preview.css'
 import { ref, watch } from 'vue'
 
@@ -9,7 +9,6 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const authStore = useAuthStore()
 const useGlobalStore = useGlobalStoreWithOut()
 
 const countdown = ref(15) // 倒计时 15 秒

@@ -6,16 +6,16 @@ import { fetchGetBalanceQueryAPI } from '@/api/balance'
 import { fetchQueryConfigAPI } from '@/api/config'
 import type { ResData } from '@/api/types'
 import { store } from '@/store'
-import type { AuthState, GlobalConfig, UserBalance } from './helper'
-import { getToken, removeToken, setToken } from './helper'
+import type { AuthState, GlobalConfig, UserBalance, UserInfo } from './helper'
+import { defaultUserBalance, defaultUserInfo, getToken, removeToken, setToken } from './helper'
 
 export const useAuthStore = defineStore('auth-store', {
   state: (): AuthState => ({
     token: getToken(),
     loginDialog: false,
     globalConfigLoading: true,
-    userInfo: {},
-    userBalance: {},
+    userInfo: defaultUserInfo(),
+    userBalance: defaultUserBalance(),
     globalConfig: {} as GlobalConfig,
     loadInit: false,
   }),
@@ -25,17 +25,23 @@ export const useAuthStore = defineStore('auth-store', {
   },
 
   actions: {
-    async getUserInfo(): Promise<T> {
+    async getUserInfo(): Promise<{ userInfo: UserInfo; userBalance: UserBalance } | undefined> {
       try {
         if (!this.loadInit) await this.getGlobalConfig()
 
-        const res = await fetchGetInfo()
+        const res = await fetchGetInfo<{
+          userInfo?: Partial<UserInfo>
+          userBalance?: Partial<UserBalance>
+        }>()
         if (!res) return Promise.resolve(res)
         const { data } = res
         const { userInfo, userBalance } = data
-        this.userInfo = { ...userInfo }
-        this.userBalance = { ...userBalance }
-        return Promise.resolve(data)
+        this.userInfo = { ...defaultUserInfo(), ...userInfo }
+        this.userBalance = { ...defaultUserBalance(), ...userBalance }
+        return Promise.resolve({
+          userInfo: this.userInfo,
+          userBalance: this.userBalance,
+        })
       } catch (error) {
         return Promise.reject(error)
       }
@@ -76,8 +82,8 @@ export const useAuthStore = defineStore('auth-store', {
     logOut() {
       this.token = undefined
       removeToken()
-      this.userInfo = {}
-      this.userBalance = {}
+      this.userInfo = defaultUserInfo()
+      this.userBalance = defaultUserBalance()
       // message().success('登出账户成功！')
       const chatStore = useChatStore()
       chatStore.clearChat()
@@ -87,8 +93,8 @@ export const useAuthStore = defineStore('auth-store', {
     updatePasswordSuccess() {
       this.token = undefined
       removeToken()
-      this.userInfo = {}
-      this.userBalance = {}
+      this.userInfo = defaultUserInfo()
+      this.userBalance = defaultUserBalance()
       this.loginDialog = true
     },
   },

@@ -3,14 +3,14 @@
 import { fetchChatAPIProcess } from '@/api'
 import { fetchAcademicChatAPIProcess } from '@/api/academic'
 import { fetchQueryOneCatAPI } from '@/api/appStore'
+import { fetchDeleteGroupChatsAfterIdAPI, fetchSyncDisplayContentAPI } from '@/api/chatLog'
 import { openImageViewer } from '@/components/common/ImageViewer/useImageViewer'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
-import { t } from '@/locales'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
-import { dialog } from '@/utils/dialog'
 import { message } from '@/utils/message'
 import { Close, DropDownList } from '@icon-park/vue-next'
 import DownSmall from '@icon-park/vue-next/es/icons/DownSmall'
+import type { AxiosProgressEvent } from 'axios'
 import Sider from './components/sider/index.vue'
 // 导入DropdownMenu组件用于弹窗
 import { DropdownMenu } from '@/components/common/DropdownMenu'
@@ -63,14 +63,43 @@ const triggerUpgradeIfNeeded = (messageText: string) => {
   }
 }
 
-// 添加自定义的updateGroupChat函数
-const updateGroupChat = (index: number, chat: Chat.Chat) => {
-  chatStore.updateGroupChat(index, chat)
-}
-
 const clearLastError = () => {
   lastError.value = ''
   lastErrorRequestId.value = ''
+}
+
+const trimConversationTailAfterOverwrite = async (
+  assistantIndex: number,
+  baseList: Chat.Chat[],
+  groupId: number
+) => {
+  if (assistantIndex < 0 || !Array.isArray(baseList)) return
+  const tailItems = baseList.slice(assistantIndex + 1)
+  if (!tailItems.length) {
+    chatStore.clearHiddenReplyTail(groupId)
+    return
+  }
+
+  const currentTailLength = Math.max(0, (chatStore.chatList?.length || 0) - assistantIndex - 1)
+  if (currentTailLength > 0) {
+    chatStore.chatList.splice(assistantIndex + 1, currentTailLength)
+  }
+
+  const deleteStartChatId = Number(
+    tailItems.find(item => Number(item?.chatId || 0) > 0)?.chatId || 0
+  )
+  if (deleteStartChatId > 0) {
+    try {
+      await fetchDeleteGroupChatsAfterIdAPI({ id: deleteStartChatId })
+    } catch (error) {
+      if (tailItems.length) {
+        chatStore.chatList.splice(assistantIndex + 1, 0, ...tailItems)
+      }
+      throw error
+    }
+  }
+
+  chatStore.clearHiddenReplyTail(groupId)
 }
 
 const handleImportFiles = () => {
@@ -157,54 +186,12 @@ const getAcademicCoreRequestName = (item: any) => {
   if (isAcademicDisabledOption(selected)) return ''
   return selected
 }
-const normalizeAcademicName = (value: any) =>
-  String(value || '')
-    .toLowerCase()
-    .replace(/[\s\-_/\\]+/g, '')
-    .replace(/[（）()【】\[\]<>《》:：,.，。'"`]/g, '')
-const academicFileRequiredPlugins = new Set(
-  [
-    'pdf批量总结',
-    'pdf深度理解',
-    'word批量总结',
-    'latex摘要',
-    'latex精准翻译',
-    'latex英文润色',
-    'latex中文润色',
-    'latex高亮纠错',
-    '解析整个python项目',
-    '注释整个python项目',
-    '解析整个matlab项目',
-    '解析整个c项目头文件',
-    '解析整个c项目cpphpp等',
-    '解析整个go项目',
-    '解析整个rust项目',
-    '解析整个java项目',
-    '解析整个前端项目jstscss等',
-    '解析整个lua项目',
-    '解析整个csharp项目',
-    '解析jupyternotebook文件',
-    '翻译markdown或readme',
-    '批量生成函数注释',
-    '解析项目源代码自定义文件类型',
-  ].map(normalizeAcademicName)
-)
 const dataSources = computed(() => chatStore.chatList || [])
 const activeGroupId = computed(() => chatStore.active)
 const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
 const isStreaming = computed(() => Boolean(chatStore.isStreamIn))
 const globalConfig = computed(() => authStore.globalConfig)
-const sideDrawingEditModel = computed(() => authStore.globalConfig?.sideDrawingEditModel)
-const isStreamCacheEnabled = computed(() => authStore.globalConfig.streamCacheEnabled === '1')
 const copyrightEndYear = computed(() => new Date().getFullYear())
-const lastAssistantMessage = computed(() => {
-  const list = dataSources.value || []
-  for (let i = list.length - 1; i >= 0; i -= 1) {
-    const item = list[i]
-    if (item?.role !== 'user') return item
-  }
-  return null
-})
 
 // 使用watch监听activeGroupInfo的变化
 const configObj = computed(() => {
@@ -604,6 +591,17 @@ const stripSerializedPayloadArtifacts = (value: string) => {
   return text
 }
 
+const stripLeakedPolishTableInstructions = (value: string) =>
+  String(value || '')
+    .replace(
+      /^[^\S\r\n>]*\|?\s*(?:列名|表头)(?:必须)?(?:严格)?为[:：]\s*\|?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|?\s*$/gim,
+      ''
+    )
+    .replace(
+      /(?:列名|表头)(?:必须)?(?:严格)?为[:：]\s*\|?\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|?/gi,
+      ''
+    )
+
 const normalizeIncomingText = (
   value: string,
   options: { trim?: boolean; mode?: 'stream' | 'final' } = {}
@@ -645,6 +643,7 @@ const normalizeIncomingText = (
     .replace(/(解析项目)\s*[:：]\s*(?=\n|$)/g, '$1')
     .replace(/\r\n/g, '\n')
     .replace(/\n{4,}/g, '\n\n\n')
+  text = stripLeakedPolishTableInstructions(text)
 
   if (mode === 'final' && text.trim()) {
     text = stripSerializedPayloadArtifacts(text)
@@ -689,9 +688,6 @@ const scoreTextStructure = (value: string) => {
   return score
 }
 
-const polishReasonTableHeaderPattern =
-  /^\s*\|\s*修改前原文片段\s*\|\s*修改后片段\s*\|\s*修改原因与解释\s*\|\s*$/m
-
 const markdownTableLinePattern = /^\s*\|.*\|\s*$/
 
 const splitMarkdownTableCells = (line: string) => {
@@ -731,7 +727,11 @@ const countMarkdownTableRows = (value: string) =>
     .filter(line => {
       const cells = splitMarkdownTableCells(line)
       if (cells.length !== 3) return false
-      if (cells[0] === '修改前原文片段' && cells[1] === '修改后片段' && cells[2] === '修改原因与解释')
+      if (
+        cells[0] === '修改前原文片段' &&
+        cells[1] === '修改后片段' &&
+        cells[2] === '修改原因与解释'
+      )
         return false
       return !/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(line)
     }).length
@@ -792,6 +792,92 @@ const extractStablePolishReasonTable = (value: string) => {
   return bestRowCount > 0 ? bestTable : ''
 }
 
+const findStablePolishReasonTableRange = (value: string) => {
+  const normalized = normalizeIncomingText(value, { trim: true })
+  if (!normalized) return null
+
+  const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
+  let bestMatch: {
+    start: number
+    end: number
+    rowCount: number
+  } | null = null
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const headerLine = String(lines[i] || '').trim()
+    const headerCells = splitMarkdownTableCells(headerLine)
+    if (
+      headerCells.length !== 3 ||
+      headerCells[0] !== '修改前原文片段' ||
+      headerCells[1] !== '修改后片段' ||
+      headerCells[2] !== '修改原因与解释'
+    ) {
+      continue
+    }
+
+    const maybeTitle = String(lines[i - 1] || '').trim()
+    const start = /^修改对照表[:：]?$/.test(maybeTitle) ? Math.max(0, i - 1) : i
+
+    let separatorConsumed = false
+    let rowCount = 0
+    let end = i + 1
+
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const trimmed = String(lines[j] || '').trim()
+      if (!trimmed) {
+        if (separatorConsumed && rowCount > 0) {
+          end = j
+          break
+        }
+        continue
+      }
+
+      if (!separatorConsumed) {
+        if (/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(trimmed)) {
+          separatorConsumed = true
+          end = j + 1
+          continue
+        }
+        end = j
+        break
+      }
+
+      if (!markdownTableLinePattern.test(trimmed)) {
+        end = j
+        break
+      }
+      const rowCells = splitMarkdownTableCells(trimmed)
+      if (rowCells.length !== 3) {
+        end = j
+        break
+      }
+      rowCount += 1
+      end = j + 1
+    }
+
+    if (!separatorConsumed || rowCount <= 0) continue
+    if (!bestMatch || rowCount > bestMatch.rowCount) {
+      bestMatch = { start, end, rowCount }
+    }
+  }
+
+  return bestMatch
+}
+
+const replacePolishReasonTableWithStableSnapshot = (value: string, stableTable?: string) => {
+  const normalized = normalizeIncomingText(value, { trim: true })
+  const snapshot = String(stableTable || '').trim() || extractStablePolishReasonTable(normalized)
+  if (!snapshot) return normalized
+
+  const match = findStablePolishReasonTableRange(normalized)
+  if (!match) return normalized || snapshot
+
+  const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
+  const prefix = lines.slice(0, match.start).join('\n').trimEnd()
+  const suffix = lines.slice(match.end).join('\n').trimStart()
+  return [prefix, snapshot, suffix].filter(section => String(section || '').trim()).join('\n\n')
+}
+
 const pickBetterPolishTableSnapshot = (current: string, candidate: string) => {
   const currentTable = extractStablePolishReasonTable(current)
   const candidateTable = extractStablePolishReasonTable(candidate)
@@ -843,8 +929,6 @@ const chooseBetterFinalText = (streamText: string, finalText: string) => {
   if (next.length >= Math.floor(current.length * 1.15) && nextScore >= currentScore) return next
   return current
 }
-
-const hasStablePolishReasonTable = (value: string) => Boolean(extractStablePolishReasonTable(value))
 
 const extractTextChunk = (payload: any): string => {
   if (!payload) return ''
@@ -1003,6 +1087,7 @@ const onConversation = async ({
   const requestFileUrl = String(fileUrl || '')
 
   const activeList = chatStore.chatList || []
+  const activeListSnapshot = Array.isArray(activeList) ? [...activeList] : []
   let assistantIndex = -1
   let effectiveReplyChatId = Number(replyChatId || 0)
   const directReplyIndex =
@@ -1026,19 +1111,6 @@ const onConversation = async ({
       error: false,
       status: 1,
     })
-  }
-
-  const hideVisibleTailAfter = (idx: number) => {
-    if (idx < 0) return
-    const currentList = chatStore.chatList || []
-    const anchorChatId = Number(currentList[idx]?.chatId || 0)
-    if (idx >= currentList.length - 1) return
-    const hiddenIds = currentList
-      .slice(idx + 1)
-      .map(item => Number(item?.chatId || 0))
-      .filter(id => id > 0)
-    chatStore.rememberHiddenReplyTail(Number(activeGroupId.value), hiddenIds, anchorChatId)
-    currentList.splice(idx + 1)
   }
 
   if (overwriteReply && directReplyIndex >= 0) {
@@ -1115,8 +1187,19 @@ const onConversation = async ({
     return
   }
 
-  if (overwriteReply && assistantIndex >= 0) {
-    hideVisibleTailAfter(assistantIndex)
+  if (overwriteReply) {
+    try {
+      await trimConversationTailAfterOverwrite(
+        assistantIndex,
+        activeListSnapshot,
+        Number(activeGroupId.value)
+      )
+    } catch (error) {
+      chatStore.setStreamIn(false)
+      useGlobalStore.updateIsChatIn(false)
+      ms.error('删除后续消息失败，请刷新后重试')
+      return
+    }
   }
 
   if (assistantIndex < 0) {
@@ -1329,8 +1412,12 @@ const onConversation = async ({
         if (isPolishAcademicTask() && lockedPolishTable) {
           freezePolishTable = true
           stablePolishTableSnapshot = lockedPolishTable
-          fullText = lockedPolishTable
-          displayedText = lockedPolishTable
+          const mergedPolishText = replacePolishReasonTableWithStableSnapshot(
+            normalizedFinal || streamBaseline,
+            lockedPolishTable
+          )
+          fullText = mergedPolishText
+          displayedText = mergedPolishText
         } else {
           const preferred =
             academicMode.value && !isPolishAcademicTask()
@@ -1427,8 +1514,11 @@ const onConversation = async ({
     ndjsonBuffer = ''
   }
 
-  const handleStreamProgress = ({ event }) => {
-    const target: any = event?.target || {}
+  const handleStreamProgress = (progressEvent: AxiosProgressEvent) => {
+    const target = (progressEvent.event?.target || {}) as {
+      responseText?: string
+      isChunk?: boolean
+    }
     const responseText = String(target?.responseText || '')
     const isChunkMode = Boolean(target?.isChunk)
     let incrementalText = ''
@@ -1561,12 +1651,20 @@ const onConversation = async ({
     if (lockedPolishTable) {
       freezePolishTable = true
       stablePolishTableSnapshot = lockedPolishTable
-      displayedText = lockedPolishTable
-      fullText = lockedPolishTable
+      const mergedPolishText = replacePolishReasonTableWithStableSnapshot(
+        fullText || displayedText,
+        lockedPolishTable
+      )
+      displayedText = mergedPolishText
+      fullText = mergedPolishText
     }
     if (freezePolishTable && stablePolishTableSnapshot) {
-      displayedText = stablePolishTableSnapshot
-      fullText = stablePolishTableSnapshot
+      const mergedPolishText = replacePolishReasonTableWithStableSnapshot(
+        fullText || displayedText,
+        stablePolishTableSnapshot
+      )
+      displayedText = mergedPolishText
+      fullText = mergedPolishText
     }
     if (!hasVisibleText(displayedReasoningText) && hasVisibleText(fullReasoningText)) {
       displayedReasoningText = fullReasoningText
@@ -1574,7 +1672,9 @@ const onConversation = async ({
 
     // 使用同一套清洗规则判断“可见内容”，避免 raw 文本非空但清洗后为空导致页面看起来无回复。
     const visibleContent = normalizeIncomingText(
-      freezePolishTable && stablePolishTableSnapshot ? stablePolishTableSnapshot : displayedText,
+      freezePolishTable && stablePolishTableSnapshot
+        ? replacePolishReasonTableWithStableSnapshot(displayedText, stablePolishTableSnapshot)
+        : displayedText,
       { trim: true }
     )
     const visibleReasoning = normalizeIncomingText(displayedReasoningText, { trim: true })
@@ -1604,6 +1704,23 @@ const onConversation = async ({
 
     if (visibleReasoning) {
       displayedReasoningText = visibleReasoning
+    }
+
+    if (
+      academicMode.value &&
+      !isErrorResponse &&
+      assistantLogId &&
+      hasVisibleText(displayedText)
+    ) {
+      try {
+        await fetchSyncDisplayContentAPI({
+          chatId: Number(assistantLogId),
+          content: displayedText,
+          reasoningText: displayedReasoningText || undefined,
+        })
+      } catch (syncError) {
+        console.error('[academic] sync display content failed:', syncError)
+      }
     }
 
     patchCurrentAssistant({
@@ -1650,7 +1767,7 @@ const handleRefresh = async () => {
 const handleDelete = async (item: Chat.Chat) => {
   if (isStreaming.value) return
   if (item?.chatId) {
-    await chatStore.deleteChatById(item.chatId)
+    await chatStore.deleteChatById(Number(item.chatId))
     return
   }
   const idx = dataSources.value.findIndex(chat => chat === item)
@@ -1659,7 +1776,7 @@ const handleDelete = async (item: Chat.Chat) => {
   }
 }
 
-const handleEditConversation = async (payload: Record<string, any>) => {
+const handleEditConversation = async (payload: Chat.ConversationParams) => {
   return onConversation(payload)
 }
 
@@ -1699,7 +1816,7 @@ const handleRegenerate = async (
       modelType: currentModelInfo.modelType,
       modelAvatar: currentModelInfo.modelAvatar,
       overwriteReply: true,
-      chatId: userMsg?.chatId ? String(userMsg.chatId) : undefined,
+      chatId: userMsg?.chatId ? Number(userMsg.chatId) : undefined,
       replyChatId: targetReplyId || undefined,
       editIndex: userIndex,
       replyIndex: index,
@@ -1813,15 +1930,15 @@ provide('tryParseJson', tryParseJson)
         :class="[
           'relative z-10 flex-shrink-0',
           activeChatBackgroundImg && !useGlobalStore.showAppListComponent
-            ? 'bg-[var(--bg-body)]/80 dark:bg-gray-900/50 backdrop-blur-sm'
-            : 'bg-[var(--bg-body)] dark:bg-gray-800 backdrop-blur-sm',
+            ? 'bg-[var(--bg-body)]/80 dark:bg-[#080808]/95 backdrop-blur-sm'
+            : 'bg-[var(--bg-body)] dark:bg-[#080808] backdrop-blur-sm',
         ]"
         @toggle-app-list="toggleAppList"
       />
 
       <!-- Conditional Content - Keep original non-transparent backgrounds for these -->
       <template v-if="useGlobalStore.externalLinkDialog">
-        <ExternalLinkComponent class="relative z-10 flex-1 bg-white dark:bg-gray-900" />
+        <ExternalLinkComponent class="relative z-10 flex-1 bg-white dark:bg-[#080808]" />
       </template>
       <template v-else-if="useGlobalStore.showAppListComponent">
         <AppList
