@@ -89,6 +89,7 @@ declare namespace Chat {
     isStreamIn?: boolean
     pluginList: []
     academicMode: boolean
+    mobileAcademicPanelVisible: boolean
     academicPluginList: any[]
     academicCoreFunctions: any[]
     academicPluginArgs: string

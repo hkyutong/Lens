@@ -121,6 +121,7 @@ const academicMode = computed({
     chatStore.setAcademicMode(value)
   },
 })
+const mobileAcademicPanelVisible = computed(() => chatStore.mobileAcademicPanelVisible)
 const { isMobile } = useBasicLayout()
 const usingPlugin = computed(() => chatStore.currentPlugin)
 const isStreamIn = computed(() => {
@@ -209,6 +210,26 @@ const buttonDisabled = computed(
 
 const isExpanded = ref(false) // 控制输入框是否扩展
 const shouldShowExpandButton = ref(false) // 控制是否显示扩展按钮
+
+const handleAcademicModeToggle = () => {
+  if (!isMobile.value) {
+    academicMode.value = !academicMode.value
+    return
+  }
+
+  if (!academicMode.value) {
+    academicMode.value = true
+    chatStore.setMobileAcademicPanelVisible(true)
+    return
+  }
+
+  if (!mobileAcademicPanelVisible.value) {
+    chatStore.setMobileAcademicPanelVisible(true)
+    return
+  }
+
+  academicMode.value = false
+}
 
 const autoResize = () => {
   if (inputRef.value) {
@@ -1422,7 +1443,7 @@ defineExpose({
                 <div
                   class="btn-pill btn-md mx-1"
                   :class="[academicMode ? 'btn-pill-active' : '']"
-                  @click="academicMode = !academicMode"
+                  @click="handleAcademicModeToggle"
                   role="button"
                   :aria-pressed="academicMode"
                   aria-label="启用或禁用学术模式"

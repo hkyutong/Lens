@@ -7,6 +7,9 @@ import '@/styles/index.css'
 import { printYutoLensInfo, printAppInfo } from '@/utils/logger'
 import { message } from '@/utils/message'
 import router from '@/utils/router'
+import materialSymbolsIcons from '@iconify-json/material-symbols/icons.json'
+import riIcons from '@iconify-json/ri/icons.json'
+import { addCollection } from '@iconify/vue'
 import 'katex/dist/katex.min.css'
 import { createApp } from 'vue'
 import VueViewer from 'v-viewer'
@@ -18,6 +21,7 @@ import { setupStore } from './store'
 
 // 可选禁用控制台输出（生产排查时建议关闭此开关）
 const disableConsole = import.meta.env.VITE_DISABLE_CONSOLE === '1'
+const enableDebugErrorBanner = import.meta.env.DEV || import.meta.env.MODE === 'test'
 if (disableConsole) {
   console.log = () => {}
   console.warn = () => {}
@@ -41,6 +45,10 @@ function detectSystemTheme() {
 const authStore = useAuthStoreWithout()
 
 async function bootstrap() {
+  // 预注册运行期会用到的图标集，避免生产环境回源请求 icon API。
+  addCollection(riIcons as any)
+  addCollection(materialSymbolsIcons as any)
+
   const app = createApp(App)
 
   // 设置样式和资源
@@ -72,6 +80,10 @@ async function bootstrap() {
   app.use(MotionPlugin)
 
   app.config.errorHandler = err => {
+    if (!enableDebugErrorBanner) {
+      console.error('[app error]', err)
+      return
+    }
     try {
       const el = document.getElementById('app-error-banner') || document.createElement('div')
       if (!el.id) {

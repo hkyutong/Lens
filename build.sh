@@ -83,6 +83,21 @@ run_pnpm() {
   corepack pnpm "$@"
 }
 
+sanitize_macos_metadata() {
+  local target="$1"
+  [ -e "$target" ] || return 0
+
+  if has_cmd xattr; then
+    xattr -cr "$target" >/dev/null 2>&1 || true
+  fi
+
+  if has_cmd dot_clean; then
+    dot_clean -m "$target" >/dev/null 2>&1 || true
+  fi
+
+  find "$target" \( -name '._*' -o -name '.DS_Store' \) -type f -delete 2>/dev/null || true
+}
+
 ensure_pm2() {
   if has_cmd pm2; then
     return
@@ -214,6 +229,8 @@ NODE
   if [ -f "$SERVICE_DIR/.env.example" ]; then
     cp "$SERVICE_DIR/.env.example" "$QUICK_DEPLOY_DIR/.env.example"
   fi
+
+  sanitize_macos_metadata "$QUICK_DEPLOY_DIR"
 }
 
 install_academic_deps() {

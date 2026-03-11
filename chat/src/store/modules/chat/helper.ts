@@ -16,6 +16,7 @@ export function defaultState(): Chat.ChatState {
     currentPlugin: undefined,
     pluginList: [],
     academicMode: false,
+    mobileAcademicPanelVisible: false,
     academicPluginList: [],
     academicCoreFunctions: [],
     academicPluginArgs: '',

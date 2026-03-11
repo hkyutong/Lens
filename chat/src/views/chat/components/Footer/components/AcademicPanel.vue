@@ -13,9 +13,13 @@ interface Props {
   groupLabel?: string
   groupPlaceholder?: string
   infoLabel?: string
+  showClose?: boolean
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  close: []
+}>()
 const chatStore = useChatStore()
 
 const academicMode = computed(() => chatStore.academicMode)
@@ -332,16 +336,27 @@ const formatPluginOption = (plugin: any) => {
         <div class="flex items-center gap-2">
           <div class="text-sm font-semibold text-[#080808] dark:text-white">学术插件</div>
         </div>
-        <span
-          class="px-3 py-1 rounded-full text-[10px] font-medium whitespace-nowrap"
-          :class="
-            activePlugin || activeCore
-              ? 'bg-[#f2f2f2] text-[#080808]'
-              : 'bg-[#f2f2f2] text-[#080808]'
-          "
-        >
-          {{ activePlugin || activeCore ? '已启用' : '未启用' }}
-        </span>
+        <div class="flex items-center gap-2">
+          <span
+            class="px-3 py-1 rounded-full text-[10px] font-medium whitespace-nowrap"
+            :class="
+              activePlugin || activeCore
+                ? 'bg-[#f2f2f2] text-[#080808]'
+                : 'bg-[#f2f2f2] text-[#080808]'
+            "
+          >
+            {{ activePlugin || activeCore ? '已启用' : '未启用' }}
+          </span>
+          <button
+            v-if="props.showClose"
+            type="button"
+            class="flex h-7 w-7 items-center justify-center rounded-full border border-[#d9d9de] bg-white/95 text-[15px] leading-none text-[#8f8f98] shadow-sm transition hover:text-[#080808] dark:border-white/10 dark:bg-[#121212]/95 dark:text-white/55 dark:hover:text-white"
+            aria-label="关闭学术插件面板"
+            @click="emit('close')"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       <div class="mt-6 grid gap-3 md:grid-cols-2">

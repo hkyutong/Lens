@@ -52,6 +52,26 @@ const { isMobile } = useBasicLayout()
 const { scrollRef, scrollToBottom, scrollToBottomIfAtBottom, isAtBottom, handleScroll } =
   useScroll()
 const { addGroupChat, updateGroupChatSome } = useChat()
+const enableDetailedErrorUi = import.meta.env.DEV || import.meta.env.MODE === 'test'
+
+const toUserFacingRequestError = (rawMessage: string, statusCode = 0) => {
+  const messageText = String(rawMessage || '').trim()
+  if (!messageText) return '请求失败，请稍后重试'
+  if (/积分不足|选购套餐|升级套餐/i.test(messageText)) return messageText
+  if (statusCode === 401) return '登录状态已失效，请重新登录后重试'
+  if (/历史(?:用户消息|回复).*(不存在|已失效)/.test(messageText)) {
+    return '当前会话状态已更新，请刷新页面后重试'
+  }
+  if (
+    statusCode >= 500 ||
+    /服务器内部错误|network error|request failed|timeout|socket hang up|ECONNREFUSED|fetch failed/i.test(
+      messageText
+    )
+  ) {
+    return '服务暂时不可用，请稍后重试'
+  }
+  return messageText
+}
 
 const triggerUpgradeIfNeeded = (messageText: string) => {
   if (!messageText) return
@@ -113,6 +133,10 @@ const useGlobalStore = useGlobalStoreWithOut()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
+const closeMobileAcademicPanel = () => {
+  chatStore.setMobileAcademicPanelVisible(false)
+}
+
 // ============== 响应式状态 ==============
 const route = useRoute()
 const bottomContainer = ref()
@@ -145,8 +169,10 @@ const token = computed(() => {
   return route?.query?.token ? String(route.query.token) : ''
 })
 const isLogin = computed(() => authStore?.isLogin ?? false)
+const showDetailedErrorBanner = computed(() => enableDetailedErrorUi && !!lastError.value)
 const usingPlugin = computed(() => chatStore.currentPlugin)
 const academicMode = computed(() => chatStore.academicMode)
+const mobileAcademicPanelVisible = computed(() => chatStore.mobileAcademicPanelVisible)
 const academicPlugin = computed(() => chatStore.currentAcademicPlugin)
 const academicCore = computed(() => chatStore.currentAcademicCore)
 const academicPluginArgs = computed(() => chatStore.academicPluginArgs)
@@ -1601,14 +1627,22 @@ const onConversation = async ({
     }
   } catch (error: any) {
     const errData = error?.data || error?.response?.data || {}
-    const errorMessage =
+    const rawErrorMessage =
       errData?.message || errData?.error || error?.message || '请求失败，请稍后重试'
     const requestId = errData?.requestId || streamRequestId || ''
+    const statusCode = Number(errData?.code || errData?.status || error?.response?.status || 0)
+    const errorMessage = toUserFacingRequestError(rawErrorMessage, statusCode)
     lastError.value = errorMessage
-    lastErrorRequestId.value = requestId
-    const suffix = requestId ? `（请求ID: ${requestId}）` : ''
+    lastErrorRequestId.value = enableDetailedErrorUi ? requestId : ''
+    const suffix = enableDetailedErrorUi && requestId ? `（请求ID: ${requestId}）` : ''
+    console.error('[chat request failed]', {
+      statusCode,
+      rawErrorMessage,
+      requestId,
+      error,
+    })
     ms.error(`${errorMessage}${suffix}`)
-    triggerUpgradeIfNeeded(errorMessage)
+    triggerUpgradeIfNeeded(rawErrorMessage)
     patchCurrentAssistant({
       chatId: assistantLogId ? Number(assistantLogId) : undefined,
       content: normalizeIncomingText(errorMessage, { trim: true }),
@@ -1973,7 +2007,7 @@ provide('tryParseJson', tryParseJson)
                       :class="[isMobile ? 'px-3 py-3' : 'px-8 py-6']"
                     >
                       <div
-                        v-if="lastError"
+                        v-if="showDetailedErrorBanner"
                         class="mb-4 px-4 py-3 rounded-2xl border border-red-200/80 dark:border-red-900/60 bg-red-50/80 dark:bg-red-950/40 text-red-700 dark:text-red-200 flex items-start justify-between gap-3"
                       >
                         <div class="text-sm leading-6">
@@ -2113,7 +2147,7 @@ provide('tryParseJson', tryParseJson)
         </main>
         <transition name="fade">
           <div
-            v-if="academicMode && isMobile"
+            v-if="academicMode && isMobile && mobileAcademicPanelVisible"
             class="fixed left-0 right-0 z-40 px-3"
             :style="{ bottom: 'calc(env(safe-area-inset-bottom) + 96px)' }"
           >
@@ -2127,6 +2161,8 @@ provide('tryParseJson', tryParseJson)
                 plugin-args-label="自定义指令"
                 plugin-args-placeholder="例如：不翻译 Agent 专业名词"
                 info-label="说明"
+                :show-close="true"
+                @close="closeMobileAcademicPanel"
               />
             </div>
           </div>

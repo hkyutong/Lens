@@ -1928,11 +1928,12 @@ export class AcademicService {
     const overwriteReply = Boolean(body.overwriteReply);
     const requestedUserLogId = Number(body.chatId || 0);
     const requestedAssistantLogId = Number(body.replyChatId || 0);
+    const staleConversationMessage = '当前会话状态已更新，请刷新页面后重试';
     if (overwriteReply && requestedUserLogId <= 0) {
-      throw new HttpException('历史用户消息不存在，请刷新后重试', HttpStatus.BAD_REQUEST);
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
     }
     if (overwriteReply && requestedAssistantLogId <= 0) {
-      throw new HttpException('历史回复不存在，请刷新后重试', HttpStatus.BAD_REQUEST);
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
     }
 
     let userLogId = 0;
@@ -1955,7 +1956,7 @@ export class AcademicService {
       }
     }
     if (overwriteReply && !userLogId) {
-      throw new HttpException('历史用户消息已失效，请刷新后重试', HttpStatus.BAD_REQUEST);
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
     }
     if (!userLogId) {
       const userSaveLog = await this.chatLogService.saveChatLog({
@@ -2005,7 +2006,7 @@ export class AcademicService {
       }
     }
     if (overwriteReply && !assistantLogId) {
-      throw new HttpException('历史回复已失效，请刷新后重试', HttpStatus.BAD_REQUEST);
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
     }
     if (!assistantLogId) {
       const assistantSaveLog = await this.chatLogService.saveChatLog({

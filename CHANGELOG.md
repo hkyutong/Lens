@@ -1,5 +1,12 @@
 # 更新日志
 
+## 0.0.29 (2026-03-12)
+- 修复手机端学术插件面板交互：`chat/src/views/chat/components/Footer/components/AcademicPanel.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/chatBase.vue` 与 `chat/src/store/modules/chat/index.ts` 现在将“学术模式是否启用”和“手机端面板是否展开”拆分为两个状态；右上角 `x` 只会收起手机端学术面板，不会取消当前学术能力选择，底部“学术”按钮在手机端可重新展开面板。
+- 收敛生产环境内部错误暴露：`chat/src/main.ts`、`chat/src/views/chat/chatBase.vue` 与 `service/src/modules/academic/academic.service.ts` 现在仅在 `dev/test` 显示调试红条和详细请求标识，生产环境改为通用用户文案，不再直接暴露内部错误状态与请求 ID。
+- 修复生产环境学术插件列表异常导致前端崩溃：`chat/src/store/modules/chat/index.ts` 对 `/academic/core-function-list` 与 `/academic/plugin-list` 返回值统一做数组兜底，避免异常返回体触发 `undefined.map`。
+- 修复生产环境动态图标回源外网：`chat/src/main.ts` 与 `chat/package.json` 预注册本地图标集，避免生产部署时再请求 `api.simplesvg.com` 导致图标加载失败。
+- 优化部署包清理与 macOS 元数据处理：`build.sh` 新增 `sanitize_macos_metadata`，`AIWebQuickDeploy` 打包前会自动移除 `._*` 与 `.DS_Store`，降低上传服务器后出现脏文件的概率。
+
 ## 0.0.28 (2026-03-10)
 - 修复中英文润色“刷新页面后表格重新挤在一起”：`service/src/modules/academic/academic.service.ts` 现在将流式阶段形成的稳定三列表 `修改前原文片段 | 修改后片段 | 修改原因与解释` 作为只增不减的快照保存，并在正常结束、超时、上游中断与异常分支统一优先用该快照回包和落库，避免后续汇总文本再次污染历史记录。
 

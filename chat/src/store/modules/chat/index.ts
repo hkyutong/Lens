@@ -130,11 +130,12 @@ export const useChatStore = defineStore('chat-store', {
     async queryAcademicPluginList() {
       try {
         const res: any = await fetchAcademicPluginList()
-        if (res?.rows) {
-          this.academicPluginList = res.rows
-        } else if (res?.data?.rows) {
-          this.academicPluginList = res.data.rows
-        }
+        const rows = Array.isArray(res?.rows)
+          ? res.rows
+          : Array.isArray(res?.data?.rows)
+            ? res.data.rows
+            : []
+        this.academicPluginList = rows
       } catch (error) {}
       this.reconcileAcademicSelectionState()
     },
@@ -150,7 +151,11 @@ export const useChatStore = defineStore('chat-store', {
       ]
       try {
         const res: any = await fetchAcademicCoreFunctionList()
-        const rows = res?.rows || res?.data?.rows
+        const rows = Array.isArray(res?.rows)
+          ? res.rows
+          : Array.isArray(res?.data?.rows)
+            ? res.data.rows
+            : []
         if (Array.isArray(rows) && rows.length) {
           const names = rows.map((item: any) => String(item?.name || ''))
           const legacyFallback = ['文献综述', '研究设计', '论文润色']
@@ -167,11 +172,16 @@ export const useChatStore = defineStore('chat-store', {
 
     setAcademicMode(enabled: boolean) {
       this.academicMode = enabled
+      this.mobileAcademicPanelVisible = enabled
       if (!enabled) {
         this.currentAcademicPlugin = undefined
         this.currentAcademicCore = undefined
         this.academicPluginArgs = ''
       }
+    },
+
+    setMobileAcademicPanelVisible(visible: boolean) {
+      this.mobileAcademicPanelVisible = visible
     },
 
     setAcademicPlugin(plugin: any) {
@@ -182,6 +192,7 @@ export const useChatStore = defineStore('chat-store', {
       this.currentAcademicPlugin = plugin || undefined
       if (plugin) {
         this.academicMode = true
+        this.mobileAcademicPanelVisible = true
         this.currentAcademicCore = undefined
         // 切换插件时清空自定义指令，避免将旧插件提示词污染到新插件。
         if (prevName !== nextName) {
@@ -196,6 +207,7 @@ export const useChatStore = defineStore('chat-store', {
       this.currentAcademicCore = coreFn || undefined
       if (coreFn) {
         this.academicMode = true
+        this.mobileAcademicPanelVisible = true
         this.currentAcademicPlugin = undefined
         this.academicPluginArgs = ''
       }
