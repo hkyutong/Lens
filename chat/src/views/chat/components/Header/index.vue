@@ -6,6 +6,7 @@ import { DropdownMenu } from '@/components/common/DropdownMenu'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
+import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { Brightness, CheckOne, Close, DarkMode, ExpandLeft, Right } from '@icon-park/vue-next'
 import { computed, onMounted, ref, Ref, watch } from 'vue'
 
@@ -200,7 +201,7 @@ async function switchModel(option: any) {
       currentGroup.config = previousConfig
       chatStore.recordState()
     }
-    ms.error(error?.message || '模型切换失败，请稍后重试')
+    ms.error(sanitizeUserFacingErrorMessage(error?.message || '', 0, '模型切换失败，请稍后重试'))
   }
   // useGlobalStore.updateModelDialog(false);
 }

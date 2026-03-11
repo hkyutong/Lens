@@ -5,6 +5,7 @@ import { t } from '@/locales'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { copyText } from '@/utils/format'
 import { message } from '@/utils/message'
+import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import {
   ArrowRight,
   Close,
@@ -638,7 +639,9 @@ const downloadAcademicFile = async (file: AcademicDownloadFile) => {
       let errMsg = '下载失败'
       try {
         const errPayload = await response.clone().json()
-        if (errPayload?.message) errMsg = errPayload.message
+        if (errPayload?.message) {
+          errMsg = sanitizeUserFacingErrorMessage(errPayload.message, response.status, '下载失败')
+        }
       } catch (_error) {}
       throw new Error(errMsg)
     }
@@ -652,7 +655,7 @@ const downloadAcademicFile = async (file: AcademicDownloadFile) => {
     document.body.removeChild(link)
     URL.revokeObjectURL(objectUrl)
   } catch (error: any) {
-    message()?.error(error?.message || '下载失败')
+    message()?.error(sanitizeUserFacingErrorMessage(error?.message || '', 0, '下载失败'))
   } finally {
     setDownloadingFile(pathValue, false)
   }
@@ -662,11 +665,17 @@ const parseDownloadErrorMessage = async (response: Response, fallback: string) =
   try {
     const payload = await response.clone().json()
     const message = String(payload?.message || '').trim()
-    if (message) return message
+    if (message) return sanitizeUserFacingErrorMessage(message, response.status, fallback)
   } catch (_error) {}
   try {
     const text = String(await response.clone().text()).trim()
-    if (text) return text.length > 120 ? `${text.slice(0, 120)}...` : text
+    if (text) {
+      return sanitizeUserFacingErrorMessage(
+        text.length > 120 ? `${text.slice(0, 120)}...` : text,
+        response.status,
+        fallback
+      )
+    }
   } catch (_error) {}
   return fallback
 }
@@ -705,7 +714,9 @@ const downloadUserUploadedFile = async (file: UserUploadedFile) => {
     const blob = await response.blob()
     triggerBlobDownload(blob, file.name || getSafeFileName(source))
   } catch (error: any) {
-    message()?.error(error?.message || '文件下载失败，请稍后重试')
+    message()?.error(
+      sanitizeUserFacingErrorMessage(error?.message || '', 0, '文件下载失败，请稍后重试')
+    )
   } finally {
     setDownloadingFile(source, false)
   }

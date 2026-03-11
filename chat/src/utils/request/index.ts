@@ -2,6 +2,7 @@ import { useAuthStore } from '@/store'
 import { message } from '@/utils/message'
 import type { AxiosProgressEvent, AxiosResponse, GenericAbortSignal } from 'axios'
 import request from './axios'
+import { sanitizeUserFacingErrorMessage } from './sanitizeErrorMessage'
 
 export interface HttpOption {
   url: string
@@ -70,7 +71,11 @@ function http<T = any>({
       authStore.removeToken()
       if (!hasWhitePath(error?.request?.responseURL)) {
         authStore.loadInit && authStore.setLoginDialog(true)
-        const message = error?.response?.data?.message || '请先登录后再进行使用！'
+        const message = sanitizeUserFacingErrorMessage(
+          error?.response?.data?.message || '',
+          status,
+          '请先登录后再进行使用！'
+        )
         if (Date.now() - last401ErrorTimestamp > 3000) {
           ms.error(message)
         }
@@ -78,10 +83,18 @@ function http<T = any>({
       last401ErrorTimestamp = Date.now()
     } else {
       if (data && !data?.success) {
-        ms.error(data?.message || '请求接口错误！')
+        ms.error(
+          sanitizeUserFacingErrorMessage(data?.message || '', status, '请求接口错误！')
+        )
       }
     }
-    throw new Error(error?.response?.data?.message || error?.message || 'Error')
+    throw new Error(
+      sanitizeUserFacingErrorMessage(
+        error?.response?.data?.message || error?.message || '',
+        status,
+        '请求失败，请稍后重试'
+      )
+    )
   }
 
   beforeRequest?.()

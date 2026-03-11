@@ -7,7 +7,7 @@ import * as mammoth from 'mammoth';
 import { Readable } from 'stream';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { formatUrl, getTokenCount } from '@/common/utils';
+import { formatUrl, getTokenCount, sanitizeClientErrorMessage } from '@/common/utils';
 import { ChatLogService } from '../chatLog/chatLog.service';
 import { ChatGroupService } from '../chatGroup/chatGroup.service';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
@@ -1313,15 +1313,9 @@ export class AcademicService {
       this.sanitizeAcademicOutput(this.extractTextFromSerializedContent(String(value || ''))),
     );
     if (!normalized) return '';
-    if (/(incorrect api key|invalid_api_key|api key provided)/i.test(normalized)) {
-      return '学术服务 API Key 无效，请联系管理员更新学术服务配置。';
-    }
-    if (/(request timeout|network error|检查代理服务器|proxy)/i.test(normalized)) {
-      return '学术服务网络异常，请检查学术服务代理配置或云端连通性。';
-    }
     if (/^(?:academic\s+error|error|null|undefined)$/i.test(normalized)) return '';
     if (/^(?:学术服务异常|服务器内部错误|internal server error)$/i.test(normalized)) return '';
-    return normalized;
+    return sanitizeClientErrorMessage(normalized, HttpStatus.BAD_GATEWAY, '学术服务处理失败，请重试');
   }
 
   private async collectAcademicStreamState(
@@ -4084,6 +4078,7 @@ export class AcademicService {
       ),
       { trim: false, removeSectionHeadings: false },
     );
+    if (this.isAcademicNetworkErrorSnippet(normalized)) return '';
     return this.stripLeakedPolishTableInstructions(normalized);
   }
 
@@ -4532,7 +4527,7 @@ export class AcademicService {
   private isAcademicNetworkErrorSnippet(text: string) {
     const normalized = String(text || '').trim();
     if (!normalized) return false;
-    return /(?:request timeout|network error|proxy settings in config\.py|检查代理服务器是否可用|代理设置的格式是否正确|格式须是\[协议\]:\/\/\[地址\]:\[端口\]|unable to connect to proxy|proxyerror|max retries exceeded|remote end closed connection without response)/i.test(
+    return /(?:request timeout|network error|proxy settings in config\.py|检查代理服务器是否可用|代理设置的格式是否正确|格式须是\[协议\]:\/\/\[地址\]:\[端口\]|unable to connect to proxy|proxyerror|max retries exceeded|remote end closed connection without response|httpconnectionpool|httpsconnectionpool|read timed out|connect timeout|timeout of \d+ms exceeded|socket hang up|connection aborted|econnrefused|econnreset|enotfound|getaddrinfo|https?:\/\/|\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)\b|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{2,5})?\b)/i.test(
       normalized,
     );
   }
@@ -4900,7 +4895,10 @@ export class AcademicService {
       }
       if (String(payload.finishReason || payload.finish_reason || '').toLowerCase() === 'error') {
         const rawError = String(payload.error ?? '').trim();
-        const safeError = this.sanitizeAcademicChunk(rawError) || this.redactFilePaths(rawError);
+        const safeError =
+          this.getSafeAcademicErrorMessage(rawError) ||
+          this.sanitizeAcademicChunk(rawError) ||
+          this.redactFilePaths(rawError);
         const allowCacheNoise = /^'?allow_cache'?$/i.test(rawError);
         if (!allowCacheNoise && !state.fileVectorResult) {
           state.streamError = safeError || rawError || state.streamError || 'academic error';

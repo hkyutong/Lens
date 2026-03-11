@@ -1,5 +1,6 @@
 import { useAuthStore, useGlobalStore } from '@/store'
 import { message } from '@/utils/message'
+import { sanitizeUserFacingErrorMessage } from './sanitizeErrorMessage'
 
 // 基本配置
 const BASE_URL = import.meta.env.VITE_GLOB_API_URL || ''
@@ -88,10 +89,11 @@ const fetchClient = async (url: string, options: RequestInit = {}) => {
       if (response.status === 401) {
         authStore.removeToken()
         authStore.setLoginDialog(true)
-        const loginMessage =
-          errorData?.message ||
-          (typeof errorData === 'string' ? errorData : '') ||
+        const loginMessage = sanitizeUserFacingErrorMessage(
+          errorData?.message || (typeof errorData === 'string' ? errorData : '') || '',
+          response.status,
           '请先登录后再进行使用！'
+        )
         if (Date.now() - last401ErrorTimestamp > 3000) {
           ms.error(loginMessage)
         }
@@ -100,7 +102,11 @@ const fetchClient = async (url: string, options: RequestInit = {}) => {
 
       // 抛出自定义错误，包含更多信息
       throw new FetchError(
-        response.status.toString(),
+        sanitizeUserFacingErrorMessage(
+          errorData?.message || (typeof errorData === 'string' ? errorData : '') || '',
+          response.status,
+          '请求失败，请稍后重试'
+        ),
         response.status,
         response.statusText,
         errorData
@@ -115,7 +121,11 @@ const fetchClient = async (url: string, options: RequestInit = {}) => {
     }
 
     // 如果是AbortError或其他网络错误，包装成自定义错误
-    const fetchError = new FetchError(error.message || 'Network Error', 0, 'Network Error')
+    const fetchError = new FetchError(
+      sanitizeUserFacingErrorMessage(error.message || '', 0, '网络异常，请稍后重试'),
+      0,
+      'Network Error'
+    )
 
     return Promise.reject(fetchError)
   }

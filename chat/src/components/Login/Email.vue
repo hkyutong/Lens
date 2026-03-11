@@ -4,6 +4,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore } from '@/store'
 import { message } from '@/utils/message'
+import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { ref } from 'vue'
 import SliderCaptcha from './SliderCaptcha.vue'
 
@@ -170,7 +171,7 @@ async function loginAction() {
     authStore.setLoginDialog(false)
   } catch (error: any) {
     loading.value = false
-    ms.error(error.message)
+    ms.error(sanitizeUserFacingErrorMessage(error?.message || '', 0, '登录失败，请稍后重试'))
   }
 }
 </script>

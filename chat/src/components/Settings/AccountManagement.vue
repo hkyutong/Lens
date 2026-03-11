@@ -12,6 +12,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { message } from '@/utils/message'
+import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { ArrowLeft, Edit, IdCard, Lock, Phone, Wechat } from '@icon-park/vue-next'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import SliderCaptcha from '../Login/SliderCaptcha.vue'
@@ -135,7 +136,7 @@ async function updatePassword() {
       console.log('表单清理完成，状态已更新')
     } else {
       console.log('密码修改失败:', res.message)
-      ms.error(res.message || '密码修改失败')
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '密码修改失败'))
     }
   } catch (error) {
     console.log('密码修改过程出现异常:', error)
@@ -238,7 +239,7 @@ async function saveUserInfo() {
     loading.value = false
 
     if (!res.success) {
-      ms.error(res.message || '更新失败')
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '更新失败'))
       return
     }
 
@@ -359,7 +360,7 @@ function onIdentitySuccess() {
       ms.success('身份认证成功')
       getInfo() // 刷新用户信息
     } else {
-      ms.error(res.message || '认证失败')
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '认证失败'))
     }
   })
 }
@@ -382,7 +383,7 @@ async function sendCode() {
       countdown.value = 60
       startCountdown()
     } else {
-      ms.error(res.message || '发送验证码失败')
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '发送验证码失败'))
     }
   } catch (error) {
     console.error('发送验证码失败:', error)
@@ -450,7 +451,7 @@ async function onPhoneSuccess() {
       // 返回主视图
       backToMainView()
     } else {
-      ms.error(res.message || '手机认证失败')
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '手机认证失败'))
     }
   } catch (error) {
     console.error('手机认证失败:', error)

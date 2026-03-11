@@ -1,4 +1,5 @@
 import { Result } from '@/common/result';
+import { sanitizeClientErrorMessage } from '@/common/utils';
 import {
   ArgumentsHost,
   Catch,
@@ -22,13 +23,19 @@ export class AllExceptionsFilter<_T> implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const exceptionResponse = exception.getResponse() as any;
+      const rawMessage = Array.isArray(exceptionResponse?.message)
+        ? exceptionResponse.message[0]
+        : typeof exceptionResponse?.message === 'string'
+          ? exceptionResponse.message
+          : exception.message;
+      const safeMessage = sanitizeClientErrorMessage(rawMessage, status);
       const payload = {
         event: 'http_exception',
         requestId,
         userId,
         path: request?.path,
         status,
-        message: exception.message,
+        message: rawMessage,
         response: exceptionResponse,
       };
       const serialized = JSON.stringify(payload);
@@ -42,7 +49,7 @@ export class AllExceptionsFilter<_T> implements ExceptionFilter {
       if (status === HttpStatus.BAD_REQUEST && Array.isArray(exceptionResponse?.message)) {
         response.status(status).json({
           code: status,
-          message: exceptionResponse.message[0],
+          message: safeMessage,
           data: null,
           requestId,
         });
@@ -51,7 +58,7 @@ export class AllExceptionsFilter<_T> implements ExceptionFilter {
 
       response.status(status).json({
         code: status,
-        message: exception.message,
+        message: safeMessage,
         data: null,
         requestId,
       });
@@ -70,7 +77,7 @@ export class AllExceptionsFilter<_T> implements ExceptionFilter {
     Logger.error(JSON.stringify(payload), err?.stack, 'AllExceptionsFilter');
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       code: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: '服务器内部错误',
+      message: sanitizeClientErrorMessage(err?.message || '', HttpStatus.INTERNAL_SERVER_ERROR),
       data: null,
       requestId,
     });

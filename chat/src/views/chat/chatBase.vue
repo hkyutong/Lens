@@ -8,6 +8,7 @@ import { openImageViewer } from '@/components/common/ImageViewer/useImageViewer'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
+import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { Close, DropDownList } from '@icon-park/vue-next'
 import DownSmall from '@icon-park/vue-next/es/icons/DownSmall'
 import type { AxiosProgressEvent } from 'axios'
@@ -54,24 +55,8 @@ const { scrollRef, scrollToBottom, scrollToBottomIfAtBottom, isAtBottom, handleS
 const { addGroupChat, updateGroupChatSome } = useChat()
 const enableDetailedErrorUi = import.meta.env.DEV || import.meta.env.MODE === 'test'
 
-const toUserFacingRequestError = (rawMessage: string, statusCode = 0) => {
-  const messageText = String(rawMessage || '').trim()
-  if (!messageText) return '请求失败，请稍后重试'
-  if (/积分不足|选购套餐|升级套餐/i.test(messageText)) return messageText
-  if (statusCode === 401) return '登录状态已失效，请重新登录后重试'
-  if (/历史(?:用户消息|回复).*(不存在|已失效)/.test(messageText)) {
-    return '当前会话状态已更新，请刷新页面后重试'
-  }
-  if (
-    statusCode >= 500 ||
-    /服务器内部错误|network error|request failed|timeout|socket hang up|ECONNREFUSED|fetch failed/i.test(
-      messageText
-    )
-  ) {
-    return '服务暂时不可用，请稍后重试'
-  }
-  return messageText
-}
+const toUserFacingRequestError = (rawMessage: string, statusCode = 0) =>
+  sanitizeUserFacingErrorMessage(rawMessage, statusCode, '请求失败，请稍后重试')
 
 const triggerUpgradeIfNeeded = (messageText: string) => {
   if (!messageText) return
