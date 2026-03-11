@@ -1639,38 +1639,92 @@ auto_route_skip_prefixes = (
     "volcengine-",
 )
 
-def _build_openai_compatible_route(max_token: int = 200000):
+AUTO_REGISTERED_OPENAI_COMPATIBLE_MODELS = set()
+
+def _pick_auto_route_tokenizer(model_name: str):
+    lowered = str(model_name or "").strip().lower()
+    if lowered.startswith("gpt-5") or "gpt-5" in lowered:
+        return tokenizer_gpt5, get_token_num_gpt5
+    if lowered.startswith("gpt-3.5") or "gpt-3.5" in lowered:
+        return tokenizer_gpt35, get_token_num_gpt35
+    return tokenizer_gpt4, get_token_num_gpt4
+
+def _normalize_openai_compatible_endpoint(endpoint: str):
+    value = str(endpoint or "").strip()
+    if not value:
+        return openai_endpoint
+    value = value.rstrip("/")
+    if re.search(r"/(?:chat/completions|responses)(?:\?.*)?$", value, flags=re.IGNORECASE):
+        return value
+    if re.search(r"/v\d+(?:beta|alpha)?(?:/|$)", value, flags=re.IGNORECASE):
+        return f"{value}/chat/completions"
+    return f"{value}/v1/chat/completions"
+
+def _build_openai_compatible_route(model_name: str = "", max_token: int = 200000, endpoint: str = ""):
+    tokenizer, token_counter = _pick_auto_route_tokenizer(model_name)
     return {
         "fn_with_ui": chatgpt_ui,
         "fn_without_ui": chatgpt_noui,
-        "endpoint": openai_endpoint,
+        "endpoint": _normalize_openai_compatible_endpoint(endpoint),
         "can_multi_thread": True,
         "max_token": max_token,
-        "tokenizer": tokenizer_gpt4,
-        "token_cnt": get_token_num_gpt4,
+        "tokenizer": tokenizer,
+        "token_cnt": token_counter,
     }
 
-def auto_register_openai_compatible_model(model_name: str, source: str = "runtime") -> bool:
+def auto_register_openai_compatible_model(model_name: str, source: str = "runtime", endpoint: str = "", max_token: int = 0) -> bool:
     model_name = str(model_name or "").strip()
     if not model_name:
         return False
-    if model_name in model_info:
+    normalized_max_token = int(max_token) if str(max_token or "").isdigit() else 0
+    endpoint_override = _normalize_openai_compatible_endpoint(endpoint) if endpoint else ""
+    if model_name in model_info and model_name not in AUTO_REGISTERED_OPENAI_COMPATIBLE_MODELS:
         return True
     if model_name.startswith(auto_route_skip_prefixes):
         return False
-    model_info.update({model_name: _build_openai_compatible_route()})
-    logger.info(f"OpenAI兼容模型自动注册({source}): {model_name}")
+    existing = model_info.get(model_name, {})
+    route = _build_openai_compatible_route(
+        model_name=model_name,
+        max_token=normalized_max_token or int(existing.get("max_token", 200000) or 200000),
+        endpoint=endpoint_override or existing.get("endpoint") or openai_endpoint,
+    )
+    model_info.update({model_name: route})
+    AUTO_REGISTERED_OPENAI_COMPATIBLE_MODELS.add(model_name)
+    logger.info(
+        f"OpenAI兼容模型自动注册({source}): {model_name}, "
+        f"endpoint={route['endpoint']}, max_token={route['max_token']}"
+    )
     return True
 
 def ensure_model_routes_available(llm_kwargs: dict):
     model_expr = str(llm_kwargs.get("llm_model", "") or "").strip()
     if not model_expr:
         return []
+    endpoint_override = str(llm_kwargs.get("api_endpoint", "") or "").strip()
+    max_token_override_raw = llm_kwargs.get("max_token", 0)
+    try:
+        max_token_override = int(max_token_override_raw or 0)
+    except Exception:
+        max_token_override = 0
     model_list = [m.strip() for m in model_expr.split("&") if str(m).strip()]
     missing_models = []
     for model in model_list:
-        if model not in model_info and (not auto_register_openai_compatible_model(model)):
+        if model not in model_info and (
+            not auto_register_openai_compatible_model(
+                model,
+                endpoint=endpoint_override,
+                max_token=max_token_override,
+            )
+        ):
             missing_models.append(model)
+            continue
+        if model in AUTO_REGISTERED_OPENAI_COMPATIBLE_MODELS:
+            auto_register_openai_compatible_model(
+                model,
+                source="runtime-refresh",
+                endpoint=endpoint_override,
+                max_token=max_token_override,
+            )
     llm_kwargs["llm_model"] = "&".join(model_list)
     return missing_models
 

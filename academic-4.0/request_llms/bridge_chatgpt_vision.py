@@ -26,6 +26,21 @@ timeout_bot_msg = '[Local Message] Request timeout. Network error. Please check 
                   '网络错误，检查代理服务器是否可用，以及代理设置的格式是否正确，格式须是[协议]://[地址]:[端口]，缺一不可。'
 
 
+def should_passthrough_api_key(llm_kwargs):
+    return bool(llm_kwargs.get('api_key_passthrough'))
+
+
+def resolve_runtime_api_key(llm_kwargs):
+    api_key_value = str(llm_kwargs.get('api_key') or '').strip()
+    if should_passthrough_api_key(llm_kwargs):
+        if not api_key_value:
+            raise AssertionError("服务端未提供可用的API_KEY。")
+        return api_key_value
+    if not is_any_api_key(api_key_value):
+        raise AssertionError("你提供了错误的API_KEY。\n\n1. 临时解决方案：直接在输入区键入api_key，然后回车提交。\n\n2. 长效解决方案：在config.py中配置。")
+    return select_api_key(api_key_value, llm_kwargs['llm_model'])
+
+
 def report_invalid_key(key):
     # 弃用功能
     return
@@ -80,7 +95,7 @@ def predict(inputs, llm_kwargs, plugin_kwargs, chatbot, history=[], system_promp
         chatbot.append(("输入已识别为openai的api_key", what_keys(inputs)))
         yield from update_ui(chatbot=chatbot, history=history, msg="api_key已导入") # 刷新界面
         return
-    elif not is_any_api_key(chatbot._cookies['api_key']):
+    elif not should_passthrough_api_key(llm_kwargs) and not is_any_api_key(chatbot._cookies['api_key']):
         chatbot.append((inputs, "缺少api_key。\n\n1. 临时解决方案：直接在输入区键入api_key，然后回车提交。\n\n2. 长效解决方案：在config.py中配置。"))
         yield from update_ui(chatbot=chatbot, history=history, msg="缺少api_key") # 刷新界面
         return
@@ -247,10 +262,7 @@ def generate_payload(inputs, llm_kwargs, history, system_prompt, image_paths):
     """
     整合所有信息，选择LLM模型，生成http请求，为发送请求做准备
     """
-    if not is_any_api_key(llm_kwargs['api_key']):
-        raise AssertionError("你提供了错误的API_KEY。\n\n1. 临时解决方案：直接在输入区键入api_key，然后回车提交。\n\n2. 长效解决方案：在config.py中配置。")
-
-    api_key = select_api_key(llm_kwargs['api_key'], llm_kwargs['llm_model'])
+    api_key = resolve_runtime_api_key(llm_kwargs)
 
     headers = {
         "Content-Type": "application/json",
@@ -302,5 +314,4 @@ def generate_payload(inputs, llm_kwargs, history, system_prompt, image_paths):
     }
 
     return headers, payload, api_key
-
 

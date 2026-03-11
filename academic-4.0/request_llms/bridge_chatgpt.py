@@ -35,6 +35,23 @@ timeout_bot_msg = '[Local Message] Request timeout. Network error. Please check 
                   '网络错误，检查代理服务器是否可用，以及代理设置的格式是否正确，格式须是[协议]://[地址]:[端口]，缺一不可。'
 
 
+def should_passthrough_api_key(llm_kwargs):
+    return bool(llm_kwargs.get('api_key_passthrough'))
+
+
+def resolve_runtime_api_key(llm_kwargs):
+    api_key_value = str(llm_kwargs.get('api_key') or '').strip()
+    if should_passthrough_api_key(llm_kwargs):
+        if not api_key_value:
+            raise AssertionError("服务端未提供可用的API_KEY。")
+        return api_key_value
+    if not is_any_api_key(api_key_value):
+        raise AssertionError("你提供了错误的API_KEY。\n\n1. 临时解决方案：直接在输入区键入api_key，然后回车提交。\n\n2. 长效解决方案：在config.py中配置。")
+    if llm_kwargs['llm_model'].startswith('vllm-'):
+        return 'no-api-key'
+    return select_api_key(api_key_value, llm_kwargs['llm_model'])
+
+
 def safe_requests_post(url, **kwargs):
     """
     固定关闭 requests 对环境变量代理的继承，避免本地/服务器环境代理干扰上游请求。
@@ -254,7 +271,7 @@ def predict(inputs:str, llm_kwargs:dict, plugin_kwargs:dict, chatbot:ChatBotWith
         chatbot.append(("输入已识别为openai的api_key", what_keys(inputs)))
         yield from update_ui(chatbot=chatbot, history=history, msg="api_key已导入") # 刷新界面
         return
-    elif not is_any_api_key(chatbot._cookies['api_key']):
+    elif not should_passthrough_api_key(llm_kwargs) and not is_any_api_key(chatbot._cookies['api_key']):
         chatbot.append((inputs, "缺少api_key。\n\n1. 临时解决方案：直接在输入区键入api_key，然后回车提交。\n\n2. 长效解决方案：在config.py中配置。"))
         yield from update_ui(chatbot=chatbot, history=history, msg="缺少api_key") # 刷新界面
         return
@@ -466,13 +483,7 @@ def generate_payload(inputs:str, llm_kwargs:dict, history:list, system_prompt:st
     """
     from request_llms.bridge_all import model_info
 
-    if not is_any_api_key(llm_kwargs['api_key']):
-        raise AssertionError("你提供了错误的API_KEY。\n\n1. 临时解决方案：直接在输入区键入api_key，然后回车提交。\n\n2. 长效解决方案：在config.py中配置。")
-
-    if llm_kwargs['llm_model'].startswith('vllm-'):
-        api_key = 'no-api-key'
-    else:
-        api_key = select_api_key(llm_kwargs['api_key'], llm_kwargs['llm_model'])
+    api_key = resolve_runtime_api_key(llm_kwargs)
 
     headers = {
         "Content-Type": "application/json",

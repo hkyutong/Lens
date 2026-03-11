@@ -190,6 +190,18 @@ export class AcademicService {
       .toLowerCase();
   }
 
+  private buildAcademicModelEndpoint(rawUrl: string) {
+    const source = formatUrl(String(rawUrl || '').trim());
+    if (!source) return '';
+    if (/\/(?:chat\/completions|responses)(?:\?.*)?$/i.test(source)) {
+      return source;
+    }
+    if (/\/v\d+(?:beta|alpha)?(?:\/|$)/i.test(source)) {
+      return `${source}/chat/completions`;
+    }
+    return `${source}/v1/chat/completions`;
+  }
+
   private async findAcademicModelInfo(preferredModel: string, preferredModelName = '') {
     const requestedModel = String(preferredModel || '').trim();
     const requestedModelName = String(preferredModelName || '').trim();
@@ -1866,11 +1878,15 @@ export class AcademicService {
       key: modelApiKey,
       model: useModel,
       modelName: useModelName,
+      proxyUrl,
+      maxModelTokens,
       id: keyId,
       isTokenBased,
       tokenFeeRatio,
       deductDeepThink = 1,
     } = modelInfo;
+    const academicModelEndpoint = this.buildAcademicModelEndpoint(String(proxyUrl || '').trim());
+    const academicMaxToken = Number(maxModelTokens || 0);
 
     const groupId = body.options?.groupId || null;
     const usingDeepThinking = body.options?.usingDeepThinking || false;
@@ -2181,6 +2197,13 @@ export class AcademicService {
     }
     if (modelApiKey && String(modelApiKey).trim()) {
       academicPayload.llm_kwargs.api_key = String(modelApiKey).trim();
+      academicPayload.llm_kwargs.api_key_passthrough = true;
+    }
+    if (academicModelEndpoint) {
+      academicPayload.llm_kwargs.api_endpoint = academicModelEndpoint;
+    }
+    if (Number.isFinite(academicMaxToken) && academicMaxToken > 0) {
+      academicPayload.llm_kwargs.max_token = academicMaxToken;
     }
     // 服务端强制覆盖，禁止客户端改模型名/密钥。
     academicPayload.llm_kwargs.llm_model = useModel;
