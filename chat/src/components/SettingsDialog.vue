@@ -88,11 +88,12 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
 import { dialog } from '@/utils/dialog'
 import { Close } from '@icon-park/vue-next' // Only Close icon needed now
-import { computed, markRaw, nextTick, onMounted, ref, watch } from 'vue'
-import AccountManagement from './Settings/AccountManagement.vue'
-import MemberCenter from './Settings/MemberCenter.vue'
-import NoticeDialog from './Settings/NoticeDialog.vue'
-import UserAgreement from './Settings/UserAgreement.vue'
+import { computed, defineAsyncComponent, markRaw, nextTick, onMounted, ref, watch } from 'vue'
+
+const AccountManagement = defineAsyncComponent(() => import('./Settings/AccountManagement.vue'))
+const MemberCenter = defineAsyncComponent(() => import('./Settings/MemberCenter.vue'))
+const NoticeDialog = defineAsyncComponent(() => import('./Settings/NoticeDialog.vue'))
+const UserAgreement = defineAsyncComponent(() => import('./Settings/UserAgreement.vue'))
 
 const useGlobalStore = useGlobalStoreWithOut()
 interface Props {

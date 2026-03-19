@@ -3,8 +3,9 @@ import logo from '@/assets/logo.png'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAuthStore } from '@/store'
 import { Close } from '@icon-park/vue-next'
-import { computed, ref } from 'vue'
-import Email from './Email.vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
+
+const Email = defineAsyncComponent(() => import('./Email.vue'))
 
 defineProps<Props>()
 const authStore = useAuthStore()
@@ -45,9 +46,9 @@ function changeLoginType(type: string) {
       <div class="flex-1 flex flex-col items-center justify-center">
         <div class="mb-8 text-center">
           <div class="flex items-center justify-center mb-4">
-            <img :src="logoPath" alt="YutoLens" class="h-10 w-10 rounded-2xl" />
+            <img :src="logoPath" alt="Lens" class="h-10 w-10 rounded-2xl" />
           </div>
-          <div class="text-xl font-semibold tracking-wide">欢迎使用 YutoLens</div>
+          <div class="text-xl font-semibold tracking-wide">欢迎使用 Lens</div>
           <div class="text-sm text-gray-300 mt-2">登录以继续进入科研工作区</div>
         </div>
         <!-- 登录组件区域 -->

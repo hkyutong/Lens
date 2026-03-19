@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import Watermark from '@/components/common/Watermark/index.vue'
-import HtmlDialog from '@/components/HtmlDialog.vue'
 import { initWechatLogin } from '@/services/wechatLogin' // 导入微信登录相关功能
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { ClientJS } from 'clientjs'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { ss } from './utils/storage'
+
+const Watermark = defineAsyncComponent(() => import('@/components/common/Watermark/index.vue'))
+const HtmlDialog = defineAsyncComponent(() => import('@/components/HtmlDialog.vue'))
 
 const client = new ClientJS()
 const authStore = useAuthStore()
@@ -26,6 +27,86 @@ const wechatSilentLoginStatus = computed(
 const showWatermark = computed(() => Number(authStore.globalConfig?.showWatermark) === 1)
 // 默认不清除缓存，需要在后台配置中设置为1才开启自动清除
 const clearCacheEnabled = computed(() => Number(authStore.globalConfig?.clearCacheEnabled) === 1)
+const siteName = computed(() => authStore.globalConfig?.siteName || 'Lens')
+const siteUrl = computed(() => authStore.globalConfig?.siteUrl || '')
+const siteDescription = computed(
+  () =>
+    authStore.globalConfig?.homeWelcomeContent ||
+    'Lens 是面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织的 AI 学术工作台。'
+)
+const siteKeywords =
+  'AI SEO, 学术AI, AI学术平台, AI科研工作台, 论文速读, PDF理解, Arxiv摘要, LaTeX翻译, 英文润色, BibTeX, Lens'
+
+function toAbsoluteUrl(url: string) {
+  const normalized = String(url || '').trim()
+  if (!normalized) return ''
+  try {
+    return new URL(normalized, window.location.origin).toString()
+  } catch (error) {
+    return ''
+  }
+}
+
+function setOrCreateMeta(selector: string, attrs: Record<string, string>, content: string) {
+  let el = document.head.querySelector(selector) as HTMLMetaElement | null
+  if (!el) {
+    el = document.createElement('meta')
+    Object.entries(attrs).forEach(([key, value]) => el?.setAttribute(key, value))
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', content)
+}
+
+function setOrCreateLink(selector: string, attrs: Record<string, string>, href: string) {
+  let el = document.head.querySelector(selector) as HTMLLinkElement | null
+  if (!el) {
+    el = document.createElement('link')
+    Object.entries(attrs).forEach(([key, value]) => el?.setAttribute(key, value))
+    document.head.appendChild(el)
+  }
+  el.setAttribute('href', href)
+}
+
+function updateStructuredData(
+  name: string,
+  description: string,
+  canonicalUrl: string,
+  imageUrl: string
+) {
+  const structuredData = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name,
+      url: canonicalUrl,
+      description,
+      inLanguage: 'zh-CN',
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name,
+      applicationCategory: 'ResearchApplication',
+      operatingSystem: 'Web',
+      url: canonicalUrl,
+      image: imageUrl || undefined,
+      description,
+      featureList: [
+        '论文速读与 PDF 深度理解',
+        'Arxiv 摘要与学术翻译',
+        'LaTeX 摘要、润色与纠错',
+        '中英文论文润色',
+        '参考文献转 BibTeX',
+        '研究会话与文件工作流',
+      ],
+    },
+  ]
+
+  const script = document.getElementById('app-ld-json') as HTMLScriptElement | null
+  if (script) {
+    script.textContent = JSON.stringify(structuredData)
+  }
+}
 
 /**
  * 清除所有本地缓存
@@ -120,12 +201,64 @@ async function loadBaiduCode() {
 }
 
 function setDocumentTitle() {
-  document.title = 'Lens | YutoAI'
+  document.title = `${siteName.value} | AI 学术工作台`
+}
+
+function syncDocumentSeo() {
+  const name = siteName.value
+  const description = siteDescription.value
+  const baseUrl = toAbsoluteUrl(siteUrl.value) || window.location.origin
+  const canonicalUrl = (() => {
+    try {
+      return new URL(window.location.pathname || '/', baseUrl).toString()
+    } catch (error) {
+      return window.location.href
+    }
+  })()
+  const imageUrl = toAbsoluteUrl(faviconPath.value || '/favicon.svg')
+
+  setDocumentTitle()
+  setOrCreateMeta('meta[name="description"]', { name: 'description' }, description)
+  setOrCreateMeta('meta[name="keywords"]', { name: 'keywords' }, siteKeywords)
+  setOrCreateMeta(
+    'meta[name="robots"]',
+    { name: 'robots' },
+    'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'
+  )
+  setOrCreateMeta(
+    'meta[name="googlebot"]',
+    { name: 'googlebot' },
+    'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'
+  )
+  setOrCreateMeta('meta[property="og:type"]', { property: 'og:type' }, 'website')
+  setOrCreateMeta('meta[property="og:locale"]', { property: 'og:locale' }, 'zh_CN')
+  setOrCreateMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, name)
+  setOrCreateMeta('meta[property="og:title"]', { property: 'og:title' }, `${name} | AI 学术工作台`)
+  setOrCreateMeta('meta[property="og:description"]', { property: 'og:description' }, description)
+  setOrCreateMeta('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl)
+  setOrCreateMeta('meta[property="og:image"]', { property: 'og:image' }, imageUrl)
+  setOrCreateMeta('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary_large_image')
+  setOrCreateMeta(
+    'meta[name="twitter:title"]',
+    { name: 'twitter:title' },
+    `${name} | AI 学术工作台`
+  )
+  setOrCreateMeta('meta[name="twitter:description"]', { name: 'twitter:description' }, description)
+  setOrCreateMeta('meta[name="twitter:image"]', { name: 'twitter:image' }, imageUrl)
+  setOrCreateMeta('meta[name="application-name"]', { name: 'application-name' }, name)
+  setOrCreateLink('link[rel="canonical"]', { rel: 'canonical' }, canonicalUrl)
+  updateStructuredData(name, description, canonicalUrl, imageUrl)
 }
 
 watch(
-  () => authStore.globalConfig?.siteName,
-  () => setDocumentTitle(),
+  () => [
+    authStore.globalConfig?.siteName,
+    authStore.globalConfig?.siteUrl,
+    authStore.globalConfig?.homeWelcomeContent,
+    authStore.globalConfig?.clientLogoPath,
+    authStore.globalConfig?.clientFaviconPath,
+  ],
+  () => syncDocumentSeo(),
   { immediate: true }
 )
 
@@ -155,7 +288,7 @@ function isWechatBrowser(): boolean {
 
 onMounted(async () => {
   // 设置网站标题
-  setDocumentTitle()
+  syncDocumentSeo()
 
   // 加载百度统计代码（如果有）
   loadBaiduCode()

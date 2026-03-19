@@ -1,20 +1,49 @@
 User-agent: *
+Allow: /
 Disallow: /api/
 Disallow: /auth/
-Allow: /
-
-# Prevent indexing of sensitive paths
 Disallow: /admin/
 Disallow: /login
 Disallow: /register
 Disallow: /settings
 Disallow: /user/
-
-# Allow crawling of static assets
 Allow: /assets/
 Allow: /images/
 Allow: /css/
 Allow: /js/
+Allow: /legal/privacy.html
+Allow: /legal/terms.html
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /sitemap.xml
+Allow: /seo/
 
-# Crawl-delay
-Crawl-delay: 10
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /admin/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /admin/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /admin/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /admin/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /admin/

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import BadWordsDialog from '@/components/Dialogs/BadWordsDialog.vue'
-import Login from '@/components/Login/Login.vue'
-import MobileSettingsDialog from '@/components/MobileSettingsDialog.vue'
-import SettingsDialog from '@/components/SettingsDialog.vue'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
-import { computed, onMounted, onUnmounted, provide, watch } from 'vue'
-import ChatBase from './chatBase.vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, provide, watch } from 'vue'
+
+const Login = defineAsyncComponent(() => import('@/components/Login/Login.vue'))
+const BadWordsDialog = defineAsyncComponent(() => import('@/components/Dialogs/BadWordsDialog.vue'))
+const SettingsDialog = defineAsyncComponent(() => import('@/components/SettingsDialog.vue'))
+const MobileSettingsDialog = defineAsyncComponent(
+  () => import('@/components/MobileSettingsDialog.vue')
+)
+const ChatBase = defineAsyncComponent(() => import('./chatBase.vue'))
 
 const ms = message()
 const appStore = useAppStore()

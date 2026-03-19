@@ -1,5 +1,15 @@
 # 更新日志
 
+## 0.0.30 (2026-03-19)
+- 将 `chat` 前端从“通用聊天页 + 学术按钮”重构为“学术工作台”：`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Workspace/Home.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/components/Footer/components/AcademicPanel.vue`、`chat/src/views/chat/components/sider/index.vue`、`chat/src/views/chat/components/sider/List.vue` 与 `chat/src/views/chat/components/sider/ListItem.vue` 现在改为左侧研究导航、中间研究会话区、右侧常驻研究控制栏的布局；空状态首页改成 Research Desk，输入区改成更偏论文/研究工作流的 composer，学术模式在 UI 上提升为“研究模式”主流程。
+- 统一学术工作台视觉系统：`chat/src/styles/global.less`、`chat/src/styles/themes/light.css` 与 `chat/src/styles/themes/dark.css` 新增 paper/surface/accent 等设计 token，整体改成更偏专业学术产品的浅色主视觉，同时保留暗色模式兼容。
+- 补强站点 SEO 与 AI SEO：`chat/index.html` 与 `chat/src/App.vue` 现在会输出并动态同步 `title`、`description`、`keywords`、`robots`、Open Graph、Twitter Card、canonical 与 JSON-LD 结构化数据；SPA 入口新增可供搜索引擎和 AI 抓取器理解的静态语义首屏。
+- 新增 AI 检索与爬虫入口：`chat/public/robots.txt` 增加对 `GPTBot`、`OAI-SearchBot`、`ClaudeBot`、`PerplexityBot` 等爬虫的规则；新增 `chat/public/llms.txt` 与 `chat/public/llms-full.txt` 描述 Lens 的学术产品定位；`chat/public/icon/manifest.webmanifest` 同步补齐名称、描述、启动路径并修复图标路径错误。
+- 增加 AI SEO 内容层专题页：新增 `chat/public/seo/research-workspace.html`、`chat/public/seo/paper-summary.html`、`chat/public/seo/arxiv-summary.html`、`chat/public/seo/latex-translation.html`、`chat/public/seo/academic-polishing.html`、`chat/public/seo/faq.html` 与 `chat/public/seo/styles.css`，把 “AI 学术工作台 / 论文速读 / Arxiv / LaTeX / 学术润色 / FAQ” 做成可被搜索引擎和 AI 检索器直接抓取的静态落地页，并接入 `index.html` 静态语义首页、`llms.txt`、`llms-full.txt`、`robots.txt` 与动态 `sitemap.xml` 的发现链路。
+- 新增动态站点地图：`service/src/modules/spa/spa.controller.ts` 增加 `/sitemap.xml` 输出，优先跟随后台 `siteUrl` 配置生成公开页面与 AI 文档入口的 sitemap，避免把域名写死在静态文件中。
+- 消除前端构建警告：`chat/src/main.ts` 改为只注册实际使用的 Iconify 图标子集，新增 `chat/src/constants/iconCollections.ts` 承载本地图标集合，避免把整套 `@iconify-json/material-symbols` 与 `@iconify-json/ri` 全量打进主包；`chat/vite.config.ts` 调整 Rollup `manualChunks` 粒度，拆分 `markdown/highlight/katex/codemirror` 等 vendor；`chat/src/App.vue`、`chat/src/views/chat/chat.vue`、`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Message/index.vue`、`chat/src/views/chat/components/Message/Text/index.vue`、`chat/src/components/SettingsDialog.vue`、`chat/src/components/MobileSettingsDialog.vue` 与 `chat/src/components/Login/Login.vue` 进一步改为按需异步加载重组件和 `mermaid`，最终消除了 `vite build` 的 chunk size 警告，并通过更新 `chat/pnpm-lock.yaml` 中的 `caniuse-lite` 数据消除了 `Browserslist` 过期警告。
+- 完成验证：`pnpm -C chat type-check`、`pnpm -C chat exec vite build --mode=production`、`pnpm -C service exec tsc -p tsconfig.json --noEmit` 与 `pnpm -C service run build:test` 均通过；当前前端生产构建输出已消除 `chunk size` 与 `Browserslist` 警告。
+
 ## 0.0.29 (2026-03-12)
 - 修复手机端学术插件面板交互：`chat/src/views/chat/components/Footer/components/AcademicPanel.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/chatBase.vue` 与 `chat/src/store/modules/chat/index.ts` 现在将“学术模式是否启用”和“手机端面板是否展开”拆分为两个状态；右上角 `x` 只会收起手机端学术面板，不会取消当前学术能力选择，底部“学术”按钮在手机端可重新展开面板。
 - 收敛生产环境内部错误暴露：`chat/src/main.ts`、`chat/src/views/chat/chatBase.vue` 与 `service/src/modules/academic/academic.service.ts` 现在仅在 `dev/test` 显示调试红条和详细请求标识，生产环境改为通用用户文案，不再直接暴露内部错误状态与请求 ID。
@@ -44,7 +54,7 @@
 - 调整轻量部署说明为宝塔优先：`AIWebQuickDeploy/README.md` 与 `docs/DEPLOYMENT.md` 现在以“宝塔 Node 项目部署”作为主路径，明确 `AIWebQuickDeploy` 的启动文件应为 `dist/main.js`、运行目录为部署包根目录，`start.sh` 仅保留为命令行兜底方式，不再作为文档中的默认部署入口。
 - 优化中英文润色表格粒度：`academic-4.0/core_functional.py` 中的 `中文润色` 与 `英文润色` 提示词改为强制按“小句/短片段”输出 Markdown 表格，列名统一为 `修改前原文片段 | 修改后片段 | 修改原因与解释`，并明确要求“一行只描述一个局部修改、单元格尽量简短”，减少一整段文本被塞进单个表格单元格的情况。
 - 调整部署文档为用户无关写法：`docs/DEPLOYMENT.md` 不再绑定 `root/www` 这类特定系统用户，改为要求部署者自行选择并始终使用同一个业务用户，避免文档层误导出交叉启动。
-- 修复轻量部署包复用旧 PM2 进程导致环境变量不刷新的问题：`build.sh` 在生成 `AIWebQuickDeploy/package.json` 时将 `pnpm start` 与 `pnpm start:daemon` 统一改为调用 `bash ./start.sh`，确保每次部署都先删除旧的 `YutoLens` 进程，再基于最新 `.env` 与 `pm2.conf.json` 重新创建进程，不再因为 `restartProcessId` 沿用旧的 `ADMIN_SERVE_ROOT`。
+- 修复轻量部署包复用旧 PM2 进程导致环境变量不刷新的问题：`build.sh` 在生成 `AIWebQuickDeploy/package.json` 时将 `pnpm start` 与 `pnpm start:daemon` 统一改为调用 `bash ./start.sh`，确保每次部署都先删除旧的 `Lens` 进程，再基于最新 `.env` 与 `pm2.conf.json` 重新创建进程，不再因为 `restartProcessId` 沿用旧的 `ADMIN_SERVE_ROOT`。
 - 清理聊天前端高频调试噪声：移除 `chat/src/App.vue`、`chat/src/utils/request/index.ts`、`chat/src/store/modules/global/index.ts`、`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/components/Message/Text/index.vue`、`chat/src/components/common/ImageViewer/index.vue` 中的生产路径 `console.log` 调试输出，减少前端控制台垃圾和运行时噪声。
 - 修复后台自定义入口与后台前端打包基路径脱节的问题：`admin/vite.config.ts` 生产构建改为相对资源路径，`admin/src/router/index.ts` 生产环境按当前访问路径自适应 `hash` 路由基座，避免后台入口改为 `/alice3306` 后 HTML 仍引用 `/admin/*` 资源、路由仍回跳旧前缀。
 - 修复旧 `/admin` 地址在自定义后台入口启用后被聊天前台 SPA 误吞的问题：`service/src/modules/spa/spa.controller.ts` 现在会同时保留对当前后台入口和遗留 `/admin` 的排除，避免旧后台地址误返回前台页面。
@@ -194,7 +204,7 @@
 - 修复学术服务日志权限崩溃：`academic-4.0/shared_utils/fastapi_stream_server.py` 的学术日志初始化改为自动尝试 `ACADEMIC_LOG_FILE -> PM2_HOME/logs -> /tmp/lens-academic/academic.log`，即使项目目录日志文件不可写也不会导致 `lens-academic` 启动失败。
 - 增强轻量部署防误用提示：`AIWebQuickDeploy/start.sh` 现在会在 root 运行时显式警告 PM2 用户分裂风险，部署文档同步要求统一使用同一业务用户启动。
 - 恢复 AIWebQuickDeploy 轻量部署包链路：`build.sh` 现在会自动把 `service dist` 与 `admin/chat dist` 同步到 `AIWebQuickDeploy/`，并新增 `QUICK_DEPLOY_ONLY=1` 只打包不启动模式。
-- 新增 `AIWebQuickDeploy/start.sh` 与配套说明文档，目标服务器可直接安装运行时依赖并用 PM2 启动 `YutoLens`。
+- 新增 `AIWebQuickDeploy/start.sh` 与配套说明文档，目标服务器可直接安装运行时依赖并用 PM2 启动 `Lens`。
 - 修复 Linux 部署学术服务缺依赖问题：`academic-4.0/requirements.txt` 补充 `markdown`、`pymdown-extensions`、`python-markdown-math`、`pygments`，避免 `lens-academic` 因 `ModuleNotFoundError: markdown` 启动失败。
 - 修复截断提示格式：`crazy_functions/crazy_utils.py` 的超长文本提示改为 `警告，文本过长将进行截断，Token溢出数：N。`，不再输出 `[Local Message]`。
 - 修复指定学术插件开场脏文案：`PDF_Summary.py`、`PDF_QA.py`、`Word_Summary.py`、`Arxiv_Downloader.py`、`PDF_Translate.py`、`PDF_Translate_Nougat.py` 去除“函数插件贡献者”展示，并增强 Markdown 结构化输出提示。

@@ -30,8 +30,14 @@ import 'highlight.js/styles/atom-one-dark.css' // 更现代的深色主题
 import 'highlight.js/styles/atom-one-light.css' // 更现代的浅色主题
 import MarkdownIt from 'markdown-it'
 import mila from 'markdown-it-link-attributes'
-import mermaid from 'mermaid'
 import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+
+let mermaidModulePromise: Promise<typeof import('mermaid')> | null = null
+
+const getMermaidModule = async () => {
+  mermaidModulePromise ||= import('mermaid')
+  return (await mermaidModulePromise).default
+}
 
 // 注册样式覆盖，确保主题切换时正确应用对应样式
 const injectThemeStyles = () => {
@@ -323,6 +329,7 @@ const renderMermaidBlocks = async () => {
   if (!nodes.length) return
 
   const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'default'
+  const mermaid = await getMermaidModule()
   if (mermaidTheme !== currentTheme) {
     mermaid.initialize({
       startOnLoad: false,
@@ -1030,9 +1037,7 @@ const stripLeakedPolishTableInstructionRows = (input: string) => {
       }
       const normalizedRow = `| ${cells.join(' | ')} |`
       const isHeader =
-        cells[0] === '修改前原文片段' &&
-        cells[1] === '修改后片段' &&
-        cells[2] === '修改原因与解释'
+        cells[0] === '修改前原文片段' && cells[1] === '修改后片段' && cells[2] === '修改原因与解释'
       if (!isHeader && !tableSeparatorPattern.test(trimmed)) {
         if (seenRows.has(normalizedRow)) continue
         seenRows.add(normalizedRow)
@@ -1600,7 +1605,9 @@ const trimStablePolishReasonOverflow = (reason: string, upcomingRows: StablePoli
   if (!output) return ''
   let cutIndex = -1
   for (const row of upcomingRows) {
-    const candidates = [row.before, row.after].map(item => String(item || '').trim()).filter(Boolean)
+    const candidates = [row.before, row.after]
+      .map(item => String(item || '').trim())
+      .filter(Boolean)
     for (const candidate of candidates) {
       const idx = output.indexOf(candidate)
       if (idx > 0 && (cutIndex < 0 || idx < cutIndex)) {
@@ -1616,7 +1623,9 @@ const trimStablePolishReasonOverflow = (reason: string, upcomingRows: StablePoli
 }
 
 const collectRecoveredStablePolishRows = (value: string) => {
-  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  const normalized = stripLeakedPolishTableInstructions(
+    normalizeMarkdownTables(String(value || ''))
+  )
   if (!normalized.trim()) return [] as StablePolishRow[]
 
   const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
@@ -1709,7 +1718,9 @@ const collectRecoveredStablePolishRows = (value: string) => {
 }
 
 const buildRecoveredStablePolishTable = (value: string) => {
-  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  const normalized = stripLeakedPolishTableInstructions(
+    normalizeMarkdownTables(String(value || ''))
+  )
   const rows = collectRecoveredStablePolishRows(normalized)
   if (!rows.length) return ''
 
@@ -1740,7 +1751,11 @@ const stripLeadingStablePolishOverflowBlock = (value: string) => {
     firstMeaningfulIndex += 1
   }
   if (firstMeaningfulIndex >= lines.length) return ''
-  if (!String(lines[firstMeaningfulIndex] || '').trim().startsWith('|')) {
+  if (
+    !String(lines[firstMeaningfulIndex] || '')
+      .trim()
+      .startsWith('|')
+  ) {
     return String(value || '').trimStart()
   }
   let cursor = firstMeaningfulIndex
@@ -1761,7 +1776,9 @@ const extractStablePolishReasonTable = (value: string) => {
 }
 
 const findStablePolishReasonTableRange = (value: string) => {
-  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  const normalized = stripLeakedPolishTableInstructions(
+    normalizeMarkdownTables(String(value || ''))
+  )
   if (!normalized.trim()) return null
 
   const lines = normalized.split('\n').map(line => String(line || '').trimEnd())
@@ -1831,7 +1848,9 @@ const findStablePolishReasonTableRange = (value: string) => {
 }
 
 const replacePolishReasonTableWithStableSnapshot = (value: string, stableTable?: string) => {
-  const normalized = stripLeakedPolishTableInstructions(normalizeMarkdownTables(String(value || '')))
+  const normalized = stripLeakedPolishTableInstructions(
+    normalizeMarkdownTables(String(value || ''))
+  )
   const snapshot = String(stableTable || '').trim() || extractStablePolishReasonTable(normalized)
   if (!snapshot) return normalized
 

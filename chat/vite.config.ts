@@ -2,6 +2,79 @@ import path from 'path'
 import { defineConfig, loadEnv } from 'vite'
 import { createVitePlugins } from './vite/plugins'
 
+const manualChunkGroups: Array<{ name: string; patterns: string[] }> = [
+  {
+    name: 'vue-vendor',
+    patterns: [
+      '/node_modules/vue/',
+      '/node_modules/@vue/',
+      '/node_modules/vue-router/',
+      '/node_modules/pinia/',
+    ],
+  },
+  {
+    name: 'utils-vendor',
+    patterns: ['/node_modules/@vueuse/', '/node_modules/clientjs/', '/node_modules/pinyin-match/'],
+  },
+  {
+    name: 'icons-vendor',
+    patterns: ['/node_modules/@icon-park/', '/node_modules/@iconify/'],
+  },
+  {
+    name: 'codemirror-vendor',
+    patterns: ['/node_modules/codemirror/', '/node_modules/@codemirror/'],
+  },
+  {
+    name: 'markdown-it-vendor',
+    patterns: ['/node_modules/markdown-it/', '/node_modules/markdown-it-link-attributes/'],
+  },
+  {
+    name: 'highlight-vendor',
+    patterns: ['/node_modules/highlight.js/'],
+  },
+  {
+    name: 'katex-vendor',
+    patterns: ['/node_modules/katex/', '/node_modules/@traptitech/markdown-it-katex/'],
+  },
+  {
+    name: 'md-editor-vendor',
+    patterns: ['/node_modules/md-editor-v3/'],
+  },
+  {
+    name: 'markmap-vendor',
+    patterns: ['/node_modules/markmap-'],
+  },
+  {
+    name: 'document-vendor',
+    patterns: [
+      '/node_modules/pdfjs-dist/',
+      '/node_modules/mammoth/',
+      '/node_modules/xlsx/',
+      '/node_modules/pptxtojson/',
+      '/node_modules/office-text-extractor/',
+      '/node_modules/@opendocsg/pdf2md/',
+      '/node_modules/html2pdf.js/',
+      '/node_modules/html-to-image/',
+    ],
+  },
+  {
+    name: 'viewer-vendor',
+    patterns: ['/node_modules/v-viewer/', '/node_modules/viewerjs/', '/node_modules/qrcode/'],
+  },
+]
+
+const resolveManualChunk = (id: string) => {
+  if (!id.includes('/node_modules/')) return undefined
+
+  for (const group of manualChunkGroups) {
+    if (group.patterns.some(pattern => id.includes(pattern))) {
+      return group.name
+    }
+  }
+
+  return undefined
+}
+
 export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, process.cwd()) as unknown as ImportMetaEnv
   const isBuild = mode === 'production'
@@ -66,18 +139,7 @@ export default defineConfig(({ mode }) => {
           // JS文件分类
           chunkFileNames: 'js/[name]-[hash].js',
           entryFileNames: 'js/[name]-[hash].js',
-          manualChunks: {
-            // 核心框架
-            'vue-vendor': ['vue', 'vue-router', 'pinia'],
-            // 工具库
-            'utils-vendor': ['@vueuse/core', '@vueuse/integrations'],
-            // 编辑器相关
-            'editor-vendor': ['codemirror', 'markdown-it', 'highlight.js'],
-            // UI组件库
-            'ui-vendor': ['@icon-park/vue-next'],
-            // 图表和可视化
-            'chart-vendor': ['mermaid', 'markmap-lib', 'markmap-view', 'markmap-common'],
-          },
+          manualChunks: resolveManualChunk,
         },
       },
     },

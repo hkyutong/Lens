@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { message } from '@/utils/message'
-import { computed, inject, provide, ref } from 'vue'
+import { computed, defineAsyncComponent, inject, provide, ref } from 'vue'
 import Avatar from './Avatar.vue'
-import TextComponent from './Text/index.vue'
 
 import { useGlobalStoreWithOut } from '@/store'
 import { copyText } from '@/utils/format'
+
+const TextComponent = defineAsyncComponent(() => import('./Text/index.vue'))
 
 interface Props {
   chatId?: number | string

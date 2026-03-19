@@ -81,20 +81,39 @@ function isActive(uuid: number) {
 </script>
 
 <template>
-  <p v-if="props.title" class="text-xs font-bold">
-    {{ props.title }} <span class="ml-1">({{ dataSources?.length }})</span>
-  </p>
-  <div v-for="item of dataSources" :key="`${item.uuid}`">
+  <div v-if="dataSources?.length" class="space-y-1">
     <div
-      class="relative flex items-center gap-3 px-3 py-2 break-all rounded-lg cursor-pointer hover:bg-white group dark:hover:bg-white/10 font-medium text-sm"
+      v-if="props.title"
+      class="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+    >
+      {{ props.title }} <span class="ml-1">({{ dataSources?.length }})</span>
+    </div>
+  </div>
+  <div v-for="item of dataSources" :key="`${item.uuid}`" class="mt-1">
+    <div
+      class="relative flex items-center gap-3 px-3 py-3 break-all rounded-[18px] cursor-pointer group font-medium text-sm border transition-all duration-150"
       :class="
         isActive(item.uuid)
-          ? ['bg-white', 'text-[#080808]', 'dark:bg-white/10', 'dark:text-white']
-          : ['text-[#080808]', 'dark:bg-[#080808]', 'dark:text-white/70']
+          ? [
+              'bg-white/95',
+              'text-[var(--text-main)]',
+              'border-[rgba(29,78,216,0.24)]',
+              'shadow-[var(--shadow-soft)]',
+              'dark:bg-white/10',
+              'dark:text-white',
+            ]
+          : [
+              'text-[var(--text-main)]',
+              'border-transparent',
+              'bg-transparent',
+              'hover:bg-white/70',
+              'dark:text-white/80',
+              'dark:hover:bg-white/6',
+            ]
       "
       @click="handleSelect(item)"
     >
-      <div class="flex items-center">
+      <div class="flex min-w-0 flex-1 items-center">
         <input
           v-if="item.isEdit"
           v-model="item.title"
@@ -103,7 +122,15 @@ function isActive(uuid: number) {
           class="bg-transparent border border-gray-200 dark:border-gray-400 px-1 shadow-none flex-1 truncate"
           @keypress="handleEnter(item, $event)"
         />
-        <span v-else class="flex-1 truncate max-w-48">{{ item.title }}</span>
+        <div v-else class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <span v-if="item.isSticky" class="h-2 w-2 rounded-full bg-[var(--accent)]"></span>
+            <span class="flex-1 truncate max-w-48">{{ item.title || '未命名研究会话' }}</span>
+          </div>
+          <div class="mt-1 text-[11px] text-[var(--ink-faint)]">
+            {{ item.isSticky ? '置顶研究' : '研究会话' }}
+          </div>
+        </div>
         <CheckSmall
           v-if="item.isEdit"
           class="ml-2"

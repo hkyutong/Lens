@@ -24,7 +24,16 @@ const chatStore = useChatStore()
 
 const academicMode = computed(() => chatStore.academicMode)
 const coreFunctions = computed(() => chatStore.academicCoreFunctions || [])
+const activePlugin = computed(() => chatStore.currentAcademicPlugin)
+const activeCore = computed(() => chatStore.currentAcademicCore)
+
 const getCoreLabel = (core: any) => String(core?.displayName || core?.name || '').trim()
+const getPluginLabel = (plugin: any) => String(plugin?.displayName || plugin?.name || '').trim()
+const normalizePluginName = (name: string) =>
+  String(name || '')
+    .replace(/\s+/g, '')
+    .replace(/latex/gi, 'latex')
+    .toLowerCase()
 
 const academicPluginOrder = [
   '论文速读',
@@ -39,12 +48,7 @@ const academicPluginOrder = [
   'LaTeX 中文润色',
   'LaTeX 高亮纠错',
 ]
-const normalizePluginName = (name: string) =>
-  String(name || '')
-    .replace(/\s+/g, '')
-    .replace(/latex/gi, 'latex')
-    .toLowerCase()
-const getPluginLabel = (plugin: any) => String(plugin?.displayName || plugin?.name || '').trim()
+
 const getSortKey = (name: string) => {
   const normalized = normalizePluginName(name)
   if (
@@ -72,6 +76,7 @@ const blockedPlugins = [
   '交互功能模板Demo函数',
   '多媒体智能体',
 ]
+
 const pluginList = computed(() => {
   const orderMap = new Map(
     academicPluginOrder.map((name, index) => [normalizePluginName(name), index])
@@ -93,7 +98,6 @@ const pluginList = computed(() => {
     [normalizePluginName('PDF批量总结')]: 'PDF 批量总结',
     [normalizePluginName('PDF深度理解')]: 'PDF 深度理解',
     [normalizePluginName('Word批量总结')]: 'Word 批量总结',
-    [normalizePluginName('Arxiv摘要')]: 'Arxiv摘要',
     [normalizePluginName('Arxiv论文下载')]: 'Arxiv摘要',
     [normalizePluginName('Arxiv精准翻译')]: 'Arxiv 英文摘要',
     [normalizePluginName('Arxiv英文摘要')]: 'Arxiv 英文摘要',
@@ -106,16 +110,11 @@ const pluginList = computed(() => {
   }
   const descriptionMap: Record<string, string> = {
     [normalizePluginName('解析项目源代码（自定义文件类型）')]:
-      '手动指定源代码文件类型。自定义指令用,隔开, *代表通配符, 加^代表不匹配; 空代表全部匹配。例如: "*.c, ^*.cpp, .toml"',
-    [normalizePluginName('Arxiv摘要')]: '读取并摘要Arxiv论文，可供下载（先输入编号，如1812.10695）',
-    [normalizePluginName('Arxiv论文下载')]:
-      '读取并摘要Arxiv论文，可供下载（先输入编号，如1812.10695）',
-    [normalizePluginName('读取并摘要Arxiv论文，可供下载（先输入编号，如1812.10695）')]:
-      '读取并摘要Arxiv论文，可供下载（先输入编号，如1812.10695）',
-    [normalizePluginName('Arxiv精准翻译')]:
-      "可自定义翻译要求, 解决部分词汇翻译不准确的问题。 例如当单词'Chair'翻译不准确时, 打开高级设置 - 自定义指令：请把单词'Chair'翻译为'系主任'",
-    [normalizePluginName('Arxiv英文摘要')]:
-      "可自定义翻译要求, 解决部分词汇翻译不准确的问题。 例如当单词'Chair'翻译不准确时, 打开高级设置 - 自定义指令：请把单词'Chair'翻译为'系主任'",
+      '手动指定源代码文件类型。自定义指令用,隔开, *代表通配符, 加^代表不匹配; 空代表全部匹配。',
+    [normalizePluginName('Arxiv摘要')]:
+      '读取并摘要 Arxiv 论文，可供下载（先输入编号，如 1812.10695）',
+    [normalizePluginName('Arxiv 英文摘要')]:
+      '可自定义翻译要求，适合处理专业术语、实验设置和学科特定词汇。',
   }
 
   const candidates = (chatStore.academicPluginList || [])
@@ -131,17 +130,9 @@ const pluginList = computed(() => {
     })
     .map((plugin: any, index: number) => {
       const cloned = { ...plugin, originName: String(plugin?.name || '') }
-      const label = getPluginLabel(cloned)
-      const normalized = normalizePluginName(label)
+      const normalized = normalizePluginName(getPluginLabel(cloned))
       if (renameMap[normalized]) {
         cloned.displayName = renameMap[normalized]
-      } else if (normalized.includes('注释python项目')) {
-        cloned.displayName = '注释整个Python项目'
-      } else if (
-        normalized.includes('解析项目源代码') &&
-        (normalized.includes('手动指定') || normalized.includes('筛选'))
-      ) {
-        cloned.displayName = '解析项目源代码（自定义文件类型）'
       }
       const normalizedAfterRename = normalizePluginName(getPluginLabel(cloned))
       if (descriptionMap[normalizedAfterRename]) {
@@ -164,12 +155,9 @@ const pluginList = computed(() => {
     })
     .map(entry => entry.item)
 })
-const activePlugin = computed(() => chatStore.currentAcademicPlugin)
-const activeCore = computed(() => chatStore.currentAcademicCore)
 
 const showAdvanced = ref(false)
 const groupFilter = ref('学术')
-
 const preferredGroups = ['学术', '对话', '智能体', '编程']
 
 const pluginGroups = computed(() => {
@@ -190,6 +178,16 @@ watch(
   groups => {
     if (!groups.includes(groupFilter.value)) {
       groupFilter.value = groups[0] || '学术'
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => activePlugin.value,
+  plugin => {
+    if (plugin?.advancedArgs) {
+      showAdvanced.value = true
     }
   },
   { immediate: true }
@@ -222,48 +220,26 @@ watch(
   ([plugins, cores]) => {
     const hasPlugin =
       !activePlugin.value ||
-      plugins.some(plugin => {
-        const pluginName = normalizePluginName(getPluginLabel(plugin) || plugin?.name)
-        const activeName = normalizePluginName(
-          getPluginLabel(activePlugin.value) || activePlugin.value?.name
-        )
-        return pluginName && activeName && pluginName === activeName
-      })
+      plugins.some(
+        plugin =>
+          normalizePluginName(getPluginLabel(plugin)) ===
+          normalizePluginName(getPluginLabel(activePlugin.value))
+      )
     if (!hasPlugin) {
       chatStore.setAcademicPlugin(undefined)
     }
 
     const hasCore =
       !activeCore.value ||
-      cores.some(core => {
-        const coreName = String(core?.displayName || core?.name || '')
-          .trim()
-          .toLowerCase()
-        const activeName = String(activeCore.value?.displayName || activeCore.value?.name || '')
-          .trim()
-          .toLowerCase()
-        return coreName && activeName && coreName === activeName
-      })
+      cores.some(
+        core => getCoreLabel(core).toLowerCase() === getCoreLabel(activeCore.value).toLowerCase()
+      )
     if (!hasCore) {
       chatStore.setAcademicCore(undefined)
     }
   },
   { immediate: true }
 )
-
-const selectedCore = computed({
-  get: () => getCoreLabel(activeCore.value) || '',
-  set: (value: string) => {
-    if (!value) {
-      chatStore.setAcademicCore(undefined)
-      return
-    }
-    const selected = coreFunctions.value.find(
-      core => getCoreLabel(core) === value || core.name === value
-    )
-    chatStore.setAcademicCore(selected)
-  },
-})
 
 const MAX_PLUGIN_ARGS = 300
 const DISALLOWED_PLUGIN_PATTERNS: RegExp[] = [
@@ -294,6 +270,20 @@ const sanitizePluginArgs = (value: string) => {
   return result.trim()
 }
 
+const selectedCore = computed({
+  get: () => getCoreLabel(activeCore.value) || '',
+  set: (value: string) => {
+    if (!value) {
+      chatStore.setAcademicCore(undefined)
+      return
+    }
+    const selected = coreFunctions.value.find(
+      core => getCoreLabel(core) === value || core.name === value
+    )
+    chatStore.setAcademicCore(selected)
+  },
+})
+
 const selectedPlugin = computed({
   get: () => getPluginLabel(activePlugin.value) || '',
   set: (value: string) => {
@@ -313,45 +303,78 @@ const pluginArgs = computed({
   set: (value: string) => chatStore.setAcademicPluginArgs(sanitizePluginArgs(value)),
 })
 
+const workflowLabel = computed(() => {
+  return (
+    activePlugin.value?.displayName ||
+    activePlugin.value?.name ||
+    activeCore.value?.displayName ||
+    activeCore.value?.name ||
+    '未配置研究流程'
+  )
+})
+
+const workflowDescription = computed(() => {
+  return (
+    activePlugin.value?.info ||
+    activePlugin.value?.description ||
+    activeCore.value?.description ||
+    '先启用研究模式，再选择一个核心能力或高级插件。'
+  )
+})
+
+const selectedKind = computed(() => {
+  if (activePlugin.value) return '高级插件'
+  if (activeCore.value) return '核心能力'
+  return '待配置'
+})
+
+const quickPluginCandidates = computed(() => pluginList.value.slice(0, 4))
+const quickCoreCandidates = computed(() => coreFunctions.value.slice(0, 4))
+
 const isPluginArgsEnabled = computed(() => Boolean(activePlugin.value))
 const pluginArgsPlaceholder = computed(() => {
   if (!activePlugin.value) return '选择插件后填写'
-  return "可选：补充要求，例如：请把单词'Chair'翻译为'系主任'"
+  return props.pluginArgsPlaceholder || '例如：不要翻译 Agent、基线模型等专业术语'
 })
 
-const getPluginDisplayName = (plugin: any) => getPluginLabel(plugin)
-const formatPluginOption = (plugin: any) => {
-  const name = String(getPluginDisplayName(plugin))
-  if (name.length > 20) return name.slice(0, 20) + '…'
-  return name
+const toggleResearchMode = () => {
+  chatStore.setAcademicMode(!academicMode.value)
+}
+
+const selectQuickCore = (core: any) => {
+  chatStore.setAcademicCore(core)
+}
+
+const selectQuickPlugin = (plugin: any) => {
+  chatStore.setAcademicPlugin(plugin)
 }
 </script>
 
 <template>
-  <div v-if="academicMode" class="w-full px-1 pt-3">
-    <div
-      class="rounded-[22px] border border-black/5 bg-white px-4 py-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.6)] dark:bg-[#080808] dark:border-white/10 dark:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.35)] max-h-[520px] overflow-y-auto"
-    >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <div class="text-sm font-semibold text-[#080808] dark:text-white">学术插件</div>
+  <div class="w-full">
+    <section class="research-controls">
+      <div class="research-controls__header">
+        <div>
+          <div class="research-controls__eyebrow">Research Controls</div>
+          <h3 class="research-controls__title">研究控制栏</h3>
+          <p class="research-controls__subtitle">
+            把研究模式、核心能力、高级插件和自定义要求统一放在一个持续可见的工作区。
+          </p>
         </div>
-        <div class="flex items-center gap-2">
-          <span
-            class="px-3 py-1 rounded-full text-[10px] font-medium whitespace-nowrap"
-            :class="
-              activePlugin || activeCore
-                ? 'bg-[#f2f2f2] text-[#080808]'
-                : 'bg-[#f2f2f2] text-[#080808]'
-            "
+        <div class="research-controls__header-actions">
+          <button
+            type="button"
+            class="research-controls__toggle"
+            :class="{ 'research-controls__toggle--active': academicMode }"
+            @click="toggleResearchMode"
           >
-            {{ activePlugin || activeCore ? '已启用' : '未启用' }}
-          </span>
+            {{ academicMode ? '研究模式已启用' : '启用研究模式' }}
+          </button>
           <button
             v-if="props.showClose"
             type="button"
-            class="flex h-7 w-7 items-center justify-center rounded-full border border-[#d9d9de] bg-white/95 text-[15px] leading-none text-[#8f8f98] shadow-sm transition hover:text-[#080808] dark:border-white/10 dark:bg-[#121212]/95 dark:text-white/55 dark:hover:text-white"
-            aria-label="关闭学术插件面板"
+            class="research-controls__close"
+            aria-label="关闭研究控制栏"
             @click="emit('close')"
           >
             ×
@@ -359,15 +382,19 @@ const formatPluginOption = (plugin: any) => {
         </div>
       </div>
 
-      <div class="mt-6 grid gap-3 md:grid-cols-2">
-        <div class="flex flex-col gap-2">
-          <label class="text-xs text-gray-500 dark:text-gray-400">
-            {{ props.coreLabel || '核心能力' }}
-          </label>
-          <select
-            v-model="selectedCore"
-            class="w-full rounded-2xl border border-[#f2f2f2] bg-white px-3 py-2 text-sm text-[#080808] shadow-sm transition focus:border-[#080808] focus:outline-none dark:border-white/10 dark:bg-[#080808] dark:text-white truncate"
-          >
+      <div class="research-controls__summary">
+        <span class="research-chip" :class="{ 'research-chip-active': academicMode }">
+          {{ academicMode ? 'Research Mode' : 'Idle' }}
+        </span>
+        <span class="research-chip">{{ selectedKind }}：{{ workflowLabel }}</span>
+        <span class="research-chip">分组：{{ groupFilter }}</span>
+        <span class="research-chip">高级指令：{{ pluginArgs ? '已填写' : '未填写' }}</span>
+      </div>
+
+      <div class="research-controls__grid">
+        <div class="research-controls__field">
+          <label>{{ props.coreLabel || '核心能力' }}</label>
+          <select v-model="selectedCore" class="research-controls__select">
             <option value="">{{ props.corePlaceholder || '不启用' }}</option>
             <option v-for="core in coreFunctions" :key="core.name" :value="getCoreLabel(core)">
               {{ getCoreLabel(core) }}
@@ -375,115 +402,310 @@ const formatPluginOption = (plugin: any) => {
           </select>
         </div>
 
-        <div class="flex flex-col gap-2">
-          <label class="text-xs text-gray-500 dark:text-gray-400">
-            {{ props.pluginLabel || '高级插件' }}
-          </label>
-          <select
-            v-model="selectedPlugin"
-            class="w-full rounded-2xl border border-[#f2f2f2] bg-white px-3 py-2 text-sm text-[#080808] shadow-sm transition focus:border-[#080808] focus:outline-none dark:border-white/10 dark:bg-[#080808] dark:text-white truncate"
-          >
+        <div class="research-controls__field">
+          <label>{{ props.pluginLabel || '高级插件' }}</label>
+          <select v-model="selectedPlugin" class="research-controls__select">
             <option value="">{{ props.pluginPlaceholder || '不启用' }}</option>
             <option
               v-for="plugin in filteredPlugins"
               :key="plugin.name"
-              :value="getPluginDisplayName(plugin)"
-              :title="getPluginDisplayName(plugin)"
+              :value="getPluginLabel(plugin)"
+              :title="getPluginLabel(plugin)"
             >
-              {{ formatPluginOption(plugin) }}
+              {{ getPluginLabel(plugin) }}
             </option>
           </select>
         </div>
       </div>
 
-      <div class="mt-3 grid gap-3 md:grid-cols-2">
-        <div class="flex flex-col gap-2">
-          <label class="text-xs text-gray-500 dark:text-gray-400">
-            {{ props.groupLabel || '插件分组' }}
-          </label>
-          <select
-            v-model="groupFilter"
-            class="w-full rounded-2xl border border-[#f2f2f2] bg-white px-3 py-2 text-sm text-[#080808] shadow-sm transition focus:border-[#080808] focus:outline-none dark:border-white/10 dark:bg-[#080808] dark:text-white truncate"
-          >
+      <div class="research-controls__field">
+        <label>{{ props.groupLabel || '插件分组' }}</label>
+        <div class="research-controls__group-row">
+          <select v-model="groupFilter" class="research-controls__select">
             <option v-for="group in pluginGroups" :key="group" :value="group">
               {{ group }}
             </option>
           </select>
-        </div>
-        <div class="flex items-end justify-end">
-          <button type="button" class="btn-pill btn-sm" @click="showAdvanced = !showAdvanced">
+          <button
+            type="button"
+            class="research-controls__advanced"
+            @click="showAdvanced = !showAdvanced"
+          >
             {{ showAdvanced ? '收起高级设置' : '高级设置' }}
           </button>
         </div>
       </div>
 
-      <div v-if="showAdvanced" class="mt-3 space-y-3 pr-1">
-        <div>
-          <label class="text-xs text-gray-500 dark:text-gray-400"> 自定义指令 </label>
-          <textarea
-            v-model="pluginArgs"
-            :disabled="!isPluginArgsEnabled"
-            :class="[
-              'mt-2 w-full min-h-[88px] resize-none rounded-2xl border border-[#f2f2f2] bg-white px-3 py-2 text-sm text-[#080808] shadow-sm transition focus:border-[#080808] focus:outline-none dark:border-white/10 dark:bg-[#080808] dark:text-white',
-              !isPluginArgsEnabled && 'opacity-60 cursor-not-allowed',
-            ]"
-            :placeholder="pluginArgsPlaceholder"
-            rows="3"
-            maxlength="300"
-          ></textarea>
+      <div class="research-controls__presets">
+        <div class="research-controls__preset-block">
+          <div class="research-controls__preset-title">高频核心能力</div>
+          <div class="research-controls__chips">
+            <button
+              v-for="core in quickCoreCandidates"
+              :key="core.name"
+              type="button"
+              class="research-controls__chip-btn"
+              @click="selectQuickCore(core)"
+            >
+              {{ getCoreLabel(core) }}
+            </button>
+          </div>
         </div>
-        <p class="mt-2 text-[11px] text-gray-400 dark:text-gray-500">仅在需要补充要求时填写。</p>
+        <div class="research-controls__preset-block">
+          <div class="research-controls__preset-title">高频研究插件</div>
+          <div class="research-controls__chips">
+            <button
+              v-for="plugin in quickPluginCandidates"
+              :key="plugin.name"
+              type="button"
+              class="research-controls__chip-btn"
+              @click="selectQuickPlugin(plugin)"
+            >
+              {{ getPluginLabel(plugin) }}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div v-if="activePlugin || activeCore" class="mt-4 flex flex-wrap gap-2 text-xs">
-        <span
-          class="rounded-full bg-[#f2f2f2] px-3 py-1 text-[#080808] dark:bg-white/10 dark:text-white"
-        >
-          {{ activePlugin ? '插件' : '核心能力' }}
-        </span>
-        <span
-          class="rounded-full bg-[#f2f2f2] px-3 py-1 text-[#080808] dark:bg-white/10 dark:text-white"
-        >
-          {{
-            activePlugin?.displayName ||
-            activePlugin?.name ||
-            activeCore?.displayName ||
-            activeCore?.name ||
-            '未命名'
-          }}
-        </span>
-        <span
-          v-if="activePlugin?.group"
-          class="rounded-full bg-[#f2f2f2] px-3 py-1 text-[#080808] dark:bg-white/10 dark:text-white"
-        >
-          {{ activePlugin.group }}
-        </span>
-        <span
-          v-if="activePlugin?.advancedArgs"
-          class="rounded-full bg-[#f2f2f2] px-3 py-1 text-[#080808] dark:bg-white/10 dark:text-white"
-        >
-          高级参数
-        </span>
+      <div v-if="showAdvanced" class="research-controls__advanced-panel">
+        <label>{{ props.pluginArgsLabel || '自定义指令' }}</label>
+        <textarea
+          v-model="pluginArgs"
+          :disabled="!isPluginArgsEnabled"
+          :placeholder="pluginArgsPlaceholder"
+          class="research-controls__textarea"
+          rows="4"
+          maxlength="300"
+        ></textarea>
+        <p class="research-controls__hint">仅在需要约束术语、输出格式或翻译策略时填写。</p>
       </div>
 
-      <div
-        v-if="
-          activePlugin?.info || activePlugin?.description || activeCore?.name || activePlugin?.name
-        "
-        class="mt-3 text-xs text-gray-500"
-      >
-        {{ props.infoLabel || '说明' }}:
-        {{
-          activePlugin?.info ||
-          activePlugin?.description ||
-          activeCore?.displayName ||
-          activeCore?.name ||
-          ''
-        }}
+      <div class="research-controls__workflow">
+        <div class="research-controls__workflow-label">当前工作流</div>
+        <div class="research-controls__workflow-title">{{ workflowLabel }}</div>
+        <div class="research-controls__workflow-desc">
+          {{ workflowDescription }}
+        </div>
       </div>
-      <div v-if="activePlugin?.argsReminder" class="mt-2 text-xs text-gray-500">
-        {{ activePlugin.argsReminder }}
+
+      <div v-if="!academicMode" class="research-controls__idle">
+        研究模式关闭时，你仍然可以先配置流程；一旦选择核心能力或高级插件，会自动进入研究模式。
       </div>
-    </div>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.research-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 28px;
+  border: 1px solid var(--paper-border);
+  background: var(--paper-bg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(16px);
+}
+
+.research-controls__header,
+.research-controls__header-actions,
+.research-controls__group-row,
+.research-controls__summary,
+.research-controls__chips {
+  display: flex;
+  align-items: center;
+}
+
+.research-controls__header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.research-controls__header-actions {
+  gap: 10px;
+  align-self: flex-start;
+}
+
+.research-controls__eyebrow,
+.research-controls__workflow-label,
+.research-controls__preset-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.research-controls__title {
+  margin: 6px 0 0;
+  font-size: 22px;
+  line-height: 1.2;
+  color: var(--text-main);
+}
+
+.research-controls__subtitle,
+.research-controls__workflow-desc,
+.research-controls__hint,
+.research-controls__idle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.research-controls__toggle,
+.research-controls__close,
+.research-controls__advanced,
+.research-controls__chip-btn {
+  border: 1px solid var(--border-color);
+  background: var(--surface-muted);
+  color: var(--text-main);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.research-controls__toggle,
+.research-controls__advanced {
+  border-radius: 9999px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.research-controls__toggle--active {
+  background: var(--accent-soft);
+  border-color: rgba(29, 78, 216, 0.18);
+  color: var(--accent);
+}
+
+.research-controls__close {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  font-size: 18px;
+}
+
+.research-controls__summary,
+.research-controls__chips {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.research-controls__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.research-controls__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.research-controls__field label {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.research-controls__select,
+.research-controls__textarea {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-muted);
+  color: var(--text-main);
+  padding: 12px 14px;
+  font-size: 14px;
+  outline: none;
+}
+
+.research-controls__select:focus,
+.research-controls__textarea:focus {
+  border-color: var(--accent);
+}
+
+.research-controls__group-row {
+  gap: 10px;
+}
+
+.research-controls__group-row .research-controls__select {
+  flex: 1;
+}
+
+.research-controls__presets {
+  display: grid;
+  gap: 12px;
+}
+
+.research-controls__preset-block {
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-muted);
+}
+
+.research-controls__preset-title {
+  margin-bottom: 10px;
+}
+
+.research-controls__chip-btn {
+  border-radius: 9999px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.research-controls__chip-btn:hover,
+.research-controls__toggle:hover,
+.research-controls__advanced:hover,
+.research-controls__close:hover {
+  transform: translateY(-1px);
+  border-color: rgba(29, 78, 216, 0.24);
+}
+
+.research-controls__workflow,
+.research-controls__advanced-panel,
+.research-controls__idle {
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-muted);
+}
+
+.research-controls__workflow-title {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+@media (max-width: 768px) {
+  .research-controls {
+    padding: 18px;
+    border-radius: 24px;
+  }
+
+  .research-controls__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .research-controls__header-actions,
+  .research-controls__group-row,
+  .research-controls__grid {
+    width: 100%;
+  }
+
+  .research-controls__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .research-controls__group-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>

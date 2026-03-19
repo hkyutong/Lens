@@ -38,7 +38,6 @@ const historyList = computed(() =>
   })
 )
 
-const mergedList = computed(() => [...stickyList.value, ...historyList.value])
 const createNewChatGroup = inject('createNewChatGroup', async () => {})
 
 async function handleNewChat() {
@@ -73,37 +72,58 @@ async function handleDelete(params: Chat.History) {
 <template>
   <div class="custom-scrollbar px-4 overflow-y-auto h-full">
     <div class="flex flex-col gap-3 text-sm">
-      <div class="mb-3 space-y-2">
+      <div
+        class="mb-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--surface-card)] p-3 space-y-2"
+      >
+        <div class="px-1 pb-1">
+          <div
+            class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+          >
+            Workspace
+          </div>
+          <div class="mt-1 text-sm text-[var(--ink-soft)]">组织研究会话、论文任务和工作流。</div>
+        </div>
         <button
           type="button"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-transparent text-gray-800 hover:bg-black/5 dark:text-gray-100 dark:hover:bg-white/5"
+          class="w-full flex items-center gap-2 px-3 py-2 rounded-2xl bg-[var(--surface-muted)] text-[var(--text-main)] hover:bg-white/90 dark:hover:bg-white/5"
           @click="handleNewChat"
         >
           <EditTwo size="18" />
-          <span class="text-sm font-medium">新聊天</span>
+          <span class="text-sm font-medium">新建研究</span>
         </button>
         <button
           type="button"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-transparent text-gray-800 hover:bg-black/5 dark:text-gray-100 dark:hover:bg-white/5"
+          class="w-full flex items-center gap-2 px-3 py-2 rounded-2xl bg-transparent text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5"
           @click="handleOpenAppCenter"
         >
           <ApplicationTwo size="18" />
-          <span class="text-sm font-medium">应用</span>
+          <span class="text-sm font-medium">研究能力库</span>
         </button>
       </div>
 
       <template v-if="!dataSources.length">
-        <div class="flex flex-col items-center mt-4 text-center text-gray-400">
+        <div
+          class="flex flex-col items-center rounded-[24px] border border-dashed border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-8 text-center text-[var(--ink-faint)]"
+        >
           <SvgIcon icon="ri:inbox-line" class="mb-2 text-3xl" />
-          <span>{{ t('common.noData') }}</span>
+          <span class="text-sm">{{ t('common.noData') }}</span>
+          <span class="mt-1 text-xs">从一篇论文、一个问题或一个新会话开始。</span>
         </div>
       </template>
       <template v-else>
-        <div class="space-y-1">
+        <div class="space-y-3">
           <ListItem
-            :key="'all-' + customKeyId"
-            title="全部项目"
-            :data-sources="mergedList"
+            v-if="stickyList.length"
+            :key="'sticky-' + customKeyId"
+            title="置顶研究"
+            :data-sources="stickyList"
+            @select="handleSelect"
+            @delete="handleDelete"
+          />
+          <ListItem
+            :key="'history-' + customKeyId"
+            title="最近研究"
+            :data-sources="historyList"
             @select="handleSelect"
             @delete="handleDelete"
           />

@@ -16,7 +16,7 @@ const authStore = useAuthStore()
 const { isMobile } = useBasicLayout()
 const isLogin = computed(() => authStore.isLogin)
 const logoPath = computed(() => authStore.globalConfig.clientLogoPath || logo)
-const siteName = 'Lens'
+const siteName = computed(() => authStore.globalConfig?.siteName || 'Lens')
 
 const userEmail = computed(() => authStore.userInfo.email || '')
 const avatarText = computed(() => {
@@ -102,11 +102,16 @@ function openSettings(tab?: number) {
       >
         <main class="flex flex-col h-full flex-1">
           <div class="flex items-center justify-between px-5 pt-4 pb-3">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-3">
               <img :src="logoPath" alt="Logo" class="h-7 w-7 rounded-lg" />
-              <span class="text-base font-semibold text-gray-900 dark:text-gray-100">
-                {{ siteName }}
-              </span>
+              <div class="min-w-0">
+                <div class="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
+                  {{ siteName }}
+                </div>
+                <div class="text-[11px] tracking-[0.14em] uppercase text-[var(--ink-faint)]">
+                  Research Desk
+                </div>
+              </div>
             </div>
             <button
               type="button"
@@ -126,7 +131,7 @@ function openSettings(tab?: number) {
             <div v-if="isLogin" class="flex items-center justify-between gap-3">
               <button
                 type="button"
-                class="group flex items-center gap-3 min-w-0 w-full rounded-full px-2 py-1 transition-colors hover:bg-gray-100 dark:hover:bg-white/10"
+                class="group flex items-center gap-3 min-w-0 w-full rounded-[18px] border border-[var(--border-color)] bg-[var(--surface-card)] px-3 py-3 transition-colors hover:bg-white/90 dark:hover:bg-white/10"
                 @click="openSettings(undefined)"
                 aria-label="打开设置"
               >
@@ -139,13 +144,15 @@ function openSettings(tab?: number) {
                   <span class="text-sm text-gray-800 dark:text-gray-200 truncate">
                     {{ displayEmailPrefix || '已登录' }}
                   </span>
-                  <span class="text-[11px] text-gray-500 dark:text-gray-400">设置与账户</span>
+                  <span class="text-[11px] text-[var(--ink-faint)]">研究偏好与账户</span>
                 </div>
               </button>
             </div>
-            <div v-else class="text-sm text-gray-600 leading-6 dark:text-gray-300">
-              不要失去访问权限<br />
-              登录后可同步项目和记录
+            <div
+              v-else
+              class="rounded-[20px] border border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-4 text-sm leading-6 text-[var(--ink-soft)]"
+            >
+              登录后可同步研究项目、学术记录与文件上下文。
               <div class="mt-3">
                 <button
                   type="button"

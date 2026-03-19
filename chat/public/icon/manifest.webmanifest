@@ -1,6 +1,9 @@
 {
-  "name": "",
-  "short_name": "",
+  "name": "Lens AI 学术工作台",
+  "short_name": "Lens",
+  "description": "论文速读、PDF 理解、Arxiv 摘要、LaTeX 翻译与学术写作辅助的一体化 AI 工作台",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "icon/android-chrome-192x192.png",
@@ -8,12 +11,12 @@
       "type": "image/png"
     },
     {
-      "src": "iocn/android-chrome-512x512.png",
+      "src": "icon/android-chrome-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
   ],
   "theme_color": "#ffffff",
-  "background_color": "#ffffff",
+  "background_color": "#edf4fb",
   "display": "standalone"
 }

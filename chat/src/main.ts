@@ -1,14 +1,13 @@
 import { useTheme } from '@/hooks/useTheme'
 import { useAuthStoreWithout } from '@/store/modules/auth'
+import { materialSymbolsIconCollection, riIconCollection } from '@/constants/iconCollections'
 import '@/styles/github-markdown.less'
 import '@/styles/global.less'
 // import '@/styles/highlight.less' // 移除旧的highlight样式
 import '@/styles/index.css'
-import { printYutoLensInfo, printAppInfo } from '@/utils/logger'
+import { printLensInfo, printAppInfo } from '@/utils/logger'
 import { message } from '@/utils/message'
 import router from '@/utils/router'
-import materialSymbolsIcons from '@iconify-json/material-symbols/icons.json'
-import riIcons from '@iconify-json/ri/icons.json'
 import { addCollection } from '@iconify/vue'
 import 'katex/dist/katex.min.css'
 import { createApp } from 'vue'
@@ -46,8 +45,8 @@ const authStore = useAuthStoreWithout()
 
 async function bootstrap() {
   // 预注册运行期会用到的图标集，避免生产环境回源请求 icon API。
-  addCollection(riIcons as any)
-  addCollection(materialSymbolsIcons as any)
+  addCollection(riIconCollection as any)
+  addCollection(materialSymbolsIconCollection as any)
 
   const app = createApp(App)
 
@@ -70,8 +69,8 @@ async function bootstrap() {
   const msgInstance = message()
 
   // 在开发环境下打印控制台信息
-  printYutoLensInfo()
-  printAppInfo('YutoLens', '5.0.1')
+  printLensInfo()
+  printAppInfo('Lens', '5.0.1')
 
   authStore.getGlobalConfig().catch(() => {})
 

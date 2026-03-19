@@ -3,6 +3,8 @@ import { ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as fs from 'fs';
 import { join } from 'path';
+import { formatUrl } from '@/common/utils/fromatUrl';
+import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 
 @ApiTags('spa')
 @Controller()
@@ -14,13 +16,74 @@ export class SpaController {
   private readonly adminPath: string;
   private readonly legacyAdminPath = '/admin';
 
-  constructor() {
+  constructor(private readonly globalConfigService: GlobalConfigService) {
     // 检查index.html是否存在
     this.exists = fs.existsSync(this.indexPath);
 
     // 获取管理后台路径
     this.adminPath = process.env.ADMIN_SERVE_ROOT || '/admin';
     Logger.log(`管理后台路径已配置: ${this.adminPath}`, 'SpaController');
+  }
+
+  private escapeXml(value: string) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  private async resolveBaseUrl(req: Request) {
+    const config = await this.globalConfigService.getConfigs(['siteUrl']);
+    const configuredSiteUrl = typeof config === 'string' ? config : config?.siteUrl;
+    if (configuredSiteUrl) {
+      return formatUrl(String(configuredSiteUrl));
+    }
+
+    const protocol = String(req.headers['x-forwarded-proto'] || req.protocol || 'https')
+      .split(',')[0]
+      .trim();
+    const host = String(req.headers['x-forwarded-host'] || req.get('host') || '')
+      .split(',')[0]
+      .trim();
+
+    return host ? `${protocol}://${host}` : '';
+  }
+
+  @Get('sitemap.xml')
+  async serveSitemap(@Req() req: Request, @Res() res: Response) {
+    const baseUrl = await this.resolveBaseUrl(req);
+    const routes = [
+      { path: '/', changefreq: 'daily', priority: '1.0' },
+      { path: '/legal/privacy.html', changefreq: 'monthly', priority: '0.3' },
+      { path: '/legal/terms.html', changefreq: 'monthly', priority: '0.3' },
+      { path: '/llms.txt', changefreq: 'weekly', priority: '0.4' },
+      { path: '/llms-full.txt', changefreq: 'weekly', priority: '0.4' },
+      { path: '/seo/research-workspace.html', changefreq: 'weekly', priority: '0.8' },
+      { path: '/seo/paper-summary.html', changefreq: 'weekly', priority: '0.8' },
+      { path: '/seo/arxiv-summary.html', changefreq: 'weekly', priority: '0.8' },
+      { path: '/seo/latex-translation.html', changefreq: 'weekly', priority: '0.8' },
+      { path: '/seo/academic-polishing.html', changefreq: 'weekly', priority: '0.8' },
+      { path: '/seo/faq.html', changefreq: 'weekly', priority: '0.7' },
+    ];
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${routes
+  .map(route => {
+    const loc = this.escapeXml(`${baseUrl}${route.path === '/' ? '' : route.path}`);
+    return `  <url>
+    <loc>${loc || this.escapeXml(route.path)}</loc>
+    <changefreq>${route.changefreq}</changefreq>
+    <priority>${route.priority}</priority>
+  </url>`;
+  })
+  .join('\n')}
+</urlset>`;
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    return res.send(xml);
   }
 
   @Get('*')

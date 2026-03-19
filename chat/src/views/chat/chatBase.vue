@@ -12,31 +12,42 @@ import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMes
 import { Close, DropDownList } from '@icon-park/vue-next'
 import DownSmall from '@icon-park/vue-next/es/icons/DownSmall'
 import type { AxiosProgressEvent } from 'axios'
-import Sider from './components/sider/index.vue'
 // 导入DropdownMenu组件用于弹窗
 import { DropdownMenu } from '@/components/common/DropdownMenu'
-import ExternalLinkComponent from './components/ExternalLink/index.vue'
 // 移除不再直接使用的异步组件导入
 // const TextEditor = defineAsyncComponent(() => import('./components/Previewer/TextEditor.vue'))
 // const ImagePreviewer = defineAsyncComponent(() => import('./components/Previewer/ImagePreviewer.vue'))
 // const HtmlPreviewer = defineAsyncComponent(() => import('./components/Previewer/HtmlPreviewer.vue'))
 
-// ============== 静态组件导入 ==============
-import AppList from './components/AppList/index.vue'
-import AppTips from './components/AppTips/index.vue'
-import FooterComponent from './components/Footer/index.vue'
-import HeaderComponent from './components/Header/index.vue'
-import Message from './components/Message/index.vue'
-import WelcomeComponent from './components/Welcome/index.vue'
-import WorkspaceHome from './components/Workspace/Home.vue'
-import AcademicPanel from './components/Footer/components/AcademicPanel.vue'
-
 // ============== Composition API ==============
-import { computed, inject, nextTick, onMounted, provide, ref, watch } from 'vue'
+import {
+  computed,
+  defineAsyncComponent,
+  inject,
+  nextTick,
+  onMounted,
+  provide,
+  ref,
+  watch,
+} from 'vue'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { useRoute } from 'vue-router'
 import { useChat } from './hooks/useChat'
 import { useScroll } from './hooks/useScroll'
+
+const Sider = defineAsyncComponent(() => import('./components/sider/index.vue'))
+const ExternalLinkComponent = defineAsyncComponent(
+  () => import('./components/ExternalLink/index.vue')
+)
+const AppList = defineAsyncComponent(() => import('./components/AppList/index.vue'))
+const AppTips = defineAsyncComponent(() => import('./components/AppTips/index.vue'))
+const FooterComponent = defineAsyncComponent(() => import('./components/Footer/index.vue'))
+const HeaderComponent = defineAsyncComponent(() => import('./components/Header/index.vue'))
+const Message = defineAsyncComponent(() => import('./components/Message/index.vue'))
+const WorkspaceHome = defineAsyncComponent(() => import('./components/Workspace/Home.vue'))
+const AcademicPanel = defineAsyncComponent(
+  () => import('./components/Footer/components/AcademicPanel.vue')
+)
 
 // ============== 接口定义 ==============
 // Type for the form schema field
@@ -203,6 +214,30 @@ const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
 const isStreaming = computed(() => Boolean(chatStore.isStreamIn))
 const globalConfig = computed(() => authStore.globalConfig)
 const copyrightEndYear = computed(() => new Date().getFullYear())
+const activeResearchLabel = computed(() => {
+  return (
+    academicPlugin.value?.displayName ||
+    academicPlugin.value?.name ||
+    academicCore.value?.displayName ||
+    academicCore.value?.name ||
+    ''
+  )
+})
+const activeGroupTitle = computed(() => activeGroupInfo.value?.title || '新研究会话')
+const conversationMeta = computed(() => {
+  const items = [
+    `会话：${activeGroupTitle.value}`,
+    `模型：${activeModelName.value || '默认模型'}`,
+    academicMode.value ? '研究模式已启用' : '研究模式待启用',
+  ]
+  if (activeResearchLabel.value) {
+    items.push(`流程：${activeResearchLabel.value}`)
+  }
+  if (configObj?.value?.fileInfo?.fileName) {
+    items.push(`资料：${configObj.value.fileInfo.fileName}`)
+  }
+  return items
+})
 
 // 使用watch监听activeGroupInfo的变化
 const configObj = computed(() => {
@@ -1725,12 +1760,7 @@ const onConversation = async ({
       displayedReasoningText = visibleReasoning
     }
 
-    if (
-      academicMode.value &&
-      !isErrorResponse &&
-      assistantLogId &&
-      hasVisibleText(displayedText)
-    ) {
+    if (academicMode.value && !isErrorResponse && assistantLogId && hasVisibleText(displayedText)) {
       try {
         await fetchSyncDisplayContentAPI({
           chatId: Number(assistantLogId),
@@ -1970,14 +2000,17 @@ provide('tryParseJson', tryParseJson)
       <template v-else>
         <!-- Main Chat Area - Prism-style split layout -->
         <main class="relative z-10 flex-1 overflow-hidden">
+          <div class="pointer-events-none absolute inset-0">
+            <div
+              class="absolute left-[-120px] top-[-80px] h-[320px] w-[320px] rounded-full bg-[var(--accent-soft)] blur-3xl"
+            ></div>
+            <div
+              class="absolute right-[-100px] top-[120px] h-[260px] w-[260px] rounded-full bg-sky-100/50 blur-3xl dark:bg-sky-400/10"
+            ></div>
+          </div>
           <div class="h-full w-full">
-            <div class="flex h-full min-h-0 min-w-0">
-              <div
-                :class="[
-                  'flex min-h-0 min-w-0 flex-1 flex-col',
-                  academicMode && !isMobile ? 'pr-6' : 'mx-auto max-w-[980px]',
-                ]"
-              >
+            <div class="flex h-full min-h-0 min-w-0 gap-0 xl:gap-4">
+              <div class="flex min-h-0 min-w-0 flex-1 flex-col">
                 <div class="flex-1 min-h-0 overflow-hidden">
                   <div
                     id="scrollRef"
@@ -1989,97 +2022,129 @@ provide('tryParseJson', tryParseJson)
                     <div
                       id="image-wrapper"
                       class="w-full h-full pb-8"
-                      :class="[isMobile ? 'px-3 py-3' : 'px-8 py-6']"
+                      :class="[isMobile ? 'px-3 py-3' : 'px-6 py-6']"
                     >
-                      <div
-                        v-if="showDetailedErrorBanner"
-                        class="mb-4 px-4 py-3 rounded-2xl border border-red-200/80 dark:border-red-900/60 bg-red-50/80 dark:bg-red-950/40 text-red-700 dark:text-red-200 flex items-start justify-between gap-3"
-                      >
-                        <div class="text-sm leading-6">
-                          <div class="font-semibold">请求失败</div>
-                          <div>{{ lastError }}</div>
-                          <div v-if="lastErrorRequestId" class="opacity-80 mt-1">
-                            请求ID: {{ lastErrorRequestId }}
+                      <div class="mx-auto w-full max-w-[1080px]">
+                        <div
+                          v-if="showDetailedErrorBanner"
+                          class="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-red-200/80 bg-red-50/80 px-4 py-3 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+                        >
+                          <div class="text-sm leading-6">
+                            <div class="font-semibold">请求失败</div>
+                            <div>{{ lastError }}</div>
+                            <div v-if="lastErrorRequestId" class="mt-1 opacity-80">
+                              请求ID: {{ lastErrorRequestId }}
+                            </div>
+                          </div>
+                          <button class="btn-pill btn-sm" @click="clearLastError">知道了</button>
+                        </div>
+
+                        <div
+                          class="mb-4 rounded-[26px] border border-[var(--paper-border)] bg-[var(--paper-bg)] px-4 py-4 shadow-[var(--shadow-panel)] backdrop-blur"
+                        >
+                          <div
+                            class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+                          >
+                            <div>
+                              <div
+                                class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+                              >
+                                Research Session
+                              </div>
+                              <div class="mt-2 text-lg font-semibold text-[var(--text-main)]">
+                                {{ activeGroupTitle }}
+                              </div>
+                              <div class="mt-1 text-sm text-[var(--ink-soft)]">
+                                在更接近学术写作的阅读列中组织问题、文稿、文件与研究流程。
+                              </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                              <span
+                                v-for="item in conversationMeta"
+                                :key="item"
+                                class="research-chip"
+                                :class="{ 'research-chip-active': /研究模式已启用/.test(item) }"
+                              >
+                                {{ item }}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                        <button class="btn-pill btn-sm" @click="clearLastError">知道了</button>
-                      </div>
-                      <!-- Welcome/Tips/Messages - These inherit the transparent background -->
-                      <template v-if="!dataSources.length && !activeAppId">
-                        <div class="h-full w-full">
-                          <WorkspaceHome v-if="!isMobile" @import="handleImportFiles" />
-                          <div v-else class="px-4 py-10">
-                            <WelcomeComponent :appId="activeAppId" />
+
+                        <template v-if="!dataSources.length && !activeAppId">
+                          <div class="h-full w-full">
+                            <WorkspaceHome @import="handleImportFiles" />
                           </div>
-                        </div>
-                      </template>
-                      <template v-if="!dataSources.length && activeAppId">
-                        <div
-                          class="flex justify-center items-center"
-                          :class="[isMobile ? 'h-full' : 'h-4/5 ']"
-                        >
-                          <AppTips :appId="activeAppId" />
-                        </div>
-                      </template>
-                      <template v-if="dataSources.length">
-                        <div
-                          :class="{
-                            'px-2': isMobile,
-                          }"
-                        >
-                          <Message
-                            v-for="(item, index) of dataSources"
-                            :key="item.chatId ? `chat-${item.chatId}` : `idx-${index}`"
-                            :index="index"
-                            :chatId="item.chatId"
-                            :content="item.content"
-                            :reasoningText="item.reasoningText"
-                            :model="item.model"
-                            :modelType="item.modelType"
-                            :modelName="item.modelName"
-                            :modelAvatar="item.modelAvatar"
-                            :status="item.status"
-                            :imageUrl="item.imageUrl"
-                            :fileUrl="item.fileUrl"
-                            :ttsUrl="item.ttsUrl"
-                            :taskId="item.taskId"
-                            :taskData="item.taskData"
-                            :videoUrl="item.videoUrl"
-                            :audioUrl="item.audioUrl"
-                            :action="item.action"
-                            :role="item.role"
-                            :loading="item.loading"
-                            :drawId="item.drawId"
-                            :customId="item.customId"
-                            :pluginParam="item.pluginParam"
-                            :promptReference="item.promptReference"
-                            :progress="item.progress"
-                            :networkSearchResult="item.networkSearchResult"
-                            :fileVectorResult="item.fileVectorResult"
-                            :isLast="index === dataSources.length - 1"
-                            :usingNetwork="item.usingNetwork"
-                            :usingDeepThinking="false"
-                            :useFileSearch="item.useFileSearch"
-                            :tool_calls="item.tool_calls"
-                            @delete="handleDelete(item)"
-                          />
-                          <div class="sticky bottom-2 flex justify-center p-1 z-20">
-                            <DownSmall
-                              v-show="!isAtBottom"
-                              size="24"
-                              class="p-1 bg-white dark:bg-gray-600 shadow-sm rounded-full border text-gray-700 border-gray-400 dark:border-gray-600 dark:text-gray-500 cursor-pointer transition-all duration-300 ease-in-out"
-                              :class="[isAtBottom ? 'opacity-0' : 'opacity-100']"
-                              @click="handleScrollBtm"
-                              theme="outline"
-                              :strokeWidth="2"
-                              aria-label="滚动到底部"
-                              role="button"
-                              tabindex="0"
+                        </template>
+                        <template v-if="!dataSources.length && activeAppId">
+                          <div
+                            class="flex items-center justify-center rounded-[26px] border border-[var(--paper-border)] bg-[var(--paper-bg)] p-4 shadow-[var(--shadow-panel)] backdrop-blur"
+                            :class="[isMobile ? 'h-full' : 'min-h-[480px]']"
+                          >
+                            <AppTips :appId="activeAppId" />
+                          </div>
+                        </template>
+                        <template v-if="dataSources.length">
+                          <div
+                            class="mx-auto w-full max-w-[960px] rounded-[28px] border border-[var(--paper-border)] bg-[var(--paper-bg)] px-2 py-4 shadow-[var(--shadow-panel)] backdrop-blur md:px-4"
+                            :class="{
+                              'px-2': isMobile,
+                            }"
+                          >
+                            <Message
+                              v-for="(item, index) of dataSources"
+                              :key="item.chatId ? `chat-${item.chatId}` : `idx-${index}`"
+                              :index="index"
+                              :chatId="item.chatId"
+                              :content="item.content"
+                              :reasoningText="item.reasoningText"
+                              :model="item.model"
+                              :modelType="item.modelType"
+                              :modelName="item.modelName"
+                              :modelAvatar="item.modelAvatar"
+                              :status="item.status"
+                              :imageUrl="item.imageUrl"
+                              :fileUrl="item.fileUrl"
+                              :ttsUrl="item.ttsUrl"
+                              :taskId="item.taskId"
+                              :taskData="item.taskData"
+                              :videoUrl="item.videoUrl"
+                              :audioUrl="item.audioUrl"
+                              :action="item.action"
+                              :role="item.role"
+                              :loading="item.loading"
+                              :drawId="item.drawId"
+                              :customId="item.customId"
+                              :pluginParam="item.pluginParam"
+                              :promptReference="item.promptReference"
+                              :progress="item.progress"
+                              :networkSearchResult="item.networkSearchResult"
+                              :fileVectorResult="item.fileVectorResult"
+                              :isLast="index === dataSources.length - 1"
+                              :usingNetwork="item.usingNetwork"
+                              :usingDeepThinking="false"
+                              :useFileSearch="item.useFileSearch"
+                              :tool_calls="item.tool_calls"
+                              @delete="handleDelete(item)"
                             />
+                            <div class="sticky bottom-2 z-20 flex justify-center p-1">
+                              <DownSmall
+                                v-show="!isAtBottom"
+                                size="24"
+                                class="cursor-pointer rounded-full border border-[var(--paper-border)] bg-white p-1 text-gray-700 shadow-sm transition-all duration-300 ease-in-out dark:border-white/10 dark:bg-[var(--surface-panel)] dark:text-gray-400"
+                                :class="[isAtBottom ? 'opacity-0' : 'opacity-100']"
+                                @click="handleScrollBtm"
+                                theme="outline"
+                                :strokeWidth="2"
+                                aria-label="滚动到底部"
+                                role="button"
+                                tabindex="0"
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </template>
-                      <div ref="bottomContainer" class="bottom" />
+                        </template>
+                        <div ref="bottomContainer" class="bottom" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2096,7 +2161,7 @@ provide('tryParseJson', tryParseJson)
                   <div
                     class="text-sm text-gray-600 dark:text-gray-400 max-h-6 flex justify-center items-center"
                   >
-                    YutoLens 也可能会犯错，请核查重要信息。
+                    Lens 也可能会犯错，请核查重要信息。
                     <span> YutoAI © 2021–{{ copyrightEndYear }} </span>
                     <span class="ml-2">
                       <a
@@ -2110,10 +2175,7 @@ provide('tryParseJson', tryParseJson)
                   </div>
                 </div>
               </div>
-              <aside
-                v-if="academicMode && !isMobile"
-                class="w-[360px] shrink-0 px-4 py-6 bg-transparent"
-              >
+              <aside v-if="!isMobile" class="w-[360px] shrink-0 px-2 py-6 bg-transparent">
                 <div class="sticky top-6 max-h-[calc(100vh-140px)] overflow-y-auto pr-1">
                   <AcademicPanel
                     core-label="基础功能"
@@ -2132,7 +2194,7 @@ provide('tryParseJson', tryParseJson)
         </main>
         <transition name="fade">
           <div
-            v-if="academicMode && isMobile && mobileAcademicPanelVisible"
+            v-if="isMobile && mobileAcademicPanelVisible"
             class="fixed left-0 right-0 z-40 px-3"
             :style="{ bottom: 'calc(env(safe-area-inset-bottom) + 96px)' }"
           >
