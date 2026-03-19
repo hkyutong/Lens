@@ -92,3 +92,12 @@ export const materialSymbolsIconCollection = {
     },
   },
 }
+
+export const fallbackBundledIcon = 'ri:question-line'
+
+export const bundledIconNames = new Set<string>([
+  ...Object.keys(riIconCollection.icons).map(name => `${riIconCollection.prefix}:${name}`),
+  ...Object.keys(materialSymbolsIconCollection.icons).map(
+    name => `${materialSymbolsIconCollection.prefix}:${name}`
+  ),
+])
