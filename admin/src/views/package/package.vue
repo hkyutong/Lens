@@ -567,11 +567,11 @@ meta:
                 placeholder="高级模型积分"
               />
             </el-form-item>
-            <el-form-item label="顶级积分" prop="drawMjCount">
+            <el-form-item label="顶级模型额度" prop="drawMjCount">
               <el-input
                 v-model.number="formPackage.drawMjCount"
                 type="number"
-                placeholder="顶级积分"
+                placeholder="顶级模型额度"
               />
             </el-form-item>
           </el-col>

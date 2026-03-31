@@ -1,8 +1,16 @@
 <script setup lang="ts">
+import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
 import { useChatStore } from '@/store'
+import {
+  getAcademicEntityDisplayDescription,
+  getAcademicEntityDisplayLabel,
+  getAcademicEntityRawLabel,
+  getAcademicEntitySelectorValue,
+} from '@/utils/academicI18n'
 
 interface Props {
+  embedded?: boolean
   coreLabel?: string
   pluginLabel?: string
   corePlaceholder?: string
@@ -11,7 +19,6 @@ interface Props {
   pluginArgsLabel?: string
   pluginArgsPlaceholder?: string
   groupLabel?: string
-  groupPlaceholder?: string
   infoLabel?: string
   showClose?: boolean
 }
@@ -22,13 +29,14 @@ const emit = defineEmits<{
 }>()
 const chatStore = useChatStore()
 
-const academicMode = computed(() => chatStore.academicMode)
 const coreFunctions = computed(() => chatStore.academicCoreFunctions || [])
 const activePlugin = computed(() => chatStore.currentAcademicPlugin)
 const activeCore = computed(() => chatStore.currentAcademicCore)
 
-const getCoreLabel = (core: any) => String(core?.displayName || core?.name || '').trim()
-const getPluginLabel = (plugin: any) => String(plugin?.displayName || plugin?.name || '').trim()
+const getCoreLabel = (core: any) => getAcademicEntityRawLabel(core)
+const getCoreDisplayLabel = (core: any) => getAcademicEntityDisplayLabel(core)
+const getPluginLabel = (plugin: any) => getAcademicEntityRawLabel(plugin)
+const getPluginDisplayLabel = (plugin: any) => getAcademicEntityDisplayLabel(plugin)
 const normalizePluginName = (name: string) =>
   String(name || '')
     .replace(/\s+/g, '')
@@ -158,7 +166,13 @@ const pluginList = computed(() => {
 
 const showAdvanced = ref(false)
 const groupFilter = ref('学术')
-const preferredGroups = ['学术', '对话', '智能体', '编程']
+const hiddenPluginGroups = ['智能体']
+const preferredGroups = ['学术', '对话', '编程']
+const groupLabelMap: Record<string, string> = {
+  学术: 'lens.academicPanel.groupAcademic',
+  对话: 'lens.academicPanel.groupConversation',
+  编程: 'lens.academicPanel.groupProgramming',
+}
 
 const pluginGroups = computed(() => {
   const groups = new Set<string>()
@@ -166,12 +180,21 @@ const pluginGroups = computed(() => {
     const raw = String(plugin.group || '')
     raw.split('|').forEach(part => {
       const trimmed = part.trim()
-      if (trimmed) groups.add(trimmed)
+      if (trimmed && !hiddenPluginGroups.includes(trimmed)) {
+        groups.add(trimmed)
+      }
     })
   })
   const filtered = preferredGroups.filter(group => groups.has(group))
   return filtered.length ? filtered : preferredGroups
 })
+
+const groupOptions = computed(() =>
+  pluginGroups.value.map(group => ({
+    value: group,
+    label: groupLabelMap[group] ? t(groupLabelMap[group]) : group,
+  }))
+)
 
 watch(
   pluginGroups,
@@ -200,13 +223,14 @@ const matchesGroup = (plugin: any, group: string) => {
   return raw
     .split('|')
     .map(part => part.trim())
+    .filter(part => !hiddenPluginGroups.includes(part))
     .includes(group)
 }
 
 const filteredPlugins = computed(() => {
   const group = groupFilter.value.trim()
   let candidates = pluginList.value.filter(plugin => matchesGroup(plugin, group))
-  if (!candidates.length && pluginList.value.length) {
+  if (!candidates.length) {
     candidates = pluginList.value
   }
   if (activePlugin.value && !candidates.some(plugin => plugin.name === activePlugin.value?.name)) {
@@ -271,28 +295,28 @@ const sanitizePluginArgs = (value: string) => {
 }
 
 const selectedCore = computed({
-  get: () => getCoreLabel(activeCore.value) || '',
+  get: () => getAcademicEntitySelectorValue(activeCore.value) || '',
   set: (value: string) => {
     if (!value) {
       chatStore.setAcademicCore(undefined)
       return
     }
     const selected = coreFunctions.value.find(
-      core => getCoreLabel(core) === value || core.name === value
+      core => getAcademicEntitySelectorValue(core) === value || core.name === value
     )
     chatStore.setAcademicCore(selected)
   },
 })
 
 const selectedPlugin = computed({
-  get: () => getPluginLabel(activePlugin.value) || '',
+  get: () => getAcademicEntitySelectorValue(activePlugin.value) || '',
   set: (value: string) => {
     if (!value) {
       chatStore.setAcademicPlugin(undefined)
       return
     }
     const selected = pluginList.value.find(
-      plugin => getPluginLabel(plugin) === value || plugin.name === value
+      plugin => getAcademicEntitySelectorValue(plugin) === value || plugin.name === value
     )
     chatStore.setAcademicPlugin(selected)
   },
@@ -304,28 +328,21 @@ const pluginArgs = computed({
 })
 
 const workflowLabel = computed(() => {
-  return (
-    activePlugin.value?.displayName ||
-    activePlugin.value?.name ||
-    activeCore.value?.displayName ||
-    activeCore.value?.name ||
-    '未配置研究流程'
-  )
+  return getAcademicEntityDisplayLabel(activePlugin.value || activeCore.value) ||
+    t('lens.academicPanel.workflowFallbackLabel')
 })
 
 const workflowDescription = computed(() => {
   return (
-    activePlugin.value?.info ||
-    activePlugin.value?.description ||
-    activeCore.value?.description ||
-    '先启用研究模式，再选择一个核心能力或高级插件。'
+    getAcademicEntityDisplayDescription(activePlugin.value || activeCore.value) ||
+    t('lens.academicPanel.workflowFallbackDesc')
   )
 })
 
 const selectedKind = computed(() => {
-  if (activePlugin.value) return '高级插件'
-  if (activeCore.value) return '核心能力'
-  return '待配置'
+  if (activePlugin.value) return t('lens.academicPanel.selectedKindTool')
+  if (activeCore.value) return t('lens.academicPanel.selectedKindCore')
+  return t('lens.academicPanel.selectedKindPending')
 })
 
 const quickPluginCandidates = computed(() => pluginList.value.slice(0, 4))
@@ -333,13 +350,9 @@ const quickCoreCandidates = computed(() => coreFunctions.value.slice(0, 4))
 
 const isPluginArgsEnabled = computed(() => Boolean(activePlugin.value))
 const pluginArgsPlaceholder = computed(() => {
-  if (!activePlugin.value) return '选择插件后填写'
-  return props.pluginArgsPlaceholder || '例如：不要翻译 Agent、基线模型等专业术语'
+  if (!activePlugin.value) return t('lens.academicPanel.customInstructionPlaceholderInactive')
+  return props.pluginArgsPlaceholder || t('lens.academicPanel.customInstructionPlaceholder')
 })
-
-const toggleResearchMode = () => {
-  chatStore.setAcademicMode(!academicMode.value)
-}
 
 const selectQuickCore = (core: any) => {
   chatStore.setAcademicCore(core)
@@ -355,26 +368,19 @@ const selectQuickPlugin = (plugin: any) => {
     <section class="research-controls">
       <div class="research-controls__header">
         <div>
-          <div class="research-controls__eyebrow">Research Controls</div>
-          <h3 class="research-controls__title">研究控制栏</h3>
-          <p class="research-controls__subtitle">
-            把研究模式、核心能力、高级插件和自定义要求统一放在一个持续可见的工作区。
-          </p>
+          <template v-if="!props.embedded">
+            <h3 class="research-controls__title">{{ t('lens.academicPanel.title') }}</h3>
+            <p class="research-controls__subtitle">
+              {{ t('lens.academicPanel.subtitle') }}
+            </p>
+          </template>
         </div>
         <div class="research-controls__header-actions">
-          <button
-            type="button"
-            class="research-controls__toggle"
-            :class="{ 'research-controls__toggle--active': academicMode }"
-            @click="toggleResearchMode"
-          >
-            {{ academicMode ? '研究模式已启用' : '启用研究模式' }}
-          </button>
           <button
             v-if="props.showClose"
             type="button"
             class="research-controls__close"
-            aria-label="关闭研究控制栏"
+            :aria-label="t('lens.academicPanel.close')"
             @click="emit('close')"
           >
             ×
@@ -382,48 +388,58 @@ const selectQuickPlugin = (plugin: any) => {
         </div>
       </div>
 
-      <div class="research-controls__summary">
-        <span class="research-chip" :class="{ 'research-chip-active': academicMode }">
-          {{ academicMode ? 'Research Mode' : 'Idle' }}
-        </span>
-        <span class="research-chip">{{ selectedKind }}：{{ workflowLabel }}</span>
-        <span class="research-chip">分组：{{ groupFilter }}</span>
-        <span class="research-chip">高级指令：{{ pluginArgs ? '已填写' : '未填写' }}</span>
+      <div class="research-controls__overview">
+        <div class="research-controls__overview-row">
+          <span>{{ t('lens.academicPanel.modeLabel') }}</span>
+          <strong>{{ t('lens.academicPanel.researchMode') }}</strong>
+        </div>
+        <div class="research-controls__overview-row">
+          <span>{{ selectedKind }}</span>
+          <strong>{{ workflowLabel }}</strong>
+        </div>
+        <div class="research-controls__overview-row">
+          <span>{{ t('lens.academicPanel.advancedInstruction') }}</span>
+          <strong>{{ pluginArgs ? t('lens.academicPanel.filled') : t('lens.academicPanel.empty') }}</strong>
+        </div>
       </div>
 
       <div class="research-controls__grid">
         <div class="research-controls__field">
-          <label>{{ props.coreLabel || '核心能力' }}</label>
+          <label>{{ props.coreLabel || t('lens.academicPanel.coreLabel') }}</label>
           <select v-model="selectedCore" class="research-controls__select">
-            <option value="">{{ props.corePlaceholder || '不启用' }}</option>
-            <option v-for="core in coreFunctions" :key="core.name" :value="getCoreLabel(core)">
-              {{ getCoreLabel(core) }}
+            <option value="">{{ props.corePlaceholder || t('lens.academicPanel.corePlaceholder') }}</option>
+            <option
+              v-for="core in coreFunctions"
+              :key="core.name"
+              :value="getAcademicEntitySelectorValue(core)"
+            >
+              {{ getCoreDisplayLabel(core) }}
             </option>
           </select>
         </div>
 
         <div class="research-controls__field">
-          <label>{{ props.pluginLabel || '高级插件' }}</label>
+          <label>{{ props.pluginLabel || t('lens.academicPanel.pluginLabel') }}</label>
           <select v-model="selectedPlugin" class="research-controls__select">
-            <option value="">{{ props.pluginPlaceholder || '不启用' }}</option>
+            <option value="">{{ props.pluginPlaceholder || t('lens.academicPanel.pluginPlaceholder') }}</option>
             <option
               v-for="plugin in filteredPlugins"
               :key="plugin.name"
-              :value="getPluginLabel(plugin)"
-              :title="getPluginLabel(plugin)"
+              :value="getAcademicEntitySelectorValue(plugin)"
+              :title="getPluginDisplayLabel(plugin)"
             >
-              {{ getPluginLabel(plugin) }}
+              {{ getPluginDisplayLabel(plugin) }}
             </option>
           </select>
         </div>
       </div>
 
       <div class="research-controls__field">
-        <label>{{ props.groupLabel || '插件分组' }}</label>
+        <label>{{ props.groupLabel || t('lens.academicPanel.groupLabel') }}</label>
         <div class="research-controls__group-row">
-          <select v-model="groupFilter" class="research-controls__select">
-            <option v-for="group in pluginGroups" :key="group" :value="group">
-              {{ group }}
+          <select v-model="groupFilter" class="research-controls__select research-controls__select--compact">
+            <option v-for="group in groupOptions" :key="group.value" :value="group.value">
+              {{ group.label }}
             </option>
           </select>
           <button
@@ -431,14 +447,14 @@ const selectQuickPlugin = (plugin: any) => {
             class="research-controls__advanced"
             @click="showAdvanced = !showAdvanced"
           >
-            {{ showAdvanced ? '收起高级设置' : '高级设置' }}
+            {{ showAdvanced ? t('lens.academicPanel.advancedCollapse') : t('lens.academicPanel.advancedExpand') }}
           </button>
         </div>
       </div>
 
       <div class="research-controls__presets">
         <div class="research-controls__preset-block">
-          <div class="research-controls__preset-title">高频核心能力</div>
+          <div class="research-controls__preset-title">{{ t('lens.academicPanel.quickCoreTitle') }}</div>
           <div class="research-controls__chips">
             <button
               v-for="core in quickCoreCandidates"
@@ -447,12 +463,12 @@ const selectQuickPlugin = (plugin: any) => {
               class="research-controls__chip-btn"
               @click="selectQuickCore(core)"
             >
-              {{ getCoreLabel(core) }}
+              {{ getCoreDisplayLabel(core) }}
             </button>
           </div>
         </div>
         <div class="research-controls__preset-block">
-          <div class="research-controls__preset-title">高频研究插件</div>
+          <div class="research-controls__preset-title">{{ t('lens.academicPanel.quickToolTitle') }}</div>
           <div class="research-controls__chips">
             <button
               v-for="plugin in quickPluginCandidates"
@@ -461,14 +477,14 @@ const selectQuickPlugin = (plugin: any) => {
               class="research-controls__chip-btn"
               @click="selectQuickPlugin(plugin)"
             >
-              {{ getPluginLabel(plugin) }}
+              {{ getPluginDisplayLabel(plugin) }}
             </button>
           </div>
         </div>
       </div>
 
       <div v-if="showAdvanced" class="research-controls__advanced-panel">
-        <label>{{ props.pluginArgsLabel || '自定义指令' }}</label>
+        <label>{{ props.pluginArgsLabel || t('lens.academicPanel.customInstructionLabel') }}</label>
         <textarea
           v-model="pluginArgs"
           :disabled="!isPluginArgsEnabled"
@@ -477,19 +493,15 @@ const selectQuickPlugin = (plugin: any) => {
           rows="4"
           maxlength="300"
         ></textarea>
-        <p class="research-controls__hint">仅在需要约束术语、输出格式或翻译策略时填写。</p>
+        <p class="research-controls__hint">{{ t('lens.academicPanel.customInstructionHint') }}</p>
       </div>
 
       <div class="research-controls__workflow">
-        <div class="research-controls__workflow-label">当前工作流</div>
+        <div class="research-controls__workflow-label">{{ t('lens.academicPanel.workflowLabel') }}</div>
         <div class="research-controls__workflow-title">{{ workflowLabel }}</div>
         <div class="research-controls__workflow-desc">
           {{ workflowDescription }}
         </div>
-      </div>
-
-      <div v-if="!academicMode" class="research-controls__idle">
-        研究模式关闭时，你仍然可以先配置流程；一旦选择核心能力或高级插件，会自动进入研究模式。
       </div>
     </section>
   </div>
@@ -499,19 +511,17 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-  border-radius: 28px;
-  border: 1px solid var(--paper-border);
-  background: var(--paper-bg);
-  box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(16px);
+  gap: 12px;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: var(--shadow-soft);
 }
 
 .research-controls__header,
 .research-controls__header-actions,
 .research-controls__group-row,
-.research-controls__summary,
 .research-controls__chips {
   display: flex;
   align-items: center;
@@ -539,7 +549,7 @@ const selectQuickPlugin = (plugin: any) => {
 
 .research-controls__title {
   margin: 6px 0 0;
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1.2;
   color: var(--text-main);
 }
@@ -549,17 +559,17 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__hint,
 .research-controls__idle {
   margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-sub);
 }
 
 .research-controls__toggle,
 .research-controls__close,
 .research-controls__advanced,
 .research-controls__chip-btn {
-  border: 1px solid var(--border-color);
-  background: var(--surface-muted);
+  border: 1px solid transparent;
+  background: #eef2f6;
   color: var(--text-main);
   transition:
     transform 0.2s ease,
@@ -570,34 +580,58 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__toggle,
 .research-controls__advanced {
   border-radius: 9999px;
-  padding: 10px 14px;
-  font-size: 13px;
+  min-height: 42px;
+  padding: 0 14px;
+  font-size: 11px;
   font-weight: 600;
 }
 
 .research-controls__toggle--active {
-  background: var(--accent-soft);
-  border-color: rgba(29, 78, 216, 0.18);
-  color: var(--accent);
+  background: rgba(53, 55, 64, 0.08);
+  border-color: transparent;
+  color: var(--text-main);
 }
 
 .research-controls__close {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 9999px;
-  font-size: 18px;
+  font-size: 16px;
 }
 
-.research-controls__summary,
 .research-controls__chips {
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+}
+
+.research-controls__overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+}
+
+.research-controls__overview-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.research-controls__overview-row strong {
+  color: var(--text-main);
+  font-weight: 600;
+  text-align: right;
 }
 
 .research-controls__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .research-controls__field {
@@ -607,45 +641,64 @@ const selectQuickPlugin = (plugin: any) => {
 }
 
 .research-controls__field label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-faint);
 }
 
 .research-controls__select,
 .research-controls__textarea {
   width: 100%;
-  border-radius: 18px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-muted);
+  border-radius: 14px;
+  border: 1px solid rgba(53, 55, 64, 0.08);
+  background: var(--surface-card);
   color: var(--text-main);
-  padding: 12px 14px;
-  font-size: 14px;
+  padding: 10px 12px;
+  font-size: 12px;
   outline: none;
 }
 
 .research-controls__select:focus,
 .research-controls__textarea:focus {
-  border-color: var(--accent);
+  border-color: rgba(53, 55, 64, 0.16);
 }
 
 .research-controls__group-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: stretch;
   gap: 10px;
 }
 
-.research-controls__group-row .research-controls__select {
-  flex: 1;
+.research-controls__group-row .research-controls__select--compact {
+  width: 100%;
+  max-width: 164px;
+  min-width: 0;
+}
+
+.research-controls__select {
+  min-height: 42px;
+  line-height: 1.2;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%23353740' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+  padding-right: 36px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .research-controls__presets {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .research-controls__preset-block {
-  padding: 14px;
-  border-radius: 20px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-muted);
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
 }
 
 .research-controls__preset-title {
@@ -654,43 +707,44 @@ const selectQuickPlugin = (plugin: any) => {
 
 .research-controls__chip-btn {
   border-radius: 9999px;
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: 7px 10px;
+  font-size: 11px;
 }
 
 .research-controls__chip-btn:hover,
 .research-controls__toggle:hover,
 .research-controls__advanced:hover,
 .research-controls__close:hover {
-  transform: translateY(-1px);
-  border-color: rgba(29, 78, 216, 0.24);
+  border-color: transparent;
+  background: #e6ebf1;
 }
 
 .research-controls__workflow,
 .research-controls__advanced-panel,
 .research-controls__idle {
-  padding: 14px;
-  border-radius: 20px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-muted);
+  padding: 4px 0 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
 }
 
 .research-controls__workflow-title {
   margin-top: 8px;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-main);
 }
 
 @media (max-width: 768px) {
   .research-controls {
-    padding: 18px;
-    border-radius: 24px;
+    gap: 14px;
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .research-controls__header {
-    flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
   }
 
   .research-controls__header-actions,
@@ -699,13 +753,27 @@ const selectQuickPlugin = (plugin: any) => {
     width: 100%;
   }
 
+  .research-controls__header-actions {
+    justify-content: flex-end;
+  }
+
   .research-controls__grid {
     grid-template-columns: 1fr;
   }
 
   .research-controls__group-row {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .research-controls__group-row .research-controls__select--compact {
+    max-width: none;
+  }
+
+  .research-controls__advanced,
+  .research-controls__toggle {
+    min-height: 40px;
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

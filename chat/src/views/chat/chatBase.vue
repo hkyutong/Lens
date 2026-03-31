@@ -6,7 +6,9 @@ import { fetchQueryOneCatAPI } from '@/api/appStore'
 import { fetchDeleteGroupChatsAfterIdAPI, fetchSyncDisplayContentAPI } from '@/api/chatLog'
 import { openImageViewer } from '@/components/common/ImageViewer/useImageViewer'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { t } from '@/locales'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
+import { getAcademicEntityDisplayLabel } from '@/utils/academicI18n'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { Close, DropDownList } from '@icon-park/vue-next'
@@ -60,8 +62,8 @@ interface FormField {
 
 // ============== 组合式函数 ==============
 const ms = message()
-const { isMobile } = useBasicLayout()
-const { scrollRef, scrollToBottom, scrollToBottomIfAtBottom, isAtBottom, handleScroll } =
+const { isMobile, isSmallXl } = useBasicLayout()
+const { scrollRef, scrollToBottom, scrollToBottomIfAtBottom, isAtBottom, handleScroll: baseHandleScroll } =
   useScroll()
 const { addGroupChat, updateGroupChatSome } = useChat()
 const enableDetailedErrorUi = import.meta.env.DEV || import.meta.env.MODE === 'test'
@@ -143,6 +145,13 @@ const currentAppDetail = ref<any>(null)
 const lastError = ref('')
 const lastErrorRequestId = ref('')
 const isRegenerating = ref(false)
+const desktopAcademicPanelRef = ref<HTMLElement | null>(null)
+const VIRTUAL_MESSAGE_OVERSCAN_PX = 960
+const DEFAULT_USER_MESSAGE_HEIGHT = 152
+const DEFAULT_ASSISTANT_MESSAGE_HEIGHT = 320
+const messageHeightMap = ref<Record<string, number>>({})
+const viewportScrollTop = ref(0)
+const viewportClientHeight = ref(0)
 
 // ============== 弹窗相关状态 ==============
 // Modal state
@@ -212,32 +221,15 @@ const dataSources = computed(() => chatStore.chatList || [])
 const activeGroupId = computed(() => chatStore.active)
 const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
 const isStreaming = computed(() => Boolean(chatStore.isStreamIn))
-const globalConfig = computed(() => authStore.globalConfig)
-const copyrightEndYear = computed(() => new Date().getFullYear())
+const chatHistoryHasMore = computed(() => Boolean(chatStore.chatHistoryHasMore))
+const chatHistoryLoading = computed(() => Boolean(chatStore.chatHistoryLoading))
 const activeResearchLabel = computed(() => {
-  return (
-    academicPlugin.value?.displayName ||
-    academicPlugin.value?.name ||
-    academicCore.value?.displayName ||
-    academicCore.value?.name ||
-    ''
-  )
+  return getAcademicEntityDisplayLabel(academicPlugin.value || academicCore.value)
 })
-const activeGroupTitle = computed(() => activeGroupInfo.value?.title || '新研究会话')
-const conversationMeta = computed(() => {
-  const items = [
-    `会话：${activeGroupTitle.value}`,
-    `模型：${activeModelName.value || '默认模型'}`,
-    academicMode.value ? '研究模式已启用' : '研究模式待启用',
-  ]
-  if (activeResearchLabel.value) {
-    items.push(`流程：${activeResearchLabel.value}`)
-  }
-  if (configObj?.value?.fileInfo?.fileName) {
-    items.push(`资料：${configObj.value.fileInfo.fileName}`)
-  }
-  return items
-})
+const activeGroupTitle = computed(() => activeGroupInfo.value?.title || '未命名项目')
+const workspaceTitle = computed(() =>
+  dataSources.value.length || activeAppId.value ? activeGroupTitle.value : '研究项目'
+)
 
 // 使用watch监听activeGroupInfo的变化
 const configObj = computed(() => {
@@ -303,6 +295,158 @@ const getCurrentConversationModelInfo = () => ({
 /* 当前对话组是否是应用 */
 const activeAppId = computed(() => activeGroupInfo?.value?.appId || 0)
 
+const getVirtualMessageKey = (item: Chat.Chat, index: number) => {
+  const stableId =
+    item?.chatId || item?.taskId || item?.customId || item?.drawId || item?.promptReference
+  if (stableId) return String(stableId)
+  const contentPreview = String(item?.content || '').slice(0, 32)
+  return `${item?.role || 'message'}-${index}-${contentPreview}`
+}
+
+const estimateMessageHeight = (item: Chat.Chat, index: number) => {
+  const key = getVirtualMessageKey(item, index)
+  const measuredHeight = messageHeightMap.value[key]
+  if (measuredHeight && measuredHeight > 0) return measuredHeight
+  if (item?.role === 'user') return DEFAULT_USER_MESSAGE_HEIGHT
+  const hasRichPayload = Boolean(
+    item?.imageUrl ||
+      item?.fileUrl ||
+      item?.reasoningText ||
+      item?.networkSearchResult ||
+      item?.fileVectorResult ||
+      item?.tool_calls
+  )
+  return hasRichPayload ? 380 : DEFAULT_ASSISTANT_MESSAGE_HEIGHT
+}
+
+const syncMessageViewportMetrics = () => {
+  const container = scrollRef.value
+  viewportScrollTop.value = container?.scrollTop || 0
+  viewportClientHeight.value = container?.clientHeight || 0
+}
+
+const pruneMessageHeightCache = (rows: Chat.Chat[]) => {
+  const activeKeys = new Set(rows.map((item, index) => getVirtualMessageKey(item, index)))
+  messageHeightMap.value = Object.fromEntries(
+    Object.entries(messageHeightMap.value).filter(([key]) => activeKeys.has(key))
+  )
+}
+
+const virtualMessageState = computed(() => {
+  const rows = dataSources.value || []
+  if (!rows.length) {
+    return {
+      visibleItems: [] as Array<{ item: Chat.Chat; index: number; key: string }>,
+      paddingTop: 0,
+      paddingBottom: 0,
+      totalHeight: 0,
+    }
+  }
+
+  if (!scrollRef.value || viewportClientHeight.value <= 0) {
+    return {
+      visibleItems: rows.map((item, index) => ({
+        item,
+        index,
+        key: getVirtualMessageKey(item, index),
+      })),
+      paddingTop: 0,
+      paddingBottom: 0,
+      totalHeight: 0,
+    }
+  }
+
+  const overscanStart = Math.max(0, viewportScrollTop.value - VIRTUAL_MESSAGE_OVERSCAN_PX)
+  const overscanEnd =
+    viewportScrollTop.value + viewportClientHeight.value + VIRTUAL_MESSAGE_OVERSCAN_PX
+
+  const metrics: Array<{
+    item: Chat.Chat
+    index: number
+    key: string
+    top: number
+    bottom: number
+  }> = []
+
+  let cursor = 0
+  let startIndex = 0
+  let endIndex = rows.length - 1
+  let foundStart = false
+  let foundEnd = false
+
+  rows.forEach((item, index) => {
+    const height = estimateMessageHeight(item, index)
+    const top = cursor
+    const bottom = cursor + height
+    metrics.push({
+      item,
+      index,
+      key: getVirtualMessageKey(item, index),
+      top,
+      bottom,
+    })
+    if (!foundStart && bottom >= overscanStart) {
+      startIndex = index
+      foundStart = true
+    }
+    if (!foundEnd && top > overscanEnd) {
+      endIndex = Math.max(startIndex, index - 1)
+      foundEnd = true
+    }
+    cursor = bottom
+  })
+
+  const totalHeight = cursor
+  const startMetric = metrics[startIndex]
+  const endMetric = metrics[endIndex]
+
+  return {
+    visibleItems: metrics.slice(startIndex, endIndex + 1),
+    paddingTop: startMetric?.top || 0,
+    paddingBottom: Math.max(0, totalHeight - (endMetric?.bottom || 0)),
+    totalHeight,
+  }
+})
+
+const handleMessageHeightChange = (item: Chat.Chat, index: number, height: number) => {
+  const nextHeight = Math.max(0, Math.ceil(Number(height) || 0))
+  if (!nextHeight) return
+  const key = getVirtualMessageKey(item, index)
+  if (messageHeightMap.value[key] === nextHeight) return
+  messageHeightMap.value = {
+    ...messageHeightMap.value,
+    [key]: nextHeight,
+  }
+}
+
+const scrollWorkspaceHomeToTop = async () => {
+  await nextTick()
+  requestAnimationFrame(() => {
+    if (!scrollRef.value) return
+    scrollRef.value.scrollTop = 0
+    scrollRef.value.scrollTo?.({
+      top: 0,
+      behavior: 'auto',
+    })
+  })
+}
+
+watch(
+  [() => dataSources.value.length, () => activeAppId.value],
+  async ([messageCount, appId]) => {
+    pruneMessageHeightCache(dataSources.value)
+    if (messageCount || appId) return
+    await scrollWorkspaceHomeToTop()
+  },
+  { immediate: true }
+)
+
+onMounted(() => {
+  if (!dataSources.value.length && !activeAppId.value) {
+    scrollWorkspaceHomeToTop()
+  }
+})
+
 // ============== 弹窗相关计算属性 ==============
 // Computed property for background style
 const backgroundStyle = computed(() => {
@@ -321,6 +465,8 @@ const backgroundStyle = computed(() => {
 watch(
   dataSources,
   val => {
+    pruneMessageHeightCache(val)
+    syncMessageViewportMetrics()
     if (val.length === 0) return
     if (firstScroll.value) {
       firstScroll.value = false
@@ -381,6 +527,7 @@ watch(
 onMounted(async () => {
   await chatStore.queryActiveChatLogList()
   await nextTick()
+  syncMessageViewportMetrics()
 
   if (token.value) {
     await otherLoginByToken(token.value)
@@ -507,6 +654,28 @@ const handleScrollBtm = () => {
   scrollToBottom()
 }
 
+const loadOlderMessages = async () => {
+  if (!chatHistoryHasMore.value || chatHistoryLoading.value || !scrollRef.value) return
+  const container = scrollRef.value
+  const previousHeight = container.scrollHeight
+  const previousTop = container.scrollTop
+  await chatStore.queryActiveChatLogList(true)
+  await nextTick()
+  syncMessageViewportMetrics()
+  const nextHeight = container.scrollHeight
+  container.scrollTop = Math.max(0, nextHeight - previousHeight + previousTop)
+  syncMessageViewportMetrics()
+}
+
+const handleWorkspaceScroll = async () => {
+  baseHandleScroll()
+  syncMessageViewportMetrics()
+  if (!scrollRef.value || chatHistoryLoading.value || !chatHistoryHasMore.value) return
+  if (scrollRef.value.scrollTop <= 120) {
+    await loadOlderMessages()
+  }
+}
+
 const updateWorkflowContent = (text: string, isFirst: boolean = false) => {
   if (!text) return
   if (isFirst) {
@@ -521,6 +690,14 @@ ${text}`
 const createNewChatGroup = inject('createNewChatGroup', () =>
   Promise.resolve()
 ) as () => Promise<void>
+
+const openDesktopAcademicPanel = () => {
+  if (isMobile.value) {
+    chatStore.setMobileAcademicPanelVisible(true)
+    return
+  }
+  desktopAcademicPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const hasVisibleText = (value: any) => String(value || '').trim().length > 0
 
@@ -1935,6 +2112,9 @@ provide('onConversation', onConversation)
 provide('handleRegenerate', handleRegenerate)
 provide('handleEditConversation', handleEditConversation)
 provide('getActiveConversationModelInfo', getCurrentConversationModelInfo)
+provide('messageViewportRef', scrollRef)
+provide('openResearchImport', handleImportFiles)
+provide('openResearchControls', openDesktopAcademicPanel)
 
 // Potentially expose toggleAppList if needed by other children
 // defineExpose({ toggleAppList })
@@ -1956,7 +2136,7 @@ provide('tryParseJson', tryParseJson)
 </script>
 
 <template>
-  <div class="flex h-full w-full">
+  <div class="prism-shell flex h-full w-full">
     <Sider class="h-full" />
     <!-- Main container flex -->
     <div
@@ -1974,246 +2154,279 @@ provide('tryParseJson', tryParseJson)
         }"
       ></div>
 
-      <!-- Header - Conditional Background with 50% opacity on image -->
-      <HeaderComponent
-        :class="[
-          'relative z-10 flex-shrink-0',
-          activeChatBackgroundImg && !useGlobalStore.showAppListComponent
-            ? 'bg-[var(--bg-body)]/80 dark:bg-[#080808]/95 backdrop-blur-sm'
-            : 'bg-[var(--bg-body)] dark:bg-[#080808] backdrop-blur-sm',
-        ]"
-        @toggle-app-list="toggleAppList"
-      />
-
       <!-- Conditional Content - Keep original non-transparent backgrounds for these -->
       <template v-if="useGlobalStore.externalLinkDialog">
-        <ExternalLinkComponent class="relative z-10 flex-1 bg-white dark:bg-[#080808]" />
+        <HeaderComponent
+          :class="[
+            'relative z-10 flex-shrink-0',
+            activeChatBackgroundImg && !useGlobalStore.showAppListComponent
+              ? 'bg-[var(--bg-body)]/92 backdrop-blur-sm'
+              : 'bg-[var(--bg-body)] backdrop-blur-sm',
+          ]"
+          @toggle-app-list="toggleAppList"
+        />
+        <ExternalLinkComponent class="relative z-10 flex-1 bg-[var(--bg-body)]" />
       </template>
       <template v-else-if="useGlobalStore.showAppListComponent">
+        <HeaderComponent
+          :class="[
+            'relative z-10 flex-shrink-0',
+            activeChatBackgroundImg && !useGlobalStore.showAppListComponent
+              ? 'bg-[var(--bg-body)]/92 backdrop-blur-sm'
+              : 'bg-[var(--bg-body)] backdrop-blur-sm',
+          ]"
+          @toggle-app-list="toggleAppList"
+        />
         <AppList
-          class="relative z-10 flex-1 overflow-hidden bg-[var(--bg-body)] dark:bg-[#080808]"
+          class="relative z-10 flex-1 overflow-hidden bg-[var(--bg-body)]"
           @run-app="handleRunAppFromList"
           @show-member-dialog="handleShowMemberDialogFromList"
           @run-app-with-data="handleRunAppWithData"
         />
       </template>
       <template v-else>
-        <!-- Main Chat Area - Prism-style split layout -->
-        <main class="relative z-10 flex-1 overflow-hidden">
-          <div class="pointer-events-none absolute inset-0">
-            <div
-              class="absolute left-[-120px] top-[-80px] h-[320px] w-[320px] rounded-full bg-[var(--accent-soft)] blur-3xl"
-            ></div>
-            <div
-              class="absolute right-[-100px] top-[120px] h-[260px] w-[260px] rounded-full bg-sky-100/50 blur-3xl dark:bg-sky-400/10"
-            ></div>
-          </div>
-          <div class="h-full w-full">
-            <div class="flex h-full min-h-0 min-w-0 gap-0 xl:gap-4">
-              <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-                <div class="flex-1 min-h-0 overflow-hidden">
-                  <div
-                    id="scrollRef"
-                    ref="scrollRef"
-                    class="relative h-full overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar"
-                    style="background-color: transparent; position: relative; z-index: 5"
-                    @scroll="handleScroll"
-                  >
-                    <div
-                      id="image-wrapper"
-                      class="w-full h-full pb-8"
-                      :class="[isMobile ? 'px-3 py-3' : 'px-6 py-6']"
-                    >
-                      <div class="mx-auto w-full max-w-[1080px]">
-                        <div
-                          v-if="showDetailedErrorBanner"
-                          class="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-red-200/80 bg-red-50/80 px-4 py-3 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
-                        >
-                          <div class="text-sm leading-6">
-                            <div class="font-semibold">请求失败</div>
-                            <div>{{ lastError }}</div>
-                            <div v-if="lastErrorRequestId" class="mt-1 opacity-80">
-                              请求ID: {{ lastErrorRequestId }}
-                            </div>
-                          </div>
-                          <button class="btn-pill btn-sm" @click="clearLastError">知道了</button>
-                        </div>
+        <div class="relative z-10 flex h-full min-h-0">
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <HeaderComponent
+              :class="[
+                'relative z-10 flex-shrink-0',
+                activeChatBackgroundImg && !useGlobalStore.showAppListComponent
+                  ? 'bg-[var(--bg-body)]/92 backdrop-blur-sm'
+                  : 'bg-[var(--bg-body)] backdrop-blur-sm',
+              ]"
+              @toggle-app-list="toggleAppList"
+            />
 
+            <!-- Main Chat Area - Prism-style split layout -->
+            <main class="relative z-10 flex-1 overflow-hidden">
+              <div class="h-full w-full">
+                <div class="mx-auto flex h-full min-h-0 min-w-0 w-full max-w-[1280px]">
+                  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <div class="flex-1 min-h-0 overflow-hidden">
+                      <div
+                        id="scrollRef"
+                        ref="scrollRef"
+                        class="relative h-full overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar"
+                        style="background-color: transparent; position: relative; z-index: 5"
+                        @scroll="handleWorkspaceScroll"
+                      >
                         <div
-                          class="mb-4 rounded-[26px] border border-[var(--paper-border)] bg-[var(--paper-bg)] px-4 py-4 shadow-[var(--shadow-panel)] backdrop-blur"
+                          id="image-wrapper"
+                          class="w-full h-full pb-8"
+                          :class="[isMobile ? 'px-3 py-3' : 'px-6 py-6']"
                         >
-                          <div
-                            class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
-                          >
-                            <div>
+                          <div class="mx-auto w-full max-w-[1120px]">
+                            <div
+                              v-if="showDetailedErrorBanner"
+                              class="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-red-200/80 bg-red-50/80 px-4 py-3 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+                            >
+                              <div class="text-sm leading-6">
+                                <div class="font-semibold">请求失败</div>
+                                <div>{{ lastError }}</div>
+                                <div v-if="lastErrorRequestId" class="mt-1 opacity-80">
+                                  请求ID: {{ lastErrorRequestId }}
+                                </div>
+                              </div>
+                              <button class="btn-pill btn-sm" @click="clearLastError">
+                                知道了
+                              </button>
+                            </div>
+
+                            <div
+                              v-if="dataSources.length || activeAppId"
+                              class="mb-4 flex flex-col gap-2 pb-1"
+                            >
+                              <div class="min-w-0">
+                                <div class="text-[33px] font-medium tracking-[-0.03em] text-[var(--text-main)]">
+                                  {{ workspaceTitle }}
+                                </div>
+                              </div>
+                            </div>
+
+                            <template v-if="!dataSources.length && !activeAppId">
+                              <div class="workspace-surface">
+                                <WorkspaceHome @import="handleImportFiles" />
+                              </div>
+                            </template>
+                            <template v-if="!dataSources.length && activeAppId">
                               <div
-                                class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+                                class="workspace-document flex items-center justify-center p-5"
+                                :class="[isMobile ? 'h-full' : 'min-h-[480px]']"
                               >
-                                Research Session
+                                <AppTips :appId="activeAppId" />
                               </div>
-                              <div class="mt-2 text-lg font-semibold text-[var(--text-main)]">
-                                {{ activeGroupTitle }}
-                              </div>
-                              <div class="mt-1 text-sm text-[var(--ink-soft)]">
-                                在更接近学术写作的阅读列中组织问题、文稿、文件与研究流程。
-                              </div>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                              <span
-                                v-for="item in conversationMeta"
-                                :key="item"
-                                class="research-chip"
-                                :class="{ 'research-chip-active': /研究模式已启用/.test(item) }"
+                            </template>
+                            <template v-if="dataSources.length">
+                              <div
+                                class="workspace-document mx-auto w-full max-w-[1048px] overflow-visible"
                               >
-                                {{ item }}
-                              </span>
-                            </div>
+                                <div class="px-2 py-1">
+                                  <div
+                                    v-if="chatHistoryHasMore || chatHistoryLoading"
+                                    class="mb-3 flex justify-center"
+                                  >
+                                    <button
+                                      v-if="chatHistoryHasMore && !chatHistoryLoading"
+                                      type="button"
+                                      class="btn-pill btn-sm"
+                                      @click="loadOlderMessages"
+                                    >
+                                      加载更早消息
+                                    </button>
+                                    <div
+                                      v-else
+                                      class="inline-flex items-center rounded-full bg-[var(--surface-muted)] px-3 py-1.5 text-xs text-[var(--text-sub)]"
+                                    >
+                                      正在加载更早消息...
+                                    </div>
+                                  </div>
+                                  <div
+                                    v-if="virtualMessageState.paddingTop > 0"
+                                    :style="{ height: `${virtualMessageState.paddingTop}px` }"
+                                    aria-hidden="true"
+                                  />
+                                  <Message
+                                    v-for="entry in virtualMessageState.visibleItems"
+                                    :key="entry.key"
+                                    :index="entry.index"
+                                    :chatId="entry.item.chatId"
+                                    :content="entry.item.content"
+                                    :reasoningText="entry.item.reasoningText"
+                                    :model="entry.item.model"
+                                    :modelType="entry.item.modelType"
+                                    :modelName="entry.item.modelName"
+                                    :modelAvatar="entry.item.modelAvatar"
+                                    :status="entry.item.status"
+                                    :imageUrl="entry.item.imageUrl"
+                                    :fileUrl="entry.item.fileUrl"
+                                    :ttsUrl="entry.item.ttsUrl"
+                                    :taskId="entry.item.taskId"
+                                    :taskData="entry.item.taskData"
+                                    :videoUrl="entry.item.videoUrl"
+                                    :audioUrl="entry.item.audioUrl"
+                                    :action="entry.item.action"
+                                    :role="entry.item.role"
+                                    :loading="entry.item.loading"
+                                    :drawId="entry.item.drawId"
+                                    :customId="entry.item.customId"
+                                    :pluginParam="entry.item.pluginParam"
+                                    :promptReference="entry.item.promptReference"
+                                    :progress="entry.item.progress"
+                                    :networkSearchResult="entry.item.networkSearchResult"
+                                    :fileVectorResult="entry.item.fileVectorResult"
+                                    :isLast="entry.index === dataSources.length - 1"
+                                    :usingNetwork="entry.item.usingNetwork"
+                                    :usingDeepThinking="false"
+                                    :useFileSearch="entry.item.useFileSearch"
+                                    :tool_calls="entry.item.tool_calls"
+                                    @delete="handleDelete(entry.item)"
+                                    @height-change="
+                                      handleMessageHeightChange(entry.item, entry.index, $event)
+                                    "
+                                  />
+                                  <div
+                                    v-if="virtualMessageState.paddingBottom > 0"
+                                    :style="{ height: `${virtualMessageState.paddingBottom}px` }"
+                                    aria-hidden="true"
+                                  />
+                                  <div class="sticky bottom-2 z-20 flex justify-center p-1">
+                                    <DownSmall
+                                      v-show="!isAtBottom"
+                                      size="24"
+                                      class="cursor-pointer rounded-full bg-[var(--surface-muted)] p-1.5 text-[var(--ink-soft)] transition-all duration-300 ease-in-out dark:bg-[var(--surface-panel)] dark:text-gray-400"
+                                      :class="[isAtBottom ? 'opacity-0' : 'opacity-100']"
+                                      @click="handleScrollBtm"
+                                      theme="outline"
+                                      :strokeWidth="2"
+                                      aria-label="滚动到底部"
+                                      role="button"
+                                      tabindex="0"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </template>
+                            <div ref="bottomContainer" class="bottom" />
                           </div>
                         </div>
-
-                        <template v-if="!dataSources.length && !activeAppId">
-                          <div class="h-full w-full">
-                            <WorkspaceHome @import="handleImportFiles" />
-                          </div>
-                        </template>
-                        <template v-if="!dataSources.length && activeAppId">
-                          <div
-                            class="flex items-center justify-center rounded-[26px] border border-[var(--paper-border)] bg-[var(--paper-bg)] p-4 shadow-[var(--shadow-panel)] backdrop-blur"
-                            :class="[isMobile ? 'h-full' : 'min-h-[480px]']"
-                          >
-                            <AppTips :appId="activeAppId" />
-                          </div>
-                        </template>
-                        <template v-if="dataSources.length">
-                          <div
-                            class="mx-auto w-full max-w-[960px] rounded-[28px] border border-[var(--paper-border)] bg-[var(--paper-bg)] px-2 py-4 shadow-[var(--shadow-panel)] backdrop-blur md:px-4"
-                            :class="{
-                              'px-2': isMobile,
-                            }"
-                          >
-                            <Message
-                              v-for="(item, index) of dataSources"
-                              :key="item.chatId ? `chat-${item.chatId}` : `idx-${index}`"
-                              :index="index"
-                              :chatId="item.chatId"
-                              :content="item.content"
-                              :reasoningText="item.reasoningText"
-                              :model="item.model"
-                              :modelType="item.modelType"
-                              :modelName="item.modelName"
-                              :modelAvatar="item.modelAvatar"
-                              :status="item.status"
-                              :imageUrl="item.imageUrl"
-                              :fileUrl="item.fileUrl"
-                              :ttsUrl="item.ttsUrl"
-                              :taskId="item.taskId"
-                              :taskData="item.taskData"
-                              :videoUrl="item.videoUrl"
-                              :audioUrl="item.audioUrl"
-                              :action="item.action"
-                              :role="item.role"
-                              :loading="item.loading"
-                              :drawId="item.drawId"
-                              :customId="item.customId"
-                              :pluginParam="item.pluginParam"
-                              :promptReference="item.promptReference"
-                              :progress="item.progress"
-                              :networkSearchResult="item.networkSearchResult"
-                              :fileVectorResult="item.fileVectorResult"
-                              :isLast="index === dataSources.length - 1"
-                              :usingNetwork="item.usingNetwork"
-                              :usingDeepThinking="false"
-                              :useFileSearch="item.useFileSearch"
-                              :tool_calls="item.tool_calls"
-                              @delete="handleDelete(item)"
-                            />
-                            <div class="sticky bottom-2 z-20 flex justify-center p-1">
-                              <DownSmall
-                                v-show="!isAtBottom"
-                                size="24"
-                                class="cursor-pointer rounded-full border border-[var(--paper-border)] bg-white p-1 text-gray-700 shadow-sm transition-all duration-300 ease-in-out dark:border-white/10 dark:bg-[var(--surface-panel)] dark:text-gray-400"
-                                :class="[isAtBottom ? 'opacity-0' : 'opacity-100']"
-                                @click="handleScrollBtm"
-                                theme="outline"
-                                :strokeWidth="2"
-                                aria-label="滚动到底部"
-                                role="button"
-                                tabindex="0"
-                              />
-                            </div>
-                          </div>
-                        </template>
-                        <div ref="bottomContainer" class="bottom" />
                       </div>
+                    </div>
+                    <div class="relative z-20 w-full px-2 pb-3 pt-2">
+                      <FooterComponent
+                        ref="footerRef"
+                        :class="['z-20 relative', isMobile ? 'pb-safe' : '']"
+                        @pause-request="pauseRequest"
+                        :dataSourcesLength="dataSources.length"
+                      >
+                      </FooterComponent>
                     </div>
                   </div>
                 </div>
-                <div class="relative z-20 w-full px-2 pb-3 pt-2">
-                  <FooterComponent
-                    ref="footerRef"
-                    :class="['z-20 relative', isMobile ? 'pb-safe' : '']"
-                    @pause-request="pauseRequest"
-                    :dataSourcesLength="dataSources.length"
-                  >
-                  </FooterComponent>
-                </div>
-                <div v-if="!isMobile && !dataSources.length" class="w-full pb-3 pt-1">
-                  <div
-                    class="text-sm text-gray-600 dark:text-gray-400 max-h-6 flex justify-center items-center"
-                  >
-                    Lens 也可能会犯错，请核查重要信息。
-                    <span> YutoAI © 2021–{{ copyrightEndYear }} </span>
-                    <span class="ml-2">
-                      <a
-                        class="transition-all text-gray-600 hover:text-gray-500 dark:hover:text-gray-400"
-                        href="https://beian.miit.gov.cn"
-                        target="_blank"
-                      >
-                        {{ globalConfig?.filingNumber }}
-                      </a>
-                    </span>
+              </div>
+            </main>
+          </div>
+          <aside
+            v-if="!isMobile"
+            ref="desktopAcademicPanelRef"
+            class="desktop-research-rail flex h-full min-h-0 shrink-0 self-stretch flex-col"
+            :class="[isSmallXl ? 'w-[312px]' : 'w-[368px]']"
+          >
+            <div class="flex h-full min-h-0 flex-col overflow-hidden">
+              <div
+                class="flex items-start justify-between gap-4 px-6 pb-2 pt-6"
+              >
+                <div class="min-w-0">
+                  <div class="text-[16px] font-medium text-[var(--text-main)]">
+                    {{ activeResearchLabel || t('lens.academicPanel.title') }}
                   </div>
                 </div>
+                <span class="research-chip research-chip-active">{{ t('lens.academicPanel.pinnedPanel') }}</span>
               </div>
-              <aside v-if="!isMobile" class="w-[360px] shrink-0 px-2 py-6 bg-transparent">
-                <div class="sticky top-6 max-h-[calc(100vh-140px)] overflow-y-auto pr-1">
+              <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-5 custom-scrollbar">
+                    <AcademicPanel
+                      :core-label="t('lens.academicPanel.coreLabel')"
+                      :plugin-label="t('lens.academicPanel.pluginLabel')"
+                      :core-placeholder="t('lens.academicPanel.corePlaceholder')"
+                      :plugin-placeholder="t('lens.academicPanel.pluginPlaceholder')"
+                      :plugin-args-label="t('lens.academicPanel.customInstructionLabel')"
+                      :plugin-args-placeholder="t('lens.academicPanel.customInstructionPlaceholder')"
+                      info-label="说明"
+                      :embedded="true"
+                  :show-close="false"
+                />
+              </div>
+            </div>
+          </aside>
+        </div>
+        <teleport to="body">
+          <transition name="fade">
+            <div
+              v-if="isMobile && mobileAcademicPanelVisible"
+              class="fixed inset-0 z-[100] flex items-end bg-black/18 backdrop-blur-[1px]"
+              @click.self="closeMobileAcademicPanel"
+            >
+              <div
+                class="w-full rounded-t-[22px] bg-[var(--surface-panel)] px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 shadow-[0_-12px_40px_rgba(17,17,17,0.12)]"
+              >
+                <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-black/10"></div>
+                <div class="max-h-[78vh] overflow-y-auto custom-scrollbar">
                   <AcademicPanel
-                    core-label="基础功能"
-                    plugin-label="高级插件"
-                    core-placeholder="不启用"
-                    plugin-placeholder="不启用"
-                    plugin-search-placeholder="筛选插件"
-                    plugin-args-label="自定义指令"
-                    plugin-args-placeholder="例如：不翻译 Agent 专业名词"
+                    :core-label="t('lens.academicPanel.coreLabel')"
+                    :plugin-label="t('lens.academicPanel.pluginLabel')"
+                    :core-placeholder="t('lens.academicPanel.corePlaceholder')"
+                    :plugin-placeholder="t('lens.academicPanel.pluginPlaceholder')"
+                    :plugin-args-label="t('lens.academicPanel.customInstructionLabel')"
+                    :plugin-args-placeholder="t('lens.academicPanel.customInstructionPlaceholder')"
                     info-label="说明"
+                    :embedded="false"
+                    :show-close="true"
+                    @close="closeMobileAcademicPanel"
                   />
                 </div>
-              </aside>
+              </div>
             </div>
-          </div>
-        </main>
-        <transition name="fade">
-          <div
-            v-if="isMobile && mobileAcademicPanelVisible"
-            class="fixed left-0 right-0 z-40 px-3"
-            :style="{ bottom: 'calc(env(safe-area-inset-bottom) + 96px)' }"
-          >
-            <div class="max-h-[45vh] overflow-y-auto">
-              <AcademicPanel
-                core-label="基础功能"
-                plugin-label="高级插件"
-                core-placeholder="不启用"
-                plugin-placeholder="不启用"
-                plugin-search-placeholder="筛选插件"
-                plugin-args-label="自定义指令"
-                plugin-args-placeholder="例如：不翻译 Agent 专业名词"
-                info-label="说明"
-                :show-close="true"
-                @close="closeMobileAcademicPanel"
-              />
-            </div>
-          </div>
-        </transition>
+          </transition>
+        </teleport>
       </template>
     </div>
 

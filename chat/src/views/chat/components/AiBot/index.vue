@@ -24,7 +24,7 @@ onMounted(() => {
   getRandomItems()
 })
 const usingPlugin = computed(() => chatStore.currentPlugin)
-const siteName = authStore.globalConfig?.siteName || 'YutoLens'
+const siteName = authStore.globalConfig?.siteName || 'Lens'
 const isCanvasModel = computed(() => usingPlugin.value?.parameters.includes('canvas'))
 
 const createNewChatGroup = inject('createNewChatGroup', () =>

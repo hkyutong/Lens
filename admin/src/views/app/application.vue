@@ -739,7 +739,7 @@ meta:
         <div class="text-sm/6">
           <div>应用一旦创建，可能会被多处使用，请保持规范命名分类，后续尽量变更而不是删除。</div>
           <div>
-            可自行选择应用是否固定模型。GPTs 需单独在特殊模型中配置 gpts 模型，并自行搜索填写
+            可自行选择应用是否固定模型。GPTs 需单独在顶级模型中配置 gpts 模型，并自行搜索填写
             gizmoID（例如：g-alKfVrz9K）。
           </div>
         </div>
@@ -999,7 +999,7 @@ meta:
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item v-if="!isUserApp" label="特殊模型" prop="specialModel">
+            <el-form-item v-if="!isUserApp" label="顶级模型" prop="specialModel">
               <el-radio-group v-model="specialModelType">
                 <el-radio label="none">不使用</el-radio>
                 <el-radio label="gpts">GPTs</el-radio>

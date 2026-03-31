@@ -12,6 +12,7 @@ import { BatchDelCramiDto } from './dto/batchDelCrami.dto';
 import { CreatCramiDto } from './dto/createCrami.dto';
 import { CreatePackageDto } from './dto/createPackage.dto';
 import { DeletePackageDto } from './dto/deletePackage.dto';
+import { withPackageBillingOptions } from './package-pricing.util';
 import { QuerAllCramiDto } from './dto/queryAllCrami.dto';
 import { QuerAllPackageDto } from './dto/queryAllPackage.dto';
 import { UseCramiDto } from './dto/useCrami.dto';
@@ -62,7 +63,8 @@ export class CramiService {
 
   /* 查询单个套餐 */
   async queryOnePackage(id) {
-    return await this.cramiPackageEntity.findOne({ where: { id } });
+    const pkg = await this.cramiPackageEntity.findOne({ where: { id } });
+    return pkg ? withPackageBillingOptions(pkg) : null;
   }
 
   /* 查询所有套餐 */
@@ -85,7 +87,7 @@ export class CramiService {
         where,
         order: { order: 'DESC' },
       });
-      return { rows, count };
+      return { rows: rows.map(item => withPackageBillingOptions(item)), count };
     } catch (error) {
       console.log('error: ', error);
     }

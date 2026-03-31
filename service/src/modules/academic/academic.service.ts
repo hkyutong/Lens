@@ -5046,7 +5046,7 @@ export class AcademicService {
           const response = await axios.get(url, {
             timeout: 15000,
             headers: {
-              'User-Agent': 'YutoLens/5.0',
+              'User-Agent': 'Lens/5.0',
             },
             proxy: false,
             maxRedirects: 5,
@@ -5087,7 +5087,7 @@ export class AcademicService {
           const response = await axios.get(url, {
             timeout: 15000,
             headers: {
-              'User-Agent': 'YutoLens/5.0',
+              'User-Agent': 'Lens/5.0',
             },
             proxy: false,
             maxRedirects: 5,

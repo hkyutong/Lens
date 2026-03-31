@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { DropdownMenu } from '@/components/common/DropdownMenu'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { t } from '@/locales'
 import { useChatStore } from '@/store'
 import { debounce } from '@/utils/functions/debounce'
@@ -21,12 +22,14 @@ const menuStates = ref<Record<string | number, boolean>>({})
 interface Props {
   dataSources?: Chat.ChatState['groupList']
   title?: string
+  showSearchAction?: boolean
 }
 interface Emit {
   (ev: 'update', group: Chat.History, isEdit: boolean): void
   (ev: 'delete', group: Chat.History): void
   (ev: 'sticky', group: Chat.History): void
   (ev: 'select', group: Chat.History): void
+  (ev: 'search'): void
 }
 const props = defineProps<Props>()
 const emit = defineEmits<Emit>()
@@ -78,27 +81,42 @@ async function handleEnter(params: Chat.History, event: KeyboardEvent) {
 function isActive(uuid: number) {
   return chatStore.active === uuid
 }
+
+function handleSearch(event?: MouseEvent) {
+  event?.stopPropagation()
+  emit('search')
+}
 </script>
 
 <template>
   <div v-if="dataSources?.length" class="space-y-1">
     <div
       v-if="props.title"
-      class="px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
+      class="flex items-center justify-between px-0 text-[12px] font-medium text-[var(--ink-faint)]"
     >
-      {{ props.title }} <span class="ml-1">({{ dataSources?.length }})</span>
+      <div>
+        {{ props.title }} <span class="ml-1">({{ dataSources?.length }})</span>
+      </div>
+      <button
+        v-if="showSearchAction"
+        type="button"
+        class="flex h-5 w-5 items-center justify-center rounded-full text-[var(--ink-faint)] transition hover:text-[var(--text-main)]"
+        :aria-label="t('lens.sidebar.searchProject')"
+        @click="handleSearch"
+      >
+        <SvgIcon icon="ri:search-line" class="text-[12px]" />
+      </button>
     </div>
   </div>
   <div v-for="item of dataSources" :key="`${item.uuid}`" class="mt-1">
     <div
-      class="relative flex items-center gap-3 px-3 py-3 break-all rounded-[18px] cursor-pointer group font-medium text-sm border transition-all duration-150"
+      class="relative flex items-center gap-3 px-3 py-2.5 break-all rounded-[12px] cursor-pointer group text-[13px] border transition-all duration-150"
       :class="
         isActive(item.uuid)
           ? [
-              'bg-white/95',
+              'bg-[var(--surface-muted)]',
               'text-[var(--text-main)]',
-              'border-[rgba(29,78,216,0.24)]',
-              'shadow-[var(--shadow-soft)]',
+              'border-transparent',
               'dark:bg-white/10',
               'dark:text-white',
             ]
@@ -106,7 +124,7 @@ function isActive(uuid: number) {
               'text-[var(--text-main)]',
               'border-transparent',
               'bg-transparent',
-              'hover:bg-white/70',
+              'hover:bg-[var(--surface-muted)]',
               'dark:text-white/80',
               'dark:hover:bg-white/6',
             ]
@@ -125,10 +143,7 @@ function isActive(uuid: number) {
         <div v-else class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
             <span v-if="item.isSticky" class="h-2 w-2 rounded-full bg-[var(--accent)]"></span>
-            <span class="flex-1 truncate max-w-48">{{ item.title || '未命名研究会话' }}</span>
-          </div>
-          <div class="mt-1 text-[11px] text-[var(--ink-faint)]">
-            {{ item.isSticky ? '置顶研究' : '研究会话' }}
+            <span class="flex-1 truncate max-w-48 font-normal">{{ item.title || '未命名项目' }}</span>
           </div>
         </div>
         <CheckSmall
@@ -148,6 +163,7 @@ function isActive(uuid: number) {
             ? 'opacity-100 pointer-events-auto'
             : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
         "
+        @click.stop
       >
         <!-- 下拉菜单 -->
         <DropdownMenu v-model="menuStates[item.uuid]" position="auto" min-width="128px">

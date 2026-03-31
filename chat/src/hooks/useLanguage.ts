@@ -21,6 +21,18 @@ const locales = {
     dateFormat: 'YYYY-MM-DD',
     timeFormat: 'HH:mm:ss',
   },
+  'ja-JP': {
+    locale: 'ja-JP',
+    name: '日本語',
+    dateFormat: 'YYYY-MM-DD',
+    timeFormat: 'HH:mm:ss',
+  },
+  'ko-KR': {
+    locale: 'ko-KR',
+    name: '한국어',
+    dateFormat: 'YYYY-MM-DD',
+    timeFormat: 'HH:mm:ss',
+  },
 }
 
 export function useLanguage() {

@@ -9,7 +9,7 @@ interface KeyValue {
 
 export class SetConfigDto {
   @ApiProperty({
-    example: [{ configKey: 'siteName', configVal: 'YutoLens' }],
+    example: [{ configKey: 'siteName', configVal: 'Lens' }],
     description: '设置配置信息',
   })
   @IsArray()

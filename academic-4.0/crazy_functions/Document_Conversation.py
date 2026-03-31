@@ -8,7 +8,7 @@ from crazy_functions.pdf_fns.breakdown_txt import breakdown_text_to_satisfy_toke
 from crazy_functions.rag_fns.rag_file_support import extract_text
 from request_llms.bridge_all import model_info
 from toolbox import update_ui, CatchException, report_exception
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 
 
 @dataclass

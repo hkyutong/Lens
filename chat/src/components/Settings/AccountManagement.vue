@@ -679,7 +679,7 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
           <!-- <div>
             <img :src="avatar" alt="头像" class="w-20 h-20 rounded-full cursor-pointer" />
           </div> -->
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#22c55e]">
+          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--user-avatar-bg)]">
             <span class="text-white text-lg font-semibold">{{ avatarLetters }}</span>
           </div>
         </div>

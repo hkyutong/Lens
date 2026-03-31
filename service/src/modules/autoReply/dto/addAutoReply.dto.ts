@@ -5,7 +5,7 @@ export class AddAutoReplyDto {
   prompt: string;
 
   @ApiProperty({
-    example: '我是YutoLens提供的Ai服务机器人',
+    example: '我是Lens提供的Ai服务机器人',
     description: '回答的答案',
     required: true,
   })

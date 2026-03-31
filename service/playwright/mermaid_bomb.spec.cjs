@@ -159,6 +159,23 @@ test('Mermaid语法错误应降级为代码块且不泄漏炸弹错误图', asyn
       return
     }
 
+    if (path.startsWith('/chatlog/chatList')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            rows: [],
+            hasMore: false,
+            nextBeforeChatId: 0,
+          },
+          message: 'ok',
+        }),
+      })
+      return
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

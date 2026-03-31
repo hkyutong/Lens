@@ -1,6 +1,6 @@
 {
   "apps": {
-    "name": "YutoLens",
+    "name": "Lens",
     "script": "./dist/main.js",
     "env_file": ".env",
     "watch": false,

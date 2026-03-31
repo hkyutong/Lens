@@ -25,13 +25,13 @@ const CONSOLE_STYLES: ConsoleStyles = {
 }
 
 /**
- * 打印YutoLens相关的控制台信息
+ * 打印 Lens 相关的控制台信息
  */
-export function printYutoLensInfo(): void {
+export function printLensInfo(): void {
   if (import.meta.env.PROD) return
 
-  console.log('%cYutoLens', CONSOLE_STYLES.title)
-  console.log('YutoLens 启动中...')
+  console.log('%cLens', CONSOLE_STYLES.title)
+  console.log('Lens 启动中...')
 }
 
 /**
@@ -66,7 +66,7 @@ export function printAppInfo(appName: string, version: string): void {
 }
 
 export default {
-  printYutoLensInfo,
+  printLensInfo,
   printCustomInfo,
   printAppInfo,
 }

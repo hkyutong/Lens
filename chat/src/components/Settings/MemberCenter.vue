@@ -4,11 +4,13 @@ import { fetchOrderBuyAPI } from '@/api/order'
 import { fetchSignInAPI, fetchSignLogAPI } from '@/api/signin'
 import { fetchGetJsapiTicketAPI } from '@/api/user'
 import { t } from '@/locales'
-import { message } from '@/utils/message'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-
 import type { ResData } from '@/api/types'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
+import { message } from '@/utils/message'
+import { formatCurrency, hydrateBillingOptions } from '@/utils/memberPricing'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+import type { BillingCycle, BillingOption } from '@/types/billing'
 import MemberPayment from './MemberPayment.vue'
 
 const props = defineProps<Props>()
@@ -79,6 +81,34 @@ interface Props {
   visible: boolean
 }
 
+interface PlanPreset {
+  planKey: 'plus' | 'pro' | 'max'
+  displayName: string
+  monthlyUsd: number
+  monthlyCny: number
+  annualDiscountRate: number
+}
+
+const OFFICIAL_PLAN_ALIASES: Record<PlanPreset['planKey'], string[]> = {
+  plus: ['plus', '轻用版', 'go'],
+  pro: ['pro', '专业版'],
+  max: ['max', '旗舰版'],
+}
+
+type PlanFeatureKey =
+  | 'basicModels'
+  | 'advancedModelsLite'
+  | 'advancedModels'
+  | 'allModels'
+  | 'paperSummary'
+  | 'englishPolish'
+  | 'pdfDeepRead'
+  | 'latexTranslation'
+  | 'bibtex'
+  | 'fullResearchTools'
+  | 'complexReasoning'
+  | 'specialModels'
+
 interface Pkg {
   id: number
   name: string
@@ -90,7 +120,207 @@ interface Pkg {
   drawMjCount: number
   extraReward: number
   extraPaintCount: number
+  days: number
   createdAt: Date
+  annualDiscountRate?: number
+  recommendedBillingCycle?: BillingCycle
+  billingOptions: Record<BillingCycle, BillingOption>
+}
+
+const billingCycle = ref<BillingCycle>('monthly')
+
+function normalizePlanName(name?: string) {
+  return (name || '').trim().toLowerCase()
+}
+
+function resolvePlanKeyByName(name?: string): PlanPreset['planKey'] | null {
+  const normalized = normalizePlanName(name)
+  if (!normalized) return null
+
+  for (const [planKey, aliases] of Object.entries(OFFICIAL_PLAN_ALIASES) as Array<
+    [PlanPreset['planKey'], string[]]
+  >) {
+    if (aliases.some(alias => normalizePlanName(alias) === normalized)) return planKey
+  }
+
+  return null
+}
+
+function getPlusPreset(): PlanPreset {
+  return {
+    planKey: 'plus',
+    displayName: t('lens.member.plus'),
+    monthlyUsd: 6,
+    monthlyCny: 80,
+    annualDiscountRate: 17,
+  }
+}
+
+function getProfessionalPreset(): PlanPreset {
+  return {
+    planKey: 'pro',
+    displayName: t('lens.member.pro'),
+    monthlyUsd: 20,
+    monthlyCny: 145,
+    annualDiscountRate: 38,
+  }
+}
+
+function getMaxPreset(): PlanPreset {
+  return {
+    planKey: 'max',
+    displayName: t('lens.member.max'),
+    monthlyUsd: 30,
+    monthlyCny: 220,
+    annualDiscountRate: 17,
+  }
+}
+
+function roundDisplayPrice(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+const sortedPackages = computed(() =>
+  [...packageList.value]
+    .sort((a, b) => {
+      const aPrice = Number(a.billingOptions?.monthly?.price ?? a.price ?? 0)
+      const bPrice = Number(b.billingOptions?.monthly?.price ?? b.price ?? 0)
+      return aPrice - bPrice
+    })
+)
+
+const displayPackages = computed(() => {
+  const officialKeys = new Set<PlanPreset['planKey']>()
+  const official: Pkg[] = []
+  const custom: Pkg[] = []
+
+  for (const item of sortedPackages.value) {
+    const planKey = resolvePlanKeyByName(item.name)
+    if (planKey && !officialKeys.has(planKey)) {
+      official.push(item)
+      officialKeys.add(planKey)
+      continue
+    }
+    custom.push(item)
+  }
+
+  return [...official, ...custom]
+})
+
+function getPlanPreset(pkg: Pkg): PlanPreset | null {
+  const namedPlan = resolvePlanKeyByName(pkg.name)
+  if (namedPlan === 'plus') return getPlusPreset()
+  if (namedPlan === 'pro') return getProfessionalPreset()
+  if (namedPlan === 'max') return getMaxPreset()
+  return null
+}
+
+function getBillingOption(pkg: Pkg) {
+  return pkg.billingOptions?.[billingCycle.value] ?? pkg.billingOptions.monthly
+}
+
+function getDisplayBilling(pkg: Pkg) {
+  const rawBilling = getBillingOption(pkg)
+  const preset = getPlanPreset(pkg)
+  if (!preset) return rawBilling
+
+  if (billingCycle.value === 'annual') {
+    const originalTotal = roundDisplayPrice(preset.monthlyCny * 12)
+    const price = roundDisplayPrice(originalTotal * (1 - preset.annualDiscountRate / 100))
+    return {
+      ...rawBilling,
+      price,
+      total: price,
+      originalTotal,
+      discountRate: preset.annualDiscountRate,
+      saveAmount: roundDisplayPrice(originalTotal - price),
+      monthlyEquivalentPrice: roundDisplayPrice(price / 12),
+      days: rawBilling.days > 0 ? 365 : rawBilling.days,
+    }
+  }
+
+  return {
+    ...rawBilling,
+    price: preset.monthlyCny,
+    total: preset.monthlyCny,
+    originalTotal: preset.monthlyCny,
+    discountRate: 0,
+    saveAmount: 0,
+    monthlyEquivalentPrice: preset.monthlyCny,
+    days: rawBilling.days,
+  }
+}
+
+function buildOrderInfo(pkg: Pkg) {
+  const billing = getDisplayBilling(pkg)
+  const preset = getPlanPreset(pkg)
+  return {
+    pkgInfo: {
+      ...pkg,
+      name: preset?.displayName || pkg.name,
+    },
+    billingCycle: billing.billingCycle,
+    billing,
+  }
+}
+
+function formatQuota(value: number) {
+  return value > 99999 ? '无限额度' : value
+}
+
+function getDisplayPlanName(pkg: Pkg) {
+  return getPlanPreset(pkg)?.displayName || pkg.name
+}
+
+function getPlanSummary(pkg: Pkg) {
+  const preset = getPlanPreset(pkg)
+  if (!preset) return pkg.des || ''
+  return t(`lens.member.${preset.planKey}Summary`)
+}
+
+function getPlanFeatureKeys(pkg: Pkg): PlanFeatureKey[] {
+  const preset = getPlanPreset(pkg)
+  if (!preset) return []
+
+  if (preset.planKey === 'plus') {
+    return ['basicModels', 'advancedModelsLite', 'specialModels', 'paperSummary', 'englishPolish']
+  }
+
+  if (preset.planKey === 'pro') {
+    return ['basicModels', 'advancedModels', 'specialModels', 'pdfDeepRead', 'latexTranslation', 'bibtex']
+  }
+
+  return ['allModels', 'specialModels', 'fullResearchTools', 'complexReasoning']
+}
+
+function getPlanFeatureLabels(pkg: Pkg) {
+  return getPlanFeatureKeys(pkg).map(key => t(`lens.member.features.${key}`))
+}
+
+function getDisplayPriceValue(pkg: Pkg) {
+  const preset = getPlanPreset(pkg)
+  if (!preset) return formatCurrency(getDisplayBilling(pkg).price)
+
+  if (billingCycle.value === 'annual') {
+    return formatCurrency(roundDisplayPrice(preset.monthlyUsd * 12 * (1 - preset.annualDiscountRate / 100)))
+  }
+
+  return formatCurrency(preset.monthlyUsd)
+}
+
+function getDisplayPricePrefix(pkg: Pkg) {
+  return getPlanPreset(pkg) ? '$' : '¥'
+}
+
+function getDisplayPriceCurrencyLabel(pkg: Pkg) {
+  return getPlanPreset(pkg) ? 'USD /' : 'CNY /'
+}
+
+function getDisplayPricePeriodLabel() {
+  return (billingCycle.value === 'annual'
+    ? t('lens.member.pricePerYear')
+    : t('lens.member.pricePerMonth')
+  ).replace(/^\//, '')
 }
 
 onMounted(() => {
@@ -110,7 +340,7 @@ const selectedPackage = ref<Pkg | null>(null)
 // 切换到支付页面
 function showPaymentView(pkg: Pkg) {
   selectedPackage.value = pkg
-  useGlobalStore.updateOrderInfo({ pkgInfo: pkg })
+  useGlobalStore.updateOrderInfo(buildOrderInfo(pkg))
   activeView.value = 'payment'
 }
 
@@ -197,6 +427,8 @@ function onBridgeReady(data: {
 
 async function handleBuyGoods(pkg: Pkg) {
   if (dialogLoading.value) return
+  const orderInfo = buildOrderInfo(pkg)
+  useGlobalStore.updateOrderInfo(orderInfo)
 
   // 判断是否是微信移动端环境
   function isWxMobileEnv() {
@@ -222,6 +454,7 @@ async function handleBuyGoods(pkg: Pkg) {
           const res: ResData = await fetchOrderBuyAPI({
             goodsId: pkg.id,
             payType: 'jsapi',
+            billingCycle: orderInfo.billingCycle,
           })
           const { success, data } = res
           if (success) onBridgeReady(data)
@@ -236,6 +469,7 @@ async function handleBuyGoods(pkg: Pkg) {
       const res: ResData = await fetchOrderBuyAPI({
         goodsId: pkg.id,
         payType: 'jsapi',
+        billingCycle: orderInfo.billingCycle,
       })
       const { success, data } = res
       success && onBridgeReady(data)
@@ -244,7 +478,7 @@ async function handleBuyGoods(pkg: Pkg) {
   }
 
   /* 其他场景打开支付窗口 */
-  useGlobalStore.updateOrderInfo({ pkgInfo: pkg })
+  useGlobalStore.updateOrderInfo(orderInfo)
 }
 
 async function openDrawerAfter() {
@@ -260,8 +494,11 @@ async function openDrawerAfter() {
     // 获取用户最新余额信息
     await authStore.getUserInfo()
     // 获取套餐列表
-    const res: ResData = await fetchGetPackageAPI({ status: 1, size: 30 })
-    packageList.value = res.data.rows
+    const res: ResData = await fetchGetPackageAPI({ status: 1, type: 1, size: 30 })
+    packageList.value = (res.data.rows || []).map((item: Pkg) => hydrateBillingOptions(item))
+    if (!selectName.value && displayPackages.value.length) {
+      selectName.value = displayPackages.value[0].name
+    }
     // 获取签到记录
     await getSigninLog()
     loading.value = false
@@ -297,10 +534,6 @@ function handleSuccess(pkg: Pkg) {
 
   // 其他情况切换到支付视图
   showPaymentView(pkg)
-}
-
-function splitDescription(description: string) {
-  return description.split('\n')
 }
 
 const code = ref('')
@@ -439,130 +672,179 @@ watch(
     <div v-if="activeView === 'main'">
       <!-- 套餐列表卡片 -->
       <div
-        class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4 flex flex-col space-y-4"
+        class="mb-5 flex flex-col space-y-6 rounded-[28px] border border-[var(--paper-border)] bg-white p-6 shadow-[0_24px_60px_rgba(8,8,8,0.05)]"
       >
-        <!-- 卡片标题 -->
         <div
-          class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700"
+          class="mb-1 flex flex-col gap-3 border-b border-[var(--paper-border)] pb-4 md:flex-row md:items-center md:justify-between"
         >
-          套餐列表
+          <div>
+            <div class="text-[18px] font-semibold text-[var(--text-main)]">
+              {{ t('lens.member.planList') }}
+            </div>
+            <div class="mt-1 text-sm text-[var(--text-sub)]">
+              {{ t('lens.member.planSubtitle') }}
+            </div>
+          </div>
+
+          <div
+            class="inline-flex items-center self-start rounded-full border border-[var(--paper-border)] bg-[var(--surface-panel)] p-1.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.5)]"
+          >
+            <button
+              type="button"
+              :class="[
+                billingCycle === 'monthly'
+                  ? 'bg-white text-[var(--text-main)] shadow-[0_2px_8px_rgba(8,8,8,0.06)]'
+                  : 'text-[var(--text-sub)]',
+                'rounded-full px-5 py-2.5 text-sm font-medium transition-colors',
+              ]"
+              @click="billingCycle = 'monthly'"
+            >
+              {{ t('lens.member.monthly') }}
+            </button>
+            <button
+              type="button"
+              :class="[
+                billingCycle === 'annual'
+                  ? 'bg-white text-[var(--text-main)] shadow-[0_2px_8px_rgba(8,8,8,0.06)]'
+                  : 'text-[var(--text-sub)]',
+                'rounded-full px-5 py-2.5 text-sm font-medium transition-colors',
+              ]"
+              @click="billingCycle = 'annual'"
+            >
+              <span>{{ t('lens.member.annual') }}</span>
+              <span
+                class="ml-2 inline-flex rounded-full bg-[var(--text-main)] px-2.5 py-1 text-[10px] font-semibold leading-none text-white"
+              >
+                {{ t('lens.member.annualBetter') }}
+              </span>
+            </button>
+          </div>
         </div>
 
-        <!-- 套餐列表 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
           <div
-            v-for="(item, index) in packageList"
+            v-for="(item, index) in displayPackages"
             :key="index"
             :class="[
               item.name == selectName
-                ? 'ring-2 ring-primary-500 shadow-md'
-                : 'ring-1 ring-gray-200 dark:ring-gray-700',
-              'rounded-lg p-6 hover:shadow-md bg-white dark:bg-gray-750',
+                ? 'border-[var(--text-main)] shadow-[0_18px_40px_rgba(8,8,8,0.08)]'
+                : 'border-[var(--paper-border)] shadow-[0_10px_26px_rgba(8,8,8,0.04)]',
+              'flex h-full min-h-[520px] flex-col rounded-[28px] border bg-white p-7 transition-all hover:shadow-[0_18px_40px_rgba(8,8,8,0.08)]',
             ]"
             @click="handleSelect(item)"
           >
             <div class="relative">
-              <b class="text-lg font-semibold leading-8 dark:text-white">{{ item.name }}</b>
-            </div>
-
-            <div v-if="!isHideModel3Point" class="flex justify-between items-end mt-4">
-              <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{
-                model3Name
-              }}</span>
-              <span class="font-bold dark:text-white">
-                {{ item.model3Count > 99999 ? '无限额度' : item.model3Count }}
-              </span>
-            </div>
-
-            <div v-if="!isHideModel4Point" class="flex justify-between items-end mt-2">
-              <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{
-                model4Name
-              }}</span>
-              <span class="font-bold dark:text-white">
-                {{ item.model4Count > 99999 ? '无限额度' : item.model4Count }}
-              </span>
-            </div>
-
-            <div v-if="!isHideDrawMjPoint" class="flex justify-between items-end mt-2">
-              <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{{
-                drawMjName
-              }}</span>
-              <span class="font-bold dark:text-white">
-                {{ item.drawMjCount > 99999 ? '无限额度' : item.drawMjCount }}
-              </span>
-            </div>
-
-            <div class="mt-4 flex items-baseline gap-x-1">
-              <span class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">{{
-                `￥${item.price}`
-              }}</span>
+              <b class="text-[25px] font-medium leading-[1.08] text-[var(--text-main)]">
+                {{ getDisplayPlanName(item) }}
+              </b>
             </div>
 
             <div class="mt-6">
-              <button @click.stop="handleSuccess(item)" class="btn btn-primary btn-md w-full">
-                购买套餐
+              <div class="flex items-end gap-1">
+                <span class="mb-[10px] text-[16px] font-normal leading-none text-[var(--text-sub)]">
+                  {{ getDisplayPricePrefix(item) }}
+                </span>
+                <span class="text-[46px] font-medium leading-none tracking-[-0.045em] text-[var(--text-main)]">
+                  {{ getDisplayPriceValue(item) }}
+                </span>
+                <span class="mb-[7px] ml-1 flex flex-col text-[12px] font-normal leading-[1.1] text-[var(--text-sub)]">
+                  <span>{{ getDisplayPriceCurrencyLabel(item) }}</span>
+                  <span>{{ getDisplayPricePeriodLabel() }}</span>
+                </span>
+              </div>
+
+              <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span v-if="billingCycle === 'annual'" class="font-medium text-[var(--text-sub)]">
+                  {{ t('lens.member.annualSave', { value: getDisplayBilling(item).discountRate }) }}
+                </span>
+              </div>
+            </div>
+
+            <p class="mt-5 min-h-[84px] max-w-[34ch] text-[15px] leading-7 text-[var(--text-sub)]">
+              {{ getPlanSummary(item) }}
+            </p>
+
+            <div class="mt-7">
+              <button
+                @click.stop="handleSuccess(item)"
+                class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-white transition hover:bg-[#1b1b1b]"
+              >
+                {{ t('lens.member.openNow') }}
               </button>
             </div>
 
-            <ul
-              v-if="item.des"
-              class="mt-4 space-y-2 text-sm leading-6 text-gray-600 dark:text-gray-400"
-            >
-              <li
-                v-for="(line, index) in splitDescription(item.des)"
-                :key="index"
-                class="flex gap-x-2"
+            <div class="mt-8 space-y-4 border-t border-[var(--paper-border)] pt-6">
+              <div
+                v-for="feature in getPlanFeatureLabels(item)"
+                :key="feature"
+                class="flex items-start gap-3"
               >
-                <svg
-                  class="h-5 w-5 flex-none text-primary-600 dark:text-primary-400"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
+                <span
+                  class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--paper-border)] bg-[var(--surface-panel)] text-[11px] font-semibold text-[var(--text-main)]"
                 >
-                  <path
-                    fill-rule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-                {{ line }}
-              </li>
-            </ul>
+                  ✦
+                </span>
+                <span class="text-[15px] leading-7 text-[var(--text-main)]">{{ feature }}</span>
+              </div>
+            </div>
+
+            <div class="mt-auto space-y-3 border-t border-[var(--paper-border)] pt-6">
+              <div v-if="!isHideModel3Point" class="flex items-end justify-between gap-4">
+                <span class="text-sm font-medium text-[var(--text-sub)]">{{ model3Name }}</span>
+                <span class="text-base font-semibold text-[var(--text-main)]">
+                  {{ formatQuota(getDisplayBilling(item).model3Count) }}
+                </span>
+              </div>
+
+              <div v-if="!isHideModel4Point" class="flex items-end justify-between gap-4">
+                <span class="text-sm font-medium text-[var(--text-sub)]">{{ model4Name }}</span>
+                <span class="text-base font-semibold text-[var(--text-main)]">
+                  {{ formatQuota(getDisplayBilling(item).model4Count) }}
+                </span>
+              </div>
+
+              <div v-if="!isHideDrawMjPoint" class="flex items-end justify-between gap-4">
+                <span class="text-sm font-medium text-[var(--text-sub)]">{{ drawMjName }}</span>
+                <span class="text-base font-semibold text-[var(--text-main)]">
+                  {{ formatQuota(getDisplayBilling(item).drawMjCount) }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
       <!-- 签到和余额并排显示区域 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div class="mb-4 grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <!-- 签到日历卡片 - 左侧 -->
         <div
-          class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col space-y-4 h-full"
+          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-white p-6 shadow-[0_18px_50px_rgba(8,8,8,0.04)]"
         >
           <!-- 卡片标题 -->
           <div
-            class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700"
+            class="mb-1 border-b border-[var(--paper-border)] pb-4 text-[18px] font-semibold text-[var(--text-main)]"
           >
             签到奖励
           </div>
 
           <!-- 签到信息 -->
           <div
-            class="bg-gray-50 mb-4 p-3 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-700"
+            class="mb-2 rounded-[20px] border border-[var(--paper-border)] bg-[var(--surface-panel)] p-4 text-sm leading-7 text-[var(--text-sub)]"
           >
-            <span class="dark:text-gray-300">签到赠送：</span>
+            <span>签到赠送：</span>
             <span v-if="signInModel3Count > 0 && !isHideModel3Point"
-              ><b class="mx-2 text-primary-500">{{ signInModel3Count }}</b
-              ><span class="dark:text-gray-300">{{ model3Name }}</span></span
+              ><b class="mx-2 text-[var(--text-main)]">{{ signInModel3Count }}</b
+              ><span>{{ model3Name }}</span></span
             >
             <span v-if="signInModel4Count > 0 && !isHideModel4Point"
-              ><b class="mx-2 text-primary-500">{{ signInModel4Count }}</b
-              ><span class="dark:text-gray-300">{{ model4Name }}</span></span
+              ><b class="mx-2 text-[var(--text-main)]">{{ signInModel4Count }}</b
+              ><span>{{ model4Name }}</span></span
             >
             <span v-if="signInMjDrawToken > 0 && !isHideDrawMjPoint"
-              ><b class="mx-2 text-primary-500">{{ signInMjDrawToken }}</b
-              ><span class="dark:text-gray-300">{{ drawMjName }}</span></span
+              ><b class="mx-2 text-[var(--text-main)]">{{ signInMjDrawToken }}</b
+              ><span>{{ drawMjName }}</span></span
             >
-            <span class="dark:text-gray-300"
-              >（已连续签到<b class="text-red-500 mx-1">{{ consecutiveDays }}</b
+            <span
+              >（已连续签到<b class="mx-1 text-[var(--text-main)]">{{ consecutiveDays }}</b
               >天）</span
             >
           </div>
@@ -570,7 +852,7 @@ watch(
           <!-- 签到日历 -->
           <div class="flex-grow">
             <div
-              class="grid grid-cols-7 text-center text-xs leading-6 text-gray-500 dark:text-gray-400"
+              class="grid grid-cols-7 text-center text-xs leading-6 text-[var(--text-sub)]"
             >
               <div>日</div>
               <div>一</div>
@@ -591,11 +873,11 @@ watch(
                   type="button"
                   :class="[
                     day.isToday
-                      ? 'bg-primary-600 text-white'
+                      ? 'bg-[var(--btn-bg-primary)] text-white'
                       : day.isSigned
-                        ? 'text-primary-600 dark:text-primary-400'
-                        : 'text-gray-900 dark:text-gray-100',
-                    'hover:bg-gray-200 dark:hover:bg-gray-700 mx-auto flex h-8 w-8 items-center justify-center rounded-full',
+                        ? 'text-[var(--text-main)]'
+                        : 'text-[var(--text-sub)]',
+                    'mx-auto flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-panel)]',
                   ]"
                 >
                   <time :datetime="day.signInDate">{{ day.day }}</time>
@@ -605,11 +887,11 @@ watch(
           </div>
 
           <!-- 签到按钮 -->
-          <div class="mt-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+          <div class="mt-4 border-t border-[var(--paper-border)] pt-4">
             <button
               @click="handleSignIn"
               :disabled="hasSignedInToday || signInLoading"
-              class="btn btn-primary btn-md w-full"
+              class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-white transition hover:bg-[#1b1b1b] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span v-if="signInLoading">签到中...</span>
               <span v-else-if="hasSignedInToday">已签到</span>
@@ -620,11 +902,11 @@ watch(
 
         <!-- 钱包余额卡片 - 右侧 -->
         <div
-          class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col space-y-4 h-full"
+          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-white p-6 shadow-[0_18px_50px_rgba(8,8,8,0.04)]"
         >
           <!-- 卡片标题 -->
           <div
-            class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700"
+            class="mb-1 border-b border-[var(--paper-border)] pb-4 text-[18px] font-semibold text-[var(--text-main)]"
           >
             额度信息
           </div>
@@ -634,10 +916,10 @@ watch(
             <!-- 普通积分 -->
             <div
               v-if="!isHideModel3Point"
-              class="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
             >
-              <div class="text-gray-500 dark:text-gray-400 w-28">{{ model3Name }}</div>
-              <div class="text-lg font-bold text-gray-900 dark:text-gray-100">
+              <div class="w-28 text-[var(--text-sub)]">{{ model3Name }}</div>
+              <div class="text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel3Count > 999999
                     ? '无限额度'
@@ -645,7 +927,7 @@ watch(
                 }}
                 <span
                   v-if="userBalance.sumModel3Count <= 999999"
-                  class="text-sm text-gray-500 dark:text-gray-400 ml-1"
+                  class="ml-1 text-sm text-[var(--text-sub)]"
                   >{{ t('usercenter.points') }}</span
                 >
               </div>
@@ -654,10 +936,10 @@ watch(
             <!-- 高级模型积分 -->
             <div
               v-if="!isHideModel4Point"
-              class="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
             >
-              <div class="text-gray-500 dark:text-gray-400 w-28">{{ model4Name }}</div>
-              <div class="text-lg font-bold text-gray-900 dark:text-gray-100">
+              <div class="w-28 text-[var(--text-sub)]">{{ model4Name }}</div>
+              <div class="text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel4Count > 99999
                     ? '无限额度'
@@ -665,19 +947,19 @@ watch(
                 }}
                 <span
                   v-if="userBalance.sumModel4Count <= 99999"
-                  class="text-sm text-gray-500 dark:text-gray-400 ml-1"
+                  class="ml-1 text-sm text-[var(--text-sub)]"
                   >{{ t('usercenter.points') }}</span
                 >
               </div>
             </div>
 
-            <!-- 顶级积分 -->
+            <!-- 顶级模型额度 -->
             <div
               v-if="!isHideDrawMjPoint"
-              class="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
             >
-              <div class="text-gray-500 dark:text-gray-400 w-28">{{ drawMjName }}</div>
-              <div class="text-lg font-bold text-gray-900 dark:text-gray-100">
+              <div class="w-28 text-[var(--text-sub)]">{{ drawMjName }}</div>
+              <div class="text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumDrawMjCount > 99999
                     ? '无限额度'
@@ -685,7 +967,7 @@ watch(
                 }}
                 <span
                   v-if="userBalance.sumDrawMjCount <= 99999"
-                  class="text-sm text-gray-500 dark:text-gray-400 ml-1"
+                  class="ml-1 text-sm text-[var(--text-sub)]"
                   >{{ t('usercenter.points') }}</span
                 >
               </div>
@@ -693,12 +975,12 @@ watch(
 
             <!-- 会员到期时间 -->
             <div
-              class="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
             >
-              <div class="text-gray-500 dark:text-gray-400 w-28">会员状态</div>
+              <div class="w-28 text-[var(--text-sub)]">会员状态</div>
               <div
                 class="text-lg font-bold"
-                :class="isMember ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'"
+                :class="isMember ? 'text-[var(--text-main)]' : 'text-[var(--text-sub)]'"
               >
                 {{ userBalance.expirationTime ? `${userBalance.expirationTime} 到期` : '非会员' }}
               </div>
@@ -708,20 +990,20 @@ watch(
           <!-- 卡密兑换部分移至此处 -->
           <div
             v-if="showCrami"
-            class="flex-grow mt-4 pt-4 border-t border-gray-200 dark:border-gray-700"
+            class="mt-4 flex-grow border-t border-[var(--paper-border)] pt-4"
           >
-            <div class="text-base font-medium text-gray-900 dark:text-gray-100 mb-3">卡密兑换</div>
+            <div class="mb-3 text-base font-medium text-[var(--text-main)]">卡密兑换</div>
             <div class="flex items-center space-x-2">
               <input
                 v-model="code"
                 :placeholder="t('usercenter.enterCardDetails')"
-                class="input input-md w-full"
+                class="h-12 w-full rounded-[16px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 text-[var(--text-main)] outline-none transition focus:border-[var(--text-main)]"
                 type="text"
               />
               <button
                 :disabled="loading || !code"
                 @click="useCrami"
-                class="btn btn-primary btn-md w-24"
+                class="inline-flex w-[116px] items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-5 py-3 text-[15px] font-medium text-white transition hover:bg-[#1b1b1b] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 兑换
               </button>

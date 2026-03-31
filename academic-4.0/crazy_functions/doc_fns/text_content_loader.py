@@ -11,7 +11,7 @@ from loguru import logger
 from toolbox import update_ui
 from crazy_functions.rag_fns.rag_file_support import extract_text
 from crazy_functions.doc_fns.content_folder import ContentFoldingManager, FileMetadata, FoldingOptions, FoldingStyle, FoldingError
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 from datetime import datetime
 import mimetypes
 

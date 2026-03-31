@@ -2,10 +2,10 @@
   "name": "yutoscholar-chat",
   "version": "4.3.0",
   "private": true,
-  "description": "YutoLens chat",
+  "description": "Lens chat",
   "author": "vastxie",
   "keywords": [
-    "YutoLens",
+    "Lens",
     "chatgpt",
     "ChatBox",
     "ChatWeb"

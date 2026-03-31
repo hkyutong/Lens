@@ -287,7 +287,7 @@ export const MODEL_LIST = [
   'grok-2-image-latest',
   'seededit',
   'seedream-3.0',
-  // 特殊模型
+  // 顶级模型
   'tts-1',
   'gpts',
 ];
@@ -358,13 +358,13 @@ export const TYPEORIGINLIST = [
 export const MODELTYPELIST = [
   { value: 1, label: '基础对话' },
   // { value: 2, label: '创意模型' },
-  { value: 3, label: '特殊模型' },
+  { value: 3, label: '顶级模型' },
 ];
 
 export const MODELTYPEMAP = {
   1: '基础对话',
   2: '创意模型',
-  3: '特殊模型',
+  3: '顶级模型',
 };
 
 export const MODELSMAPLIST = {
@@ -533,7 +533,7 @@ export const MODELSMAPLIST = {
 export const DEDUCTTYPELIST = [
   { value: 1, label: '普通积分' },
   { value: 2, label: '高级积分' },
-  { value: 3, label: '顶级积分' },
+  { value: 3, label: '顶级模型额度' },
 ];
 
 /* 绘画类型选项列表 */

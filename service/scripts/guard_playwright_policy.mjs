@@ -9,7 +9,7 @@ const SERVICE_DIR = path.resolve(__dirname, '..')
 const REPO_DIR = path.resolve(SERVICE_DIR, '..')
 
 const args = new Set(process.argv.slice(2))
-const requireEdge = args.has('--require-edge')
+const requireLocalBrowser = args.has('--require-local-browser')
 
 const SCAN_ROOTS = ['service', 'chat', 'admin', '.github']
 const SKIP_DIRS = new Set([
@@ -97,62 +97,75 @@ const ensureNoPlaywrightInstall = () => {
   if (!blockedLineHits.length) return
 
   console.error('\n[Playwright策略拦截] 检测到被禁止的浏览器安装命令。')
-  console.error('原因：E2E/回归必须固定使用本机 Microsoft Edge，禁止触发 Playwright 浏览器下载。\n')
+  console.error('原因：E2E/回归必须固定使用本机 Chrome/Chromium，禁止触发 Playwright 浏览器下载。\n')
   for (const hit of blockedLineHits) {
     console.error(`- ${hit.file}:${hit.line}`)
     console.error(`  ${hit.text}`)
   }
-  console.error('\n请移除以上安装命令，改为使用 Edge 通道（channel: "msedge"）。')
+  console.error('\n请移除以上安装命令，改为使用本机 Chrome/Chromium，或在配置中显式指定 executablePath。')
   process.exit(1)
 }
 
-const detectEdgeBinary = () => {
+const detectLocalBrowserBinary = () => {
   const home = os.homedir()
+  const envCandidates = [
+    process.env.PLAYWRIGHT_CHROME_PATH,
+    process.env.GOOGLE_CHROME_BIN,
+    process.env.CHROME_PATH,
+  ]
+  for (const candidate of envCandidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate
+  }
+
   const candidates = [
-    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-    path.join(home, 'Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'),
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    path.join(home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    path.join(home, 'Applications/Chromium.app/Contents/MacOS/Chromium'),
   ]
   for (const p of candidates) {
     if (fs.existsSync(p)) return p
   }
 
-  const whichEdge = spawnSync('which', ['msedge'], {
-    encoding: 'utf8',
-  })
-  if (whichEdge.status === 0) {
-    const resolved = String(whichEdge.stdout || '').trim()
-    if (resolved) return resolved
+  const whichCommands = ['google-chrome', 'google-chrome-stable', 'chrome', 'chromium', 'chromium-browser']
+  for (const command of whichCommands) {
+    const whichChrome = spawnSync('which', [command], {
+      encoding: 'utf8',
+    })
+    if (whichChrome.status !== 0) continue
+    const resolved = String(whichChrome.stdout || '').trim()
+    if (resolved && fs.existsSync(resolved)) return resolved
   }
 
   return ''
 }
 
-const ensureEdgeInstalled = () => {
-  const edgePath = detectEdgeBinary()
-  if (edgePath) {
-    console.log(`[Playwright策略] Edge可用: ${edgePath}`)
+const ensureLocalBrowserInstalled = () => {
+  const browserPath = detectLocalBrowserBinary()
+  if (browserPath) {
+    console.log(`[Playwright策略] 本机Chrome/Chromium可用: ${browserPath}`)
     return
   }
-  console.error('缺少 Edge，已停止，不会自动下载 Chromium。')
+  console.error('缺少本机 Chrome/Chromium，已停止，不会自动下载浏览器。')
   process.exit(1)
 }
 
-const ensureConfigUsesEdgeChannel = () => {
+const ensureConfigUsesLocalBrowser = () => {
   const configPath = path.join(SERVICE_DIR, 'playwright.config.mjs')
   if (!fs.existsSync(configPath)) {
     console.error(`缺少 Playwright 配置文件: ${configPath}`)
     process.exit(1)
   }
   const text = fs.readFileSync(configPath, 'utf8')
-  if (!/channel\s*:\s*['"]msedge['"]/.test(text)) {
-    console.error('Playwright 配置未锁定 msedge 通道，请在 playwright.config.mjs 中设置 use.channel = "msedge"。')
+  if (!/channel\s*:\s*['"]chrome['"]/.test(text) && !/executablePath/.test(text)) {
+    console.error('Playwright 配置未声明本机浏览器策略，请设置 use.channel = "chrome" 或 launchOptions.executablePath。')
     process.exit(1)
   }
 }
 
 ensureNoPlaywrightInstall()
-ensureConfigUsesEdgeChannel()
-if (requireEdge) {
-  ensureEdgeInstalled()
+ensureConfigUsesLocalBrowser()
+if (requireLocalBrowser) {
+  ensureLocalBrowserInstalled()
 }
 console.log('[Playwright策略] 通过')

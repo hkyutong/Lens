@@ -21,7 +21,7 @@ dotenv.config()
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:9520/api'
 const SUPER_USER = process.env.SUPER_USER || 'super'
 const SUPER_PASS = process.env.SUPER_PASS || '123456'
-const NAMESPACE = process.env.NAMESPACE || 'YutoLens'
+const NAMESPACE = process.env.NAMESPACE || 'Lens'
 const PERF_SEQ = Number(process.env.PERF_SEQ || 20)
 const PERF_CONC = Number(process.env.PERF_CONC || 20)
 

@@ -15,7 +15,7 @@ export function defaultState(): Chat.ChatState {
     baseConfig: null,
     currentPlugin: undefined,
     pluginList: [],
-    academicMode: false,
+    academicMode: true,
     mobileAcademicPanelVisible: false,
     academicPluginList: [],
     academicCoreFunctions: [],
@@ -23,6 +23,9 @@ export function defaultState(): Chat.ChatState {
     currentAcademicPlugin: undefined,
     currentAcademicCore: undefined,
     preferredModel: null,
+    chatHistoryHasMore: false,
+    chatHistoryLoading: false,
+    chatHistoryCursor: 0,
     hiddenReplyChatIdsByGroup: {},
     hiddenReplyTailAnchorByGroup: {},
     prompt: '',
@@ -32,7 +35,7 @@ export function defaultState(): Chat.ChatState {
 
 export function getLocalState(): Chat.ChatState {
   const localState = ss.get(LOCAL_NAME)
-  return { ...defaultState(), ...localState }
+  return { ...defaultState(), ...localState, academicMode: true }
 }
 
 export function setLocalState({

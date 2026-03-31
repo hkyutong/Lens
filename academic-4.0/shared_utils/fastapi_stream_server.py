@@ -1112,6 +1112,16 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
         await launch_websocket_server()
         logger.info("uvicorn terminated")
 
-if __name__ == "__main__":
-    mmwss = MasterMindWebSocketServer(host="0.0.0.0", port=38000)
+def main():
+    host = os.environ.get("ACADEMIC_HOST") or os.environ.get("WEB_HOST") or "0.0.0.0"
+    raw_port = os.environ.get("ACADEMIC_PORT") or os.environ.get("WEB_PORT") or "38000"
+    try:
+        port = int(raw_port)
+    except Exception:
+        port = 38000
+    mmwss = MasterMindWebSocketServer(host=host, port=port)
     asyncio.run(mmwss.long_task_01_wait_incoming_connection())
+
+
+if __name__ == "__main__":
+    main()

@@ -2,17 +2,15 @@
   <transition name="modal-fade">
     <div
       v-if="props.visible"
-      class="fixed inset-0 z-[9000] flex items-center justify-center bg-gray-900 bg-opacity-50"
+      class="fixed inset-0 z-[9000] flex items-center justify-center bg-[rgba(8,8,8,0.22)] backdrop-blur-[2px]"
     >
       <div
-        class="bg-white/95 dark:bg-gray-800 rounded-2xl shadow-2xl border border-black/5 dark:border-white/10 flex flex-col backdrop-blur"
+        class="bg-[rgba(255,255,255,0.96)] rounded-2xl border border-[var(--border-color)] flex flex-col backdrop-blur shadow-[0_16px_48px_rgba(8,8,8,0.08)]"
         :class="isMobile ? 'w-full h-full rounded-none' : 'h-[82vh] w-full max-w-5xl p-5 mx-2'"
       >
         <!-- 标题部分 -->
-        <div
-          class="flex justify-between items-center mb-4 pb-3 border-b border-gray-100 dark:border-white/10"
-        >
-          <span class="text-xl font-semibold text-gray-900 dark:text-white">设置</span>
+        <div class="flex justify-between items-center mb-4 pb-3">
+          <span class="text-xl font-semibold text-[var(--text-main)]">{{ t('lens.settings.setting') }}</span>
           <button @click="handleClose" class="btn-icon btn-md">
             <Close size="20" />
           </button>
@@ -21,7 +19,7 @@
         <div class="flex flex-grow min-h-0">
           <!-- 左边标签栏 -->
           <div
-            class="w-1/4 bg-gray-50/80 dark:bg-gray-900/40 rounded-2xl p-2 border border-gray-100 dark:border-white/10 flex flex-col min-h-0 overflow-y-auto"
+            class="w-1/4 bg-[var(--surface-panel)] rounded-2xl p-2 border border-[var(--border-color)] flex flex-col min-h-0 overflow-y-auto"
           >
             <div
               v-for="(tab, index) in tabs"
@@ -29,9 +27,9 @@
               @click="switchTab(index)"
               class="relative flex items-center gap-3 px-4 py-3 my-1 break-all rounded-xl cursor-pointer group font-medium text-sm transition-colors"
               :class="{
-                'bg-white text-[#0f1e36] shadow-sm dark:bg-gray-800 dark:text-white':
+                'bg-[var(--surface-card)] text-[var(--text-main)] border border-[var(--border-color)]':
                   activeTab === index,
-                'text-gray-600 hover:text-gray-900 hover:bg-white/60 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800/60':
+                'text-[var(--text-sub)] hover:text-[var(--text-main)] hover:bg-[var(--surface-card)]':
                   activeTab !== index,
               }"
             >
@@ -42,15 +40,15 @@
             <div class="mt-auto">
               <div
                 @click="showLogoutConfirmation"
-                class="relative flex items-center gap-3 px-4 py-3 my-2 break-all rounded-xl cursor-pointer group font-medium text-sm text-red-500 dark:text-red-400 hover:bg-white/70 dark:hover:bg-gray-800/60 transition-colors"
+                class="relative flex items-center gap-3 px-4 py-3 my-2 break-all rounded-xl cursor-pointer group font-medium text-sm text-red-500 hover:bg-[var(--surface-card)] transition-colors"
               >
-                退出登录
+                {{ t('lens.settings.logout') }}
               </div>
             </div>
           </div>
           <!-- 右边内容区域 -->
           <div
-            class="w-3/4 bg-white dark:bg-gray-800 rounded-2xl ml-4 border border-gray-100 dark:border-white/10 p-3 min-h-0 overflow-hidden"
+            class="w-3/4 bg-[var(--surface-card)] rounded-2xl ml-4 border border-[var(--border-color)] p-3 min-h-0 overflow-hidden"
           >
             <transition name="fade" mode="out-in">
               <div v-if="!isTabSwitching" key="loaded-content" class="h-full">
@@ -67,10 +65,10 @@
               <div v-else key="loading-placeholder" class="flex justify-center items-center h-full">
                 <div class="animate-pulse flex space-x-4">
                   <div class="flex-1 space-y-4 py-1">
-                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                    <div class="h-4 bg-[var(--surface-muted)] rounded w-3/4"></div>
                     <div class="space-y-2">
-                      <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+                      <div class="h-4 bg-[var(--surface-muted)] rounded"></div>
+                      <div class="h-4 bg-[var(--surface-muted)] rounded w-5/6"></div>
                     </div>
                   </div>
                 </div>
@@ -85,6 +83,7 @@
 
 <script setup lang="ts">
 import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { t } from '@/locales'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
 import { dialog } from '@/utils/dialog'
 import { Close } from '@icon-park/vue-next' // Only Close icon needed now
@@ -108,10 +107,10 @@ const globalConfig = computed(() => authStore.globalConfig)
 // Use markRaw to prevent components from becoming reactive
 const tabs = computed(() => {
   const baseTabs = [
-    { name: '账户安全', component: markRaw(AccountManagement) },
-    { name: '升级套餐', component: markRaw(MemberCenter) },
+    { name: t('lens.settings.accountSecurity'), component: markRaw(AccountManagement) },
+    { name: t('lens.settings.upgradePlan'), component: markRaw(MemberCenter) },
     // { name: '数据管理', component: markRaw(DataManagement) },
-    { name: '使用必读', component: markRaw(NoticeDialog) },
+    { name: t('lens.settings.notice'), component: markRaw(NoticeDialog) },
   ]
 
   // 只有当 globalConfig.isAutoOpenAgreement === '1' 时才添加用户协议选项

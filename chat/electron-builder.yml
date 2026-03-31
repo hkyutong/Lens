@@ -1,5 +1,5 @@
 appId: com.yutoscholar.chat
-productName: YutoLens
+productName: Lens
 copyright: Copyright © 2024 vastxie
 
 directories:
@@ -56,4 +56,4 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 'YutoLens Chat'
+  shortcutName: 'Lens Chat'

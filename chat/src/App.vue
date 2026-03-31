@@ -29,6 +29,7 @@ const showWatermark = computed(() => Number(authStore.globalConfig?.showWatermar
 const clearCacheEnabled = computed(() => Number(authStore.globalConfig?.clearCacheEnabled) === 1)
 const siteName = computed(() => authStore.globalConfig?.siteName || 'Lens')
 const siteUrl = computed(() => authStore.globalConfig?.siteUrl || '')
+const brandSeoTitle = 'Lens｜YutoAI - AI 科研工作台'
 const siteDescription = computed(
   () =>
     authStore.globalConfig?.homeWelcomeContent ||
@@ -201,7 +202,7 @@ async function loadBaiduCode() {
 }
 
 function setDocumentTitle() {
-  document.title = `${siteName.value} | AI 学术工作台`
+  document.title = brandSeoTitle
 }
 
 function syncDocumentSeo() {
@@ -233,7 +234,7 @@ function syncDocumentSeo() {
   setOrCreateMeta('meta[property="og:type"]', { property: 'og:type' }, 'website')
   setOrCreateMeta('meta[property="og:locale"]', { property: 'og:locale' }, 'zh_CN')
   setOrCreateMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, name)
-  setOrCreateMeta('meta[property="og:title"]', { property: 'og:title' }, `${name} | AI 学术工作台`)
+  setOrCreateMeta('meta[property="og:title"]', { property: 'og:title' }, brandSeoTitle)
   setOrCreateMeta('meta[property="og:description"]', { property: 'og:description' }, description)
   setOrCreateMeta('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl)
   setOrCreateMeta('meta[property="og:image"]', { property: 'og:image' }, imageUrl)
@@ -241,7 +242,7 @@ function syncDocumentSeo() {
   setOrCreateMeta(
     'meta[name="twitter:title"]',
     { name: 'twitter:title' },
-    `${name} | AI 学术工作台`
+    brandSeoTitle
   )
   setOrCreateMeta('meta[name="twitter:description"]', { name: 'twitter:description' }, description)
   setOrCreateMeta('meta[name="twitter:image"]', { name: 'twitter:image' }, imageUrl)

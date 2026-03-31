@@ -12,13 +12,13 @@ export const useAppStore = defineStore('app-store', {
     },
 
     setTheme(theme: Theme) {
-      const normalizedTheme: Theme = theme === 'dark' ? 'dark' : 'light'
+      const normalizedTheme: Theme = 'light'
       localStorage.theme = normalizedTheme
       this.theme = normalizedTheme
       window.theme = normalizedTheme
       this.recordState()
       document.documentElement.dataset.theme = normalizedTheme
-      document.documentElement.classList.toggle('dark', normalizedTheme === 'dark')
+      document.documentElement.classList.remove('dark')
       document.documentElement.style.colorScheme = normalizedTheme
     },
 

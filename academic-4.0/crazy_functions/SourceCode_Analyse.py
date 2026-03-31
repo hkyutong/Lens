@@ -1,6 +1,6 @@
 from toolbox import update_ui, promote_file_to_downloadzone
 from toolbox import CatchException, report_exception, write_history_to_file
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 from crazy_functions.crazy_utils import input_clipping
 
 

@@ -21,6 +21,8 @@ import { useGlobalStoreWithOut } from '@/store'
 import { getToken } from '../auth/helper'
 
 const useGlobalStore = useGlobalStoreWithOut()
+const CHAT_HISTORY_PAGE_SIZE = 80
+const CHAT_RENDER_WINDOW_LIMIT = 1200
 
 export const useChatStore = defineStore('chat-store', {
   state: (): Chat.ChatState => getLocalState(),
@@ -85,6 +87,46 @@ export const useChatStore = defineStore('chat-store', {
   },
 
   actions: {
+    normalizeChatRows(rows: any[]) {
+      return (Array.isArray(rows) ? rows : []).map((item: any) => ({
+        ...item,
+        fileUrl: item.fileUrl ?? item.file_url ?? '',
+        imageUrl: item.imageUrl ?? item.image_url ?? '',
+        reasoningText: item.reasoningText ?? item.reasoning_text ?? '',
+        networkSearchResult: item.networkSearchResult ?? item.network_search_result ?? '',
+        fileVectorResult: item.fileVectorResult ?? item.file_vector_result ?? '',
+      }))
+    },
+
+    mergeChatRows(existingRows: Chat.Chat[], incomingRows: Chat.Chat[]) {
+      const merged = [...incomingRows, ...existingRows]
+      const seen = new Set<string>()
+      return merged.filter(item => {
+        const key = String(item?.chatId || '')
+        if (!key) return true
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    },
+
+    trimChatWindowIfNeeded() {
+      if (!Array.isArray(this.chatList) || this.chatList.length <= CHAT_RENDER_WINDOW_LIMIT) return
+      const trimmed = this.chatList.slice(-CHAT_RENDER_WINDOW_LIMIT)
+      this.chatList = trimmed
+      const earliestChatId = Number(trimmed[0]?.chatId || 0)
+      if (earliestChatId > 0) {
+        this.chatHistoryHasMore = true
+        this.chatHistoryCursor = earliestChatId
+      }
+    },
+
+    resetChatHistoryState() {
+      this.chatHistoryHasMore = false
+      this.chatHistoryLoading = false
+      this.chatHistoryCursor = 0
+    },
+
     normalizeAcademicSelectorName(value: any) {
       return String(value || '')
         .trim()
@@ -135,7 +177,36 @@ export const useChatStore = defineStore('chat-store', {
           : Array.isArray(res?.data?.rows)
             ? res.data.rows
             : []
-        this.academicPluginList = rows
+        const renameMap: Record<string, string> = {
+          [this.normalizeAcademicSelectorName(
+            '一键下载arxiv论文并翻译摘要（先在input输入编号，如1812.10695）'
+          )]: 'Arxiv摘要',
+          [this.normalizeAcademicSelectorName('PDF批量总结')]: 'PDF 批量总结',
+          [this.normalizeAcademicSelectorName('PDF深度理解')]: 'PDF 深度理解',
+          [this.normalizeAcademicSelectorName('Word批量总结')]: 'Word 批量总结',
+          [this.normalizeAcademicSelectorName('Arxiv论文下载')]: 'Arxiv摘要',
+          [this.normalizeAcademicSelectorName('Arxiv精准翻译')]: 'Arxiv 英文摘要',
+          [this.normalizeAcademicSelectorName('Arxiv英文摘要')]: 'Arxiv 英文摘要',
+          [this.normalizeAcademicSelectorName('Arxiv精准翻译（输入arxivID）')]: 'Arxiv 英文摘要',
+          [this.normalizeAcademicSelectorName('LaTeX摘要')]: 'LaTeX 摘要',
+          [this.normalizeAcademicSelectorName('LaTeX精准翻译')]: 'LaTeX 精准翻译',
+          [this.normalizeAcademicSelectorName('LaTeX英文润色')]: 'LaTeX 英文润色',
+          [this.normalizeAcademicSelectorName('LaTeX中文润色')]: 'LaTeX 中文润色',
+          [this.normalizeAcademicSelectorName('LaTeX高亮纠错')]: 'LaTeX 高亮纠错',
+        }
+        this.academicPluginList = rows.map((item: any) => {
+          const plugin = {
+            ...item,
+            originName: String(item?.originName || item?.name || ''),
+          }
+          const normalized = this.normalizeAcademicSelectorName(
+            plugin.displayName || plugin.name || ''
+          )
+          if (renameMap[normalized]) {
+            plugin.displayName = renameMap[normalized]
+          }
+          return plugin
+        })
       } catch (error) {}
       this.reconcileAcademicSelectionState()
     },
@@ -171,12 +242,9 @@ export const useChatStore = defineStore('chat-store', {
     },
 
     setAcademicMode(enabled: boolean) {
-      this.academicMode = enabled
-      this.mobileAcademicPanelVisible = enabled
-      if (!enabled) {
-        this.currentAcademicPlugin = undefined
-        this.currentAcademicCore = undefined
-        this.academicPluginArgs = ''
+      this.academicMode = true
+      if (enabled) {
+        this.mobileAcademicPanelVisible = true
       }
     },
 
@@ -310,6 +378,7 @@ export const useChatStore = defineStore('chat-store', {
         this.groupList = []
         this.chatList = []
         this.active = 0
+        this.resetChatHistoryState()
         this.recordState()
         return
       }
@@ -383,12 +452,11 @@ export const useChatStore = defineStore('chat-store', {
       // useGlobalStore.updateImagePreviewer(false)
       // this.chatList = [];
       this.active = uuid
+      this.resetChatHistoryState()
 
       this.groupList.forEach(item => (item.isEdit = false))
       await this.queryActiveChatLogList()
-      if (this.active) {
-        await this.queryActiveChatLogList()
-      } else {
+      if (!this.active) {
         this.chatList = []
       }
       this.active = uuid
@@ -438,40 +506,68 @@ export const useChatStore = defineStore('chat-store', {
 
     /* 查询当前对话组的聊天记录 */
     /* 查询当前对话组的聊天记录 */
-    async queryActiveChatLogList() {
+    async queryActiveChatLogList(loadMore = false) {
       // 如果没有激活的对话组，或者 groupId 为 0，则不进行查询
       if (!this.active || Number(this.active) === 0) {
         this.chatList = [] // 确保没有数据时清空 chatList
+        this.resetChatHistoryState()
         return
       }
+      if (this.chatHistoryLoading) return
+      if (loadMore && !this.chatHistoryHasMore) return
 
+      this.chatHistoryLoading = true
       try {
         // 调用 API 查询聊天记录
         const res: any = await fetchQueryChatLogListAPI({
           groupId: this.active,
+          size: CHAT_HISTORY_PAGE_SIZE,
+          beforeChatId: loadMore ? this.chatHistoryCursor : undefined,
         })
 
+        const payload = res?.data
+        const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.rows) ? payload.rows : []
+        const normalizedList = this.normalizeChatRows(rows)
+        const normalizedWithHiddenFilter = this.applyHiddenReplyFilter(normalizedList, Number(this.active))
+
+        if (Array.isArray(payload)) {
+          this.chatList = normalizedWithHiddenFilter
+          this.chatHistoryHasMore = false
+          this.chatHistoryCursor = Number(this.chatList[0]?.chatId || 0)
+          this.trimChatWindowIfNeeded()
+          return
+        }
+
         // 检查响应数据并更新 chatList
-        if (res && Array.isArray(res.data)) {
-          const normalizedList = res.data.map((item: any) => ({
-            ...item,
-            fileUrl: item.fileUrl ?? item.file_url ?? '',
-            imageUrl: item.imageUrl ?? item.image_url ?? '',
-            reasoningText: item.reasoningText ?? item.reasoning_text ?? '',
-            networkSearchResult: item.networkSearchResult ?? item.network_search_result ?? '',
-            fileVectorResult: item.fileVectorResult ?? item.file_vector_result ?? '',
-          }))
-          this.chatList = this.applyHiddenReplyFilter(normalizedList, Number(this.active))
+        if (normalizedWithHiddenFilter.length) {
+          this.chatList = loadMore
+            ? this.mergeChatRows(this.chatList, normalizedWithHiddenFilter)
+            : normalizedWithHiddenFilter
+          this.chatHistoryHasMore = Boolean(payload?.hasMore)
+          this.chatHistoryCursor = Number(
+            payload?.nextBeforeChatId || this.chatList[0]?.chatId || 0
+          )
+          if (!loadMore) {
+            this.trimChatWindowIfNeeded()
+          }
         } else {
-          this.chatList = [] // 如果没有数据，确保 chatList 为空数组
+          if (!loadMore) {
+            this.chatList = [] // 如果没有数据，确保 chatList 为空数组
+          }
+          this.chatHistoryHasMore = false
+          this.chatHistoryCursor = Number(this.chatList[0]?.chatId || 0)
         }
       } catch (error) {
         // 捕获错误并处理
 
-        this.chatList = [] // 出错时清空 chatList
+        if (!loadMore) {
+          this.chatList = [] // 出错时清空 chatList
+          this.chatHistoryHasMore = false
+          this.chatHistoryCursor = 0
+        }
       } finally {
         // 无论成功还是失败，都调用 recordState
-
+        this.chatHistoryLoading = false
         this.recordState()
       }
     },
@@ -479,6 +575,7 @@ export const useChatStore = defineStore('chat-store', {
     /* 添加一条虚拟的对话记录 */
     addGroupChat(data: Chat.Chat) {
       this.chatList = [...this.chatList, data]
+      this.trimChatWindowIfNeeded()
     },
 
     /* 动态修改对话记录 */
@@ -622,6 +719,7 @@ export const useChatStore = defineStore('chat-store', {
       this.chatList = []
       this.groupList = []
       this.active = 0
+      this.resetChatHistoryState()
       this.hiddenReplyChatIdsByGroup = {}
       this.hiddenReplyTailAnchorByGroup = {}
       this.recordState()

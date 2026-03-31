@@ -1,5 +1,6 @@
 import { ss } from '@/utils/storage'
 import { UserState } from '../users/helper'
+import type { BillingCycle, BillingOption } from '@/types/billing'
 
 const LOCAL_NAME = 'userStorage'
 
@@ -13,13 +14,18 @@ export interface OrderInfo {
     id: number
     des: string
     name: string
-    price: string
+    price: number
     model3Count: number
     model4Count: number
     drawMjCount: number
     coverImg: string
     days: number
+    annualDiscountRate?: number
+    recommendedBillingCycle?: BillingCycle
+    billingOptions?: Record<BillingCycle, BillingOption>
   }
+  billingCycle: BillingCycle
+  billing: BillingOption
 }
 
 export interface GlobalState {

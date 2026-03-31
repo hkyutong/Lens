@@ -79,7 +79,7 @@
     "remaining": "",
     "ordinaryPoints": "Ordinary Points",
     "advancedPoints": "Advanced Points",
-    "drawingPoints": "Drawing Points",
+    "drawingPoints": "Top-tier Model Quota",
     "points": "Points",
     "clearConversation": "Clear Conversation",
     "clearAllNonFavoriteConversations": "Clear all non-favorite conversations?",
@@ -303,7 +303,7 @@
     "permanentAddOnCard": "Permanent Add-On Card",
     "baseModelQuota": "Base Model Quota",
     "advancedModelQuota": "Advanced Model Quota",
-    "MJDrawingQuota": "MJ Drawing Quota",
+    "MJDrawingQuota": "MJ Top-tier Model Quota",
     "packageValidity": "Package Validity",
     "days": "days",
     "permanent": "Permanent",
@@ -316,14 +316,14 @@
     "wechat": "WeChat",
     "alipay": "Alipay",
     "wechatPay": "WeChat Pay",
-    "alipayPay": "Alipay Pay",
+    "alipayPay": "Alipay",
     "paymentSuccess": "Congratulations, your payment was successful. Enjoy your purchase!",
     "paymentTimeout": "Payment timeout, please place your order again!",
     "productPayment": "Product Payment",
     "amountDue": "Amount Due:",
     "packageName": "Package Name:",
     "packageDescription": "Package Description:",
-    "siteAdminEnabledRedirect": "The site administrator has enabled redirect payment",
+    "siteAdminEnabledRedirect": "Secure checkout is ready. Click below to complete your upgrade",
     "clickToPay": "Click to Proceed to Payment",
     "completePaymentWithin": "Please complete the payment within",
     "timeToCompletePayment": "!",
@@ -393,7 +393,7 @@
     "inviteOneUser": "Inviting a user grants",
     "basicModelCredits1": "basic model credits+",
     "advancedModelCredits1": "advanced model credits+",
-    "mjDrawingCredits": "MJ drawing credits",
+    "mjDrawingCredits": "MJ top-tier model quota",
     "receiveInvitation": "Invited users receive",
     "creditsEnd": "credits",
     "invitationRecord": "Invitation Record",
@@ -418,7 +418,7 @@
     "rechargeType": "Recharge Type",
     "basicModelQuota": "Basic Model Quota",
     "advancedModelQuota": "Advanced Model Quota",
-    "mjDrawingQuota": "MJ Drawing Quota",
+    "mjDrawingQuota": "MJ Top-tier Model Quota",
     "validity": "Validity",
     "rechargeTime": "Recharge Time",
     "enterCardSecret": "Please enter the card secret first!",
@@ -428,7 +428,7 @@
     "creditUsageNote": "Each conversation consumes different credits depending on the model!",
     "advancedModelBalance": "Advanced Model Balance",
     "modelConsumptionNote": "Each conversation consumes different credits depending on the model!",
-    "mjDrawingBalance": "MJ Drawing Balance",
+    "mjDrawingBalance": "MJ Top-tier Model Balance",
     "drawingConsumptionNote": "Different credits are consumed based on drawing actions!",
     "cardRecharge": "Card Recharge",
     "enterCardDetails": "Please paste or enter your card details!",
@@ -571,7 +571,7 @@
     "selectProducts": "Select Products",
     "basicModelQuota": "Basic Model Quota",
     "advancedModelQuota": "Advanced Model Quota",
-    "drawingQuota": "Drawing Quota",
+    "drawingQuota": "Top-tier Model Quota",
     "buyPackage": "Buy Package"
   },
   "rechargeTypes": {
@@ -592,5 +592,197 @@
   },
   "messages": {
     "logoutSuccess": "Successfully logged out!"
+  },
+  "lens": {
+    "header": {
+      "projects": "Your Projects",
+      "workspaceSettings": "Workspace Settings",
+      "language": "Language"
+    },
+    "language": {
+      "zh-CN": "简体中文",
+      "zh-TW": "繁體中文",
+      "en-US": "English",
+      "ja-JP": "日本語",
+      "ko-KR": "한국어"
+    },
+    "sidebar": {
+      "newProject": "New Project",
+      "searchProject": "Search Projects",
+      "researchProject": "Research Project",
+      "recent": "Recent",
+      "pinned": "Pinned",
+      "login": "Sign In",
+      "account": "Research Preferences & Account",
+      "signedIn": "Signed In",
+      "loginDesc": "Save projects and research records"
+    },
+    "settings": {
+      "setting": "Settings",
+      "accountSecurity": "Account Security",
+      "upgradePlan": "Upgrade Plan",
+      "notice": "Usage Notes",
+      "logout": "Sign Out"
+    },
+    "member": {
+      "planList": "Plans",
+      "planSubtitle": "Start flexibly with monthly billing, or save more with annual billing.",
+      "monthly": "Monthly",
+      "annual": "Annual",
+    "annualBetter": "Annual Saves More",
+    "openNow": "Start Now",
+    "max": "Max",
+    "pro": "Pro",
+    "plus": "Plus",
+    "plusSummary": "For lightweight research, everyday questions, and core writing tasks.",
+    "proSummary": "For frequent academic writing, deep reading, and polished deliverables.",
+    "maxSummary": "For intensive research, full model access, and demanding workflows.",
+    "annualSave": "Save {value}% yearly",
+    "pricePerMonth": "/month",
+    "pricePerYear": "/year",
+    "monthlyEquivalent": "Equivalent to ￥{value}/month",
+    "usdPerMonth": "{value} USD/month",
+    "features": {
+      "basicModels": "Base models",
+      "advancedModelsLite": "Light advanced models",
+      "advancedModels": "Advanced models",
+      "allModels": "All model tiers",
+      "paperSummary": "Paper summary",
+      "englishPolish": "English polishing",
+      "pdfDeepRead": "Deep PDF reading",
+      "latexTranslation": "LaTeX translation",
+      "bibtex": "References to BibTeX",
+      "fullResearchTools": "Full research toolkit",
+      "complexReasoning": "Complex reasoning",
+      "specialModels": "Top-tier models"
+    }
+  },
+    "workspace": {
+      "introWithProjects": "Start a new research task",
+      "introFirstUse": "First time here? Start here",
+      "introDesc": "Type your question below or add materials first.",
+      "importData": "Import Files",
+      "guideWithProjects": "Start in 3 simple steps",
+      "guideFirstUse": "First time? Follow these 3 steps",
+      "stepAddData": "Add materials",
+      "stepInputTask": "Enter task",
+      "stepFollowUp": "Ask follow-ups",
+      "starterTitle": "You can also use these frequently used capabilities",
+      "starterPaperSummary": "Summarize Paper",
+      "starterPaperSummaryPrompt": "Please summarize this paper's research question, methodology, core conclusions, and key contributions.",
+      "starterEnglishPolish": "Polish English",
+      "starterEnglishPolishPrompt": "Please polish this English abstract while keeping it academically accurate, concise, and natural.",
+      "starterLatexTranslation": "Translate LaTeX",
+      "starterLatexTranslationPrompt": "Please keep LaTeX formulas and commands unchanged and translate this content into Chinese.",
+      "starterCodeExplain": "Explain Code",
+      "starterCodeExplainPrompt": "Please explain what this code does, its inputs and outputs, and the key implementation logic."
+    },
+    "academicPanel": {
+      "title": "Workspace Settings",
+      "subtitle": "Configure the current workflow, capabilities, and advanced tools.",
+      "close": "Close workspace settings",
+      "pinnedPanel": "Pinned Panel",
+      "modeLabel": "Mode",
+      "researchMode": "Research Mode",
+      "advancedInstruction": "Advanced Instructions",
+      "filled": "Filled",
+      "empty": "Empty",
+      "coreLabel": "Core Capabilities",
+      "pluginLabel": "Advanced Tools",
+      "corePlaceholder": "Disabled",
+      "pluginPlaceholder": "Disabled",
+      "groupLabel": "Tool Group",
+      "groupAcademic": "Academic",
+      "groupConversation": "Chat",
+      "groupProgramming": "Coding",
+      "advancedExpand": "Show Advanced Settings",
+      "advancedCollapse": "Hide Advanced Settings",
+      "quickCoreTitle": "Frequently Used Core Capabilities",
+      "quickToolTitle": "Frequently Used Research Tools",
+      "customInstructionLabel": "Custom Instructions",
+      "customInstructionPlaceholderInactive": "Select a tool before filling this in",
+      "customInstructionPlaceholder": "For example: do not translate professional terms such as Agent",
+      "customInstructionHint": "Only fill this in when you need to constrain terminology, output format, or translation strategy.",
+      "workflowLabel": "Current Workflow",
+      "workflowFallbackLabel": "No research workflow configured",
+      "workflowFallbackDesc": "Choose a core capability or an advanced tool to configure the current research workflow.",
+      "selectedKindCore": "Core Capability",
+      "selectedKindTool": "Advanced Tool",
+      "selectedKindPending": "Pending"
+    },
+    "academicEntities": {
+      "core": {
+        "chinesePolish": {
+          "label": "Chinese Polishing",
+          "description": "Polish academic Chinese for clearer structure and expression."
+        },
+        "englishPolish": {
+          "label": "English Polishing",
+          "description": "Polish academic English for grammar, style, and clarity."
+        },
+        "mindMap": {
+          "label": "Mind Map",
+          "description": "Convert text into a structured mind map."
+        },
+        "translation": {
+          "label": "Chinese-English Translation",
+          "description": "Translate academic content between Chinese and English."
+        },
+        "bibtex": {
+          "label": "References to BibTeX",
+          "description": "Convert reference entries into BibTeX format."
+        },
+        "codeExplain": {
+          "label": "Academic Code Explanation",
+          "description": "Explain code meaning, inputs, outputs, and key logic."
+        }
+      },
+      "tool": {
+        "paperSummary": {
+          "label": "Paper Summary",
+          "description": "Read and summarize a paper's questions, methods, findings, and contributions."
+        },
+        "pdfBatchSummary": {
+          "label": "Batch PDF Summary",
+          "description": "Summarize multiple PDF files in one run."
+        },
+        "pdfDeepRead": {
+          "label": "Deep PDF Reading",
+          "description": "Extract and analyze key arguments, methods, and findings from a PDF."
+        },
+        "wordBatchSummary": {
+          "label": "Batch Word Summary",
+          "description": "Summarize multiple Word documents in one run."
+        },
+        "arxivSummary": {
+          "label": "arXiv Summary",
+          "description": "Fetch and summarize an arXiv paper by identifier."
+        },
+        "arxivEnglishSummary": {
+          "label": "arXiv English Summary",
+          "description": "Generate an English summary for an arXiv paper."
+        },
+        "latexSummary": {
+          "label": "LaTeX Summary",
+          "description": "Summarize LaTeX manuscripts while preserving structure."
+        },
+        "latexPreciseTranslation": {
+          "label": "Precise LaTeX Translation",
+          "description": "Translate LaTeX content while preserving formulas and commands."
+        },
+        "latexEnglishPolish": {
+          "label": "LaTeX English Polishing",
+          "description": "Polish English in LaTeX without breaking commands."
+        },
+        "latexChinesePolish": {
+          "label": "LaTeX Chinese Polishing",
+          "description": "Polish Chinese in LaTeX without breaking commands."
+        },
+        "latexProofreading": {
+          "label": "LaTeX Highlighted Proofreading",
+          "description": "Mark and correct issues in LaTeX with highlighted edits."
+        }
+      }
+    }
   }
 }

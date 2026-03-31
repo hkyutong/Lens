@@ -1,0 +1,195 @@
+{
+  "language": "한국어",
+  "lens": {
+    "header": {
+      "projects": "내 프로젝트",
+      "workspaceSettings": "워크스페이스 설정",
+      "language": "언어"
+    },
+    "language": {
+      "zh-CN": "简体中文",
+      "zh-TW": "繁體中文",
+      "en-US": "English",
+      "ja-JP": "日本語",
+      "ko-KR": "한국어"
+    },
+    "sidebar": {
+      "newProject": "새 프로젝트",
+      "searchProject": "프로젝트 검색",
+      "researchProject": "연구 프로젝트",
+      "recent": "최근",
+      "pinned": "고정",
+      "login": "로그인",
+      "account": "연구 설정 및 계정",
+      "signedIn": "로그인됨",
+      "loginDesc": "프로젝트와 연구 기록 저장"
+    },
+    "settings": {
+      "setting": "설정",
+      "accountSecurity": "계정 보안",
+      "upgradePlan": "요금제 업그레이드",
+      "notice": "이용 안내",
+      "logout": "로그아웃"
+    },
+    "member": {
+      "planList": "요금제 목록",
+      "planSubtitle": "월 단위로 유연하게 시작하고, 연 단위로 더 절약하세요.",
+      "monthly": "월간",
+      "annual": "연간",
+    "annualBetter": "연간이 더 저렴",
+    "openNow": "지금 시작",
+    "max": "Max",
+    "pro": "Pro",
+    "plus": "Plus",
+    "plusSummary": "가벼운 연구, 일상 질문, 기본 글쓰기에 적합합니다.",
+    "proSummary": "고빈도 학술 글쓰기, 깊이 있는 읽기, 정식 결과물 제작에 적합합니다.",
+    "maxSummary": "집중 연구, 전체 모델 등급 활용, 고강도 워크플로에 맞춰 설계되었습니다.",
+    "annualSave": "연간 구독 시 {value}% 절약",
+    "pricePerMonth": "/월",
+    "pricePerYear": "/년",
+    "monthlyEquivalent": "월 환산 ￥{value}",
+    "usdPerMonth": "{value} USD/월",
+    "features": {
+      "basicModels": "기본 모델",
+      "advancedModelsLite": "소량의 고급 모델",
+      "advancedModels": "고급 모델",
+      "allModels": "전체 모델 등급",
+      "paperSummary": "논문 요약",
+      "englishPolish": "영문 윤문",
+      "pdfDeepRead": "PDF 심층 이해",
+      "latexTranslation": "LaTeX 번역",
+      "bibtex": "참고문헌 Bib 변환",
+      "fullResearchTools": "전체 연구 도구",
+      "complexReasoning": "복잡한 추론",
+      "specialModels": "최상위 모델"
+    }
+  },
+    "workspace": {
+      "introWithProjects": "새 연구 작업 시작",
+      "introFirstUse": "처음이라면 여기서 시작하세요",
+      "introDesc": "아래에 질문을 입력하거나 먼저 자료를 추가하세요.",
+      "importData": "자료 가져오기",
+      "guideWithProjects": "연구 시작은 이 3단계면 충분합니다",
+      "guideFirstUse": "처음이라면 이 3단계로 시작하세요",
+      "stepAddData": "자료 추가",
+      "stepInputTask": "작업 입력",
+      "stepFollowUp": "추가 질문",
+      "starterTitle": "자주 쓰는 기능을 바로 눌러 사용할 수도 있습니다",
+      "starterPaperSummary": "논문 요약",
+      "starterPaperSummaryPrompt": "이 논문의 연구 문제, 방법, 핵심 결론, 주요 기여를 요약해 주세요.",
+      "starterEnglishPolish": "영문 다듬기",
+      "starterEnglishPolishPrompt": "이 영어 초록을 학술적으로 정확하고 간결하며 자연스럽게 다듬어 주세요.",
+      "starterLatexTranslation": "LaTeX 번역",
+      "starterLatexTranslationPrompt": "LaTeX 수식과 명령은 그대로 유지하고, 이 내용을 중국어로 번역해 주세요.",
+      "starterCodeExplain": "코드 설명",
+      "starterCodeExplainPrompt": "이 코드의 역할, 입력과 출력, 핵심 구현 로직을 설명해 주세요."
+    },
+    "academicPanel": {
+      "title": "워크스페이스 설정",
+      "subtitle": "현재 워크플로, 기능, 고급 도구를 설정합니다.",
+      "close": "워크스페이스 설정 닫기",
+      "pinnedPanel": "고정 패널",
+      "modeLabel": "모드",
+      "researchMode": "연구 모드",
+      "advancedInstruction": "고급 지시",
+      "filled": "입력됨",
+      "empty": "미입력",
+      "coreLabel": "기본 기능",
+      "pluginLabel": "고급 도구",
+      "corePlaceholder": "사용 안 함",
+      "pluginPlaceholder": "사용 안 함",
+      "groupLabel": "도구 그룹",
+      "groupAcademic": "학술",
+      "groupConversation": "대화",
+      "groupProgramming": "프로그래밍",
+      "advancedExpand": "고급 설정 펼치기",
+      "advancedCollapse": "고급 설정 접기",
+      "quickCoreTitle": "자주 쓰는 핵심 기능",
+      "quickToolTitle": "자주 쓰는 연구 도구",
+      "customInstructionLabel": "사용자 지정 지시",
+      "customInstructionPlaceholderInactive": "먼저 도구를 선택한 뒤 입력하세요",
+      "customInstructionPlaceholder": "예: Agent 같은 전문 용어는 번역하지 않기",
+      "customInstructionHint": "용어, 출력 형식, 번역 전략을 제어해야 할 때만 입력하세요.",
+      "workflowLabel": "현재 워크플로",
+      "workflowFallbackLabel": "연구 워크플로가 아직 설정되지 않았습니다",
+      "workflowFallbackDesc": "핵심 기능 또는 고급 도구를 선택해 현재 연구 워크플로를 설정하세요.",
+      "selectedKindCore": "핵심 기능",
+      "selectedKindTool": "고급 도구",
+      "selectedKindPending": "대기 중"
+    },
+    "academicEntities": {
+      "core": {
+        "chinesePolish": {
+          "label": "중문 다듬기",
+          "description": "중국어 학술 표현과 구조를 더 매끄럽게 다듬습니다."
+        },
+        "englishPolish": {
+          "label": "영문 다듬기",
+          "description": "영문 논문의 문법, 문체, 명확성을 다듬습니다."
+        },
+        "mindMap": {
+          "label": "마인드맵 생성",
+          "description": "텍스트를 구조화된 마인드맵으로 변환합니다."
+        },
+        "translation": {
+          "label": "중영 상호 번역",
+          "description": "학술 맥락에서 중국어와 영어를 상호 번역합니다."
+        },
+        "bibtex": {
+          "label": "참고문헌 BibTeX 변환",
+          "description": "참고문헌 항목을 BibTeX 형식으로 변환합니다."
+        },
+        "codeExplain": {
+          "label": "학술형 코드 설명",
+          "description": "코드의 의미, 입출력, 핵심 로직을 설명합니다."
+        }
+      },
+      "tool": {
+        "paperSummary": {
+          "label": "논문 빠른 요약",
+          "description": "논문의 연구 문제, 방법, 결론, 기여를 빠르게 요약합니다."
+        },
+        "pdfBatchSummary": {
+          "label": "PDF 일괄 요약",
+          "description": "여러 PDF 파일을 한 번에 요약합니다."
+        },
+        "pdfDeepRead": {
+          "label": "PDF 심층 이해",
+          "description": "PDF의 핵심 논점, 방법, 결과를 추출하고 분석합니다."
+        },
+        "wordBatchSummary": {
+          "label": "Word 일괄 요약",
+          "description": "여러 Word 문서를 한 번에 요약합니다."
+        },
+        "arxivSummary": {
+          "label": "arXiv 요약",
+          "description": "식별자로 arXiv 논문을 가져와 요약합니다."
+        },
+        "arxivEnglishSummary": {
+          "label": "arXiv 영문 요약",
+          "description": "arXiv 논문의 영어 요약을 생성합니다."
+        },
+        "latexSummary": {
+          "label": "LaTeX 요약",
+          "description": "구조를 유지한 채 LaTeX 원고를 요약합니다."
+        },
+        "latexPreciseTranslation": {
+          "label": "LaTeX 정밀 번역",
+          "description": "수식과 명령을 유지한 채 LaTeX 내용을 정확히 번역합니다."
+        },
+        "latexEnglishPolish": {
+          "label": "LaTeX 영문 다듬기",
+          "description": "명령을 깨뜨리지 않고 LaTeX 영어 문장을 다듬습니다."
+        },
+        "latexChinesePolish": {
+          "label": "LaTeX 중문 다듬기",
+          "description": "명령을 깨뜨리지 않고 LaTeX 중국어 문장을 다듬습니다."
+        },
+        "latexProofreading": {
+          "label": "LaTeX 하이라이트 교정",
+          "description": "LaTeX의 문제를 강조 표시하며 교정합니다."
+        }
+      }
+    }
+  }
+}

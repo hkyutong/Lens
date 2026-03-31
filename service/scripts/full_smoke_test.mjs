@@ -1,6 +1,8 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { execFileSync } from 'node:child_process'
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:9520/api'
 const LOGIN_USER = process.env.LOGIN_USER || 'super'
@@ -9,6 +11,10 @@ const TARGET_MODEL = process.env.SMOKE_MODEL || 'gpt-5-nano'
 const TARGET_MODEL_NAME = process.env.SMOKE_MODEL_NAME || 'GPT-5 nano'
 const SMOKE_CORE_ONLY = String(process.env.SMOKE_CORE_ONLY || 'false').toLowerCase() === 'true'
 const SMOKE_PLUGIN_LIMIT = Math.max(Number(process.env.SMOKE_PLUGIN_LIMIT || 0), 0)
+const scriptDir = path.dirname(fileURLToPath(import.meta.url))
+const serviceDir = path.resolve(scriptDir, '..')
+const lensDir = path.resolve(serviceDir, '..')
+const fixtureDir = path.join(serviceDir, 'public/file/dev/smoke-e2e')
 
 const sampleFiles = { pdf: '', docx: '', tex: '', zip: '' }
 
@@ -16,24 +22,34 @@ const pickExistingFile = (...candidates) => candidates.find(p => p && fs.existsS
 
 const fixturePaths = {
   pdf: pickExistingFile(
-    path.resolve('service/public/file/dev/smoke-e2e/smoke.pdf'),
-    path.resolve('service/public/file/dev/e2e-1771408519075/smoke.pdf'),
-    path.resolve('service/public/file/dev/e2e-1771406609693/smoke.pdf'),
-    path.resolve('node_modules/.pnpm/pdf-parse@1.1.1/node_modules/pdf-parse/test/data/01-valid.pdf'),
+    path.join(fixtureDir, 'smoke.pdf'),
+    path.join(serviceDir, 'public/file/dev/e2e-1771408519075/smoke.pdf'),
+    path.join(serviceDir, 'public/file/dev/e2e-1771406609693/smoke.pdf'),
+    path.join(
+      serviceDir,
+      'node_modules/.pnpm/pdf-parse@1.1.1/node_modules/pdf-parse/test/data/01-valid.pdf',
+    ),
+    path.join(lensDir, 'chat/node_modules/pdf-parse/test/data/01-valid.pdf'),
   ),
   docx: pickExistingFile(
-    path.resolve('service/public/file/dev/smoke-e2e/smoke.docx'),
-    path.resolve('service/public/file/dev/e2e-1771408519075/smoke.docx'),
-    path.resolve('service/public/file/dev/e2e-1771406609693/smoke.docx'),
-    path.resolve(
+    path.join(fixtureDir, 'smoke.docx'),
+    path.join(serviceDir, 'public/file/dev/e2e-1771408519075/smoke.docx'),
+    path.join(serviceDir, 'public/file/dev/e2e-1771406609693/smoke.docx'),
+    path.join(
+      serviceDir,
       'node_modules/.pnpm/mammoth@1.9.0/node_modules/mammoth/test/test-data/single-paragraph.docx',
     ),
+    path.join(lensDir, 'chat/node_modules/mammoth/test/test-data/single-paragraph.docx'),
   ),
   zip: pickExistingFile(
-    path.resolve('service/public/file/dev/smoke-e2e/smoke.zip'),
-    path.resolve('service/public/file/dev/e2e-1771408519075/smoke.zip'),
-    path.resolve('service/public/file/dev/e2e-1771406609693/smoke.zip'),
-    path.resolve('node_modules/.pnpm/mammoth@1.9.0/node_modules/mammoth/test/test-data/hello.zip'),
+    path.join(fixtureDir, 'smoke.zip'),
+    path.join(serviceDir, 'public/file/dev/e2e-1771408519075/smoke.zip'),
+    path.join(serviceDir, 'public/file/dev/e2e-1771406609693/smoke.zip'),
+    path.join(
+      serviceDir,
+      'node_modules/.pnpm/mammoth@1.9.0/node_modules/mammoth/test/test-data/hello.zip',
+    ),
+    path.join(lensDir, 'chat/node_modules/mammoth/test/test-data/hello.zip'),
   ),
 }
 
@@ -126,20 +142,194 @@ const parseApiHost = () => {
   }
 }
 
+const writeFixtureFile = (targetPath, content) => {
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+  fs.writeFileSync(targetPath, content, 'utf8')
+}
+
+const buildProjectFixtureZip = zipPath => {
+  const sourceDir = path.join(fixtureDir, 'project-src')
+  fs.rmSync(sourceDir, { recursive: true, force: true })
+  fs.mkdirSync(path.join(sourceDir, 'src'), { recursive: true })
+  fs.mkdirSync(path.join(sourceDir, 'docs'), { recursive: true })
+
+  writeFixtureFile(
+    path.join(sourceDir, 'main.py'),
+    [
+      'def summarize_status(status: str) -> str:',
+      '    return f"状态：{status}"',
+      '',
+      'if __name__ == "__main__":',
+      '    print(summarize_status("测试通过"))',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'analysis.m'),
+    [
+      'function result = analysis(x)',
+      'result = mean(x);',
+      'end',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'main.cpp'),
+    [
+      '#include "helper.hpp"',
+      '#include <iostream>',
+      'int main() {',
+      '  std::cout << helper_message() << std::endl;',
+      '  return 0;',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'helper.hpp'),
+    [
+      '#pragma once',
+      '#include <string>',
+      'inline std::string helper_message() { return "test passed"; }',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'main.go'),
+    [
+      'package main',
+      'import "fmt"',
+      'func main() {',
+      '  fmt.Println("test passed")',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'main.rs'),
+    [
+      'fn main() {',
+      '    println!("test passed");',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'Main.java'),
+    [
+      'public class Main {',
+      '  public static void main(String[] args) {',
+      '    System.out.println("test passed");',
+      '  }',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'Program.cs'),
+    [
+      'using System;',
+      'class Program {',
+      '  static void Main() {',
+      '    Console.WriteLine("test passed");',
+      '  }',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'main.lua'),
+    [
+      'local function status()',
+      '  return "test passed"',
+      'end',
+      'print(status())',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'src/index.ts'),
+    [
+      'export const message = "test passed";',
+      'console.log(message);',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'src/app.css'),
+    [
+      'body {',
+      '  font-family: sans-serif;',
+      '  color: #111;',
+      '}',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'README.md'),
+    [
+      '# Smoke Project',
+      '',
+      'This repository is used to test project-analysis plugins.',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'docs/README.md'),
+    [
+      '# Notes',
+      '',
+      'The project contains multiple language samples.',
+      '',
+    ].join('\n'),
+  )
+  writeFixtureFile(
+    path.join(sourceDir, 'notebook.ipynb'),
+    JSON.stringify(
+      {
+        cells: [
+          {
+            cell_type: 'markdown',
+            metadata: {},
+            source: ['# Smoke Notebook\n', 'This notebook is used for plugin validation.\n'],
+          },
+          {
+            cell_type: 'code',
+            execution_count: 1,
+            metadata: {},
+            outputs: [],
+            source: ['print("test passed")\n'],
+          },
+        ],
+        metadata: {
+          kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' },
+          language_info: { name: 'python', version: '3.11' },
+        },
+        nbformat: 4,
+        nbformat_minor: 5,
+      },
+      null,
+      2,
+    ),
+  )
+
+  fs.rmSync(zipPath, { force: true })
+  execFileSync('zip', ['-qr', zipPath, '.'], { cwd: sourceDir })
+}
+
 const prepareSampleFiles = async () => {
-  const fixtureDir = path.resolve('service/public/file/dev/smoke-e2e')
   fs.mkdirSync(fixtureDir, { recursive: true })
 
   const texFixture = path.join(fixtureDir, 'smoke.tex')
   fs.writeFileSync(
     texFixture,
     [
-      '\\\\documentclass{article}',
-      '\\\\begin{document}',
+      '\\documentclass{article}',
+      '\\begin{document}',
       'This is a smoke test tex file.',
-      '\\\\end{document}',
+      '\\end{document}',
       '',
-    ].join('\\n'),
+    ].join('\n'),
     'utf8',
   )
 
@@ -153,7 +343,7 @@ const prepareSampleFiles = async () => {
 
   fs.copyFileSync(fixturePaths.pdf, path.join(fixtureDir, 'smoke.pdf'))
   fs.copyFileSync(fixturePaths.docx, path.join(fixtureDir, 'smoke.docx'))
-  fs.copyFileSync(fixturePaths.zip, path.join(fixtureDir, 'smoke.zip'))
+  buildProjectFixtureZip(path.join(fixtureDir, 'smoke.zip'))
 
   const host = parseApiHost()
   sampleFiles.pdf = `${host}/file/dev/smoke-e2e/smoke.pdf`
@@ -364,7 +554,7 @@ const main = async () => {
     }
     const outputText = String(rs.finalContent || rs.lines.join('\n') || '')
     const hardErrorPattern =
-      /(?:Traceback|插件调用出错|学术后端未返回可展示内容|已收到请求，但未返回可展示内容)/i
+      /(?:Traceback|插件调用出错|学术后端未返回可展示内容|已收到请求，但未返回可展示内容|学术服务连接异常|服务暂时不可用)/i
     const hasHardError = hardErrorPattern.test(outputText)
 
     const row = {

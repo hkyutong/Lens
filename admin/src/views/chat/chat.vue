@@ -83,7 +83,7 @@ meta:
       case 2:
         return '创意模型';
       case 3:
-        return '特殊模型';
+        return '顶级模型';
       default:
         return `类型${type}`;
     }
@@ -211,7 +211,7 @@ meta:
           >
             <el-option label="基础对话" value="1" />
             <el-option label="创意模型" value="2" />
-            <el-option label="特殊模型" value="3" />
+            <el-option label="顶级模型" value="3" />
           </el-select>
         </el-form-item>
         <el-form-item>

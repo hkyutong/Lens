@@ -96,6 +96,9 @@ declare namespace Chat {
     currentAcademicPlugin?: any
     currentAcademicCore?: any
     preferredModel?: any
+    chatHistoryHasMore?: boolean
+    chatHistoryLoading?: boolean
+    chatHistoryCursor?: number
     hiddenReplyChatIdsByGroup?: Record<number, number[]>
     hiddenReplyTailAnchorByGroup?: Record<number, number>
     prompt?: string

@@ -12,7 +12,8 @@ def write_chat_to_file(chatbot, history=None, file_name=None):
     """
     import os
     import time
-    from themes.theme import advanced_css
+    from shared_utils.report_style import get_academic_report_css
+    advanced_css = get_academic_report_css()
     # debug
     import pickle
     # def objdump(obj, file="objdump.tmp"):

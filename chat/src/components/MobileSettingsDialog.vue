@@ -2,28 +2,26 @@
   <transition name="modal-fade">
     <div
       v-if="props.visible"
-      class="fixed inset-0 z-[9000] flex items-center justify-center bg-gray-900 bg-opacity-50"
+      class="fixed inset-0 z-[9000] flex items-center justify-center bg-[rgba(8,8,8,0.22)] backdrop-blur-[2px]"
     >
-      <div class="w-full h-full bg-white dark:bg-gray-750 flex flex-col overflow-hidden">
+      <div class="w-full h-full bg-[var(--surface-card)] flex flex-col overflow-hidden">
         <!-- 标题部分 -->
-        <div
-          class="flex justify-between items-center mb-2 flex-shrink-0 px-4 pt-4 pb-2 border-b dark:border-gray-600"
-        >
+        <div class="flex justify-between items-center mb-2 flex-shrink-0 px-4 pt-4 pb-2">
           <div class="flex items-center">
             <button
               v-if="currentView !== 'main'"
               @click="backToMainView"
-              class="mr-2 p-1 rounded-full text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
+              class="mr-2 p-1 rounded-full text-[var(--text-sub)] hover:text-[var(--text-main)] hover:bg-[var(--surface-muted)] focus:outline-none"
             >
               <ArrowLeft size="20" />
             </button>
-            <span class="text-xl font-semibold dark:text-white">
-              {{ currentView === 'main' ? '设置' : currentTabTitle }}
+            <span class="text-xl font-semibold text-[var(--text-main)]">
+              {{ currentView === 'main' ? t('lens.settings.setting') : currentTabTitle }}
             </span>
           </div>
           <button
             @click="handleClose"
-            class="p-1 rounded-full text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none"
+            class="p-1 rounded-full text-[var(--text-sub)] hover:text-[var(--text-main)] hover:bg-[var(--surface-muted)] focus:outline-none"
           >
             <Close size="20" />
           </button>
@@ -36,19 +34,19 @@
             <div
               v-for="(tab, index) in tabs"
               :key="`mobile-tab-${index}`"
-              class="mb-1 border-b dark:border-gray-600 last:border-b-0"
+              class="mb-1 border-b border-[var(--border-color)] last:border-b-0"
             >
               <div
                 @click="navigateToTab(index)"
-                class="flex justify-between items-center px-4 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors duration-150"
+                class="flex justify-between items-center px-4 py-4 cursor-pointer hover:bg-[var(--surface-muted)] rounded-lg transition-colors duration-150"
                 :class="{
-                  'text-gray-800 dark:text-gray-200': true,
+                  'text-[var(--text-main)]': true,
                 }"
               >
                 <span class="font-medium text-base">{{ tab.name }}</span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 text-gray-400"
+                  class="h-5 w-5 text-[var(--ink-faint)]"
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -78,9 +76,9 @@
           <div v-if="currentView === 'main'" class="mt-auto pt-4 pb-2 flex-shrink-0 px-4">
             <button
               @click="showLogoutConfirmation"
-              class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg cursor-pointer group font-medium text-sm text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-500/50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-red-300 dark:focus:ring-red-600"
+              class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg cursor-pointer group font-medium text-sm text-red-500 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-red-200"
             >
-              退出登录
+              {{ t('lens.settings.logout') }}
             </button>
           </div>
         </div>
@@ -90,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import { useAuthStore, useGlobalStore } from '@/store'
 import { dialog } from '@/utils/dialog'
 import { ArrowLeft, Close } from '@icon-park/vue-next'
@@ -115,10 +114,10 @@ const initialTab = computed(() => globalStore.mobileInitialTab)
 // 使用computed让tabs内容随条件变化
 const tabs = computed(() => {
   const baseTabs = [
-    { name: '账户安全', component: markRaw(AccountManagement), id: 'account' },
-    { name: '升级套餐', component: markRaw(MemberCenter), id: 'member' },
+    { name: t('lens.settings.accountSecurity'), component: markRaw(AccountManagement), id: 'account' },
+    { name: t('lens.settings.upgradePlan'), component: markRaw(MemberCenter), id: 'member' },
     // { name: '数据管理', component: markRaw(DataManagement), id: 'data' },
-    { name: '使用必读', component: markRaw(NoticeDialog), id: 'notice' },
+    { name: t('lens.settings.notice'), component: markRaw(NoticeDialog), id: 'notice' },
   ]
 
   // 只有当 globalConfig.isAutoOpenAgreement === '1' 时才添加用户协议选项

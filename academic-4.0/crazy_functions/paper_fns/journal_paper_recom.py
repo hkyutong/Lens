@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from crazy_functions.pdf_fns.text_content_loader import TextContentLoader
 from crazy_functions.crazy_utils import request_gpt_model_in_new_thread_with_ui_alive
 from toolbox import update_ui, promote_file_to_downloadzone, write_history_to_file, CatchException, report_exception
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 # 导入论文下载相关函数
 from crazy_functions.论文下载 import extract_paper_id, extract_paper_ids, get_arxiv_paper, format_arxiv_id, SciHub
 from pathlib import Path

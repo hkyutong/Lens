@@ -78,7 +78,7 @@ function findFilePath(filename: string): string | null {
 
 async function bootstrap() {
   console.log('\n======================================');
-  console.log('        YutoLens 服务启动中...            ');
+  console.log('          Lens 服务启动中...             ');
   console.log('======================================\n');
 
   const redisUrl = process.env.REDIS_URL;
@@ -217,8 +217,8 @@ async function bootstrap() {
   // 只在测试环境下启用Swagger
   if (process.env.ISDEV === 'true') {
     const config = new DocumentBuilder()
-      .setTitle('YutoLens API')
-      .setDescription('YutoLens 服务 API 文档')
+      .setTitle('Lens API')
+      .setDescription('Lens 服务 API 文档')
       .setVersion('1.0')
       .addBearerAuth()
       .build();

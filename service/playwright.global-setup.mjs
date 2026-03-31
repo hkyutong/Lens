@@ -7,7 +7,7 @@ const serviceDir = __dirname
 const guardScript = path.join(serviceDir, 'scripts/guard_playwright_policy.mjs')
 
 export default async () => {
-  const rs = spawnSync(process.execPath, [guardScript, '--require-edge'], {
+  const rs = spawnSync(process.execPath, [guardScript, '--require-local-browser'], {
     cwd: serviceDir,
     stdio: 'inherit',
     env: {
@@ -16,6 +16,6 @@ export default async () => {
     },
   })
   if (rs.status !== 0) {
-    throw new Error('Playwright策略校验失败（Edge或安装策略不满足）')
+    throw new Error('Playwright策略校验失败（本机 Chrome/Chromium 或安装策略不满足）')
   }
 }

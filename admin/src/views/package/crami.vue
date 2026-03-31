@@ -373,7 +373,7 @@ meta:
             <el-input
               v-model.number="form.drawMjCount"
               type="number"
-              placeholder="卡密携带顶级积分额度"
+              placeholder="卡密携带顶级模型额度"
             />
           </el-form-item>
         </div>

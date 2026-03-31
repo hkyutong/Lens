@@ -350,7 +350,7 @@ meta:
         </el-row>
         <el-row>
           <el-col :xs="24" :md="20" :lg="15" :xl="12">
-            <el-form-item label="顶级积分额度" prop="visitorMJNum">
+            <el-form-item label="顶级模型额度" prop="visitorMJNum">
               <el-input
                 v-model="formInline.visitorMJNum"
                 type="number"

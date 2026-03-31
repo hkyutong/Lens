@@ -20,7 +20,7 @@ const BASE = process.env.BASE_URL || 'http://127.0.0.1:9520/api'
 const SUPER_USER = process.env.SUPER_USER || 'super'
 const SUPER_PASS = process.env.SUPER_PASS || '123456'
 const MODEL = process.env.E2E_MODEL || 'gpt-5-nano'
-const NAMESPACE = process.env.NAMESPACE || 'YutoLens'
+const NAMESPACE = process.env.NAMESPACE || 'Lens'
 const E2E_CORE_ONLY = String(process.env.E2E_CORE_ONLY || 'false').toLowerCase() === 'true'
 const E2E_PLUGIN_LIMIT = Math.max(Number(process.env.E2E_PLUGIN_LIMIT || 0), 0)
 

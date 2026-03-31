@@ -229,10 +229,26 @@ async function mountRegressionApi(page, options = {}) {
     }
 
     if (path === '/chatlog/chatList') {
+      const size = Math.max(Number(parsed.searchParams.get('size') || 80), 1);
+      const beforeChatId = Number(parsed.searchParams.get('beforeChatId') || 0);
+      const ordered = [...groupLogs].sort((a, b) => Number(a.chatId || 0) - Number(b.chatId || 0));
+      const filtered = beforeChatId
+        ? ordered.filter(item => Number(item.chatId || 0) < beforeChatId)
+        : ordered;
+      const pageRows = filtered.slice(Math.max(filtered.length - size, 0));
+      const nextBeforeChatId = Number(pageRows[0]?.chatId || 0);
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: groupLogs, message: 'ok' }),
+        body: JSON.stringify({
+          success: true,
+          data: {
+            rows: pageRows,
+            hasMore: filtered.length > pageRows.length,
+            nextBeforeChatId,
+          },
+          message: 'ok',
+        }),
       });
       return;
     }

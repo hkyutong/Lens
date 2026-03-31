@@ -9,4 +9,11 @@ export class BuyDto {
 
   @ApiProperty({ example: 1, description: '购买数量', required: false })
   count: number;
+
+  @ApiProperty({
+    example: 'annual',
+    description: '计费周期【monthly|annual】',
+    required: false,
+  })
+  billingCycle?: string;
 }

@@ -143,10 +143,10 @@ export class UserBalanceService {
       type === 1
         ? 'memberModel3Count'
         : type === 2
-        ? 'memberModel4Count'
-        : type === 3
-        ? 'memberDrawMjCount'
-        : null;
+          ? 'memberModel4Count'
+          : type === 3
+            ? 'memberDrawMjCount'
+            : null;
     /* 非会员扣费key */
     const baseKey =
       type === 1 ? 'model3Count' : type === 2 ? 'model4Count' : type === 3 ? 'drawMjCount' : null;
@@ -592,14 +592,34 @@ export class UserBalanceService {
   async addBalanceToOrder(order) {
     console.log('充值的工单信息:', order);
     try {
-      const { userId, goodsId } = order;
-      const pkg = await this.cramiPackageEntity.findOne({
-        where: { id: order.goodsId, status: 1 },
-      });
-      if (!pkg) {
-        throw new HttpException('非法操作、当前充值套餐暂不存在！', HttpStatus.BAD_REQUEST);
+      const { userId } = order;
+      const hasSnapshot = Boolean(order?.packageNameSnapshot);
+      const orderCount = Math.max(Number(order?.count || 1), 1);
+      let model3Count = Number(order?.model3CountSnapshot || 0);
+      let model4Count = Number(order?.model4CountSnapshot || 0);
+      let drawMjCount = Number(order?.drawMjCountSnapshot || 0);
+      let days = Number(order?.daysSnapshot || 0);
+      let pkgName = order?.packageNameSnapshot;
+      let appCats = String(order?.appCatsSnapshot || '');
+
+      if (!hasSnapshot) {
+        const pkg = await this.cramiPackageEntity.findOne({
+          where: { id: order.goodsId, status: 1 },
+        });
+        if (!pkg) {
+          throw new HttpException('非法操作、当前充值套餐暂不存在！', HttpStatus.BAD_REQUEST);
+        }
+        model3Count = Number(pkg.model3Count || 0) * orderCount;
+        model4Count = Number(pkg.model4Count || 0) * orderCount;
+        drawMjCount = Number(pkg.drawMjCount || 0) * orderCount;
+        days = Number(pkg.days || 0);
+        if (days > 0) {
+          days = days * orderCount;
+        }
+        pkgName = pkg.name;
+        appCats = String(pkg.appCats || '');
       }
-      const { model3Count, model4Count, drawMjCount, days, name: pkgName, appCats } = pkg;
+
       const money = {
         model3Count,
         model4Count,

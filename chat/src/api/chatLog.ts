@@ -26,7 +26,11 @@ export function fetchDeleteGroupChatsAfterIdAPI<T>(data: { id: number }): Promis
 }
 
 /* 查询x组对话信息 */
-export function fetchQueryChatLogListAPI<T>(data: { groupId: number }): Promise<T> {
+export function fetchQueryChatLogListAPI<T>(data: {
+  groupId: number
+  size?: number
+  beforeChatId?: number
+}): Promise<T> {
   return get<T>({
     url: '/chatlog/chatList',
     data,

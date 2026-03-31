@@ -1,0 +1,195 @@
+{
+  "language": "日本語",
+  "lens": {
+    "header": {
+      "projects": "あなたのプロジェクト",
+      "workspaceSettings": "ワークスペース設定",
+      "language": "言語"
+    },
+    "language": {
+      "zh-CN": "简体中文",
+      "zh-TW": "繁體中文",
+      "en-US": "English",
+      "ja-JP": "日本語",
+      "ko-KR": "한국어"
+    },
+    "sidebar": {
+      "newProject": "新規プロジェクト",
+      "searchProject": "プロジェクトを検索",
+      "researchProject": "研究プロジェクト",
+      "recent": "最近",
+      "pinned": "固定",
+      "login": "ログイン",
+      "account": "研究設定とアカウント",
+      "signedIn": "ログイン済み",
+      "loginDesc": "プロジェクトと研究記録を保存"
+    },
+    "settings": {
+      "setting": "設定",
+      "accountSecurity": "アカウントセキュリティ",
+      "upgradePlan": "プランをアップグレード",
+      "notice": "ご利用前に",
+      "logout": "ログアウト"
+    },
+    "member": {
+      "planList": "プラン一覧",
+      "planSubtitle": "月額で柔軟に開始し、年額でさらにお得に。",
+      "monthly": "月額",
+      "annual": "年額",
+    "annualBetter": "年額がお得",
+    "openNow": "今すぐ開始",
+    "max": "Max",
+    "pro": "Pro",
+    "plus": "Plus",
+    "plusSummary": "軽量な研究、日常の質問、基本的な執筆に向いています。",
+    "proSummary": "高頻度の学術執筆、深い読解、整った成果物の作成に適しています。",
+    "maxSummary": "集中的な研究、全モデル層の利用、高負荷ワークフロー向けです。",
+    "annualSave": "年間契約で {value}% 節約",
+    "pricePerMonth": "/月",
+    "pricePerYear": "/年",
+    "monthlyEquivalent": "月あたり ￥{value}",
+    "usdPerMonth": "{value} USD/月",
+    "features": {
+      "basicModels": "基本モデル",
+      "advancedModelsLite": "少量の高性能モデル",
+      "advancedModels": "高性能モデル",
+      "allModels": "全モデル層",
+      "paperSummary": "論文要約",
+      "englishPolish": "英文校正",
+      "pdfDeepRead": "PDF 精読",
+      "latexTranslation": "LaTeX 翻訳",
+      "bibtex": "参考文献を BibTeX 化",
+      "fullResearchTools": "研究ツール一式",
+      "complexReasoning": "複雑な推論",
+      "specialModels": "最上位モデル"
+    }
+  },
+    "workspace": {
+      "introWithProjects": "新しい研究タスクを開始",
+      "introFirstUse": "初めてならここから開始",
+      "introDesc": "下で質問を入力するか、先に資料を追加してください。",
+      "importData": "資料を取り込む",
+      "guideWithProjects": "研究開始はこの3ステップ",
+      "guideFirstUse": "初回はこの3ステップで開始",
+      "stepAddData": "資料を追加",
+      "stepInputTask": "タスクを入力",
+      "stepFollowUp": "追加で質問",
+      "starterTitle": "よく使う機能をクリックして使うこともできます",
+      "starterPaperSummary": "論文を要約",
+      "starterPaperSummaryPrompt": "この論文の研究課題、手法、主要な結論、そして新規性を要約してください。",
+      "starterEnglishPolish": "英語を推敲",
+      "starterEnglishPolishPrompt": "この英語アブストラクトを、学術的に正確で簡潔かつ自然な表現に整えてください。",
+      "starterLatexTranslation": "LaTeX を翻訳",
+      "starterLatexTranslationPrompt": "LaTeX の数式とコマンドはそのまま保持し、この内容を中国語に翻訳してください。",
+      "starterCodeExplain": "コードを解説",
+      "starterCodeExplainPrompt": "このコードの役割、入出力、主要な実装ロジックを説明してください。"
+    },
+    "academicPanel": {
+      "title": "ワークスペース設定",
+      "subtitle": "現在のワークフロー、機能、高度なツールを設定します。",
+      "close": "ワークスペース設定を閉じる",
+      "pinnedPanel": "固定パネル",
+      "modeLabel": "モード",
+      "researchMode": "研究モード",
+      "advancedInstruction": "高度な指示",
+      "filled": "入力済み",
+      "empty": "未入力",
+      "coreLabel": "基本機能",
+      "pluginLabel": "高度なツール",
+      "corePlaceholder": "無効",
+      "pluginPlaceholder": "無効",
+      "groupLabel": "ツール分類",
+      "groupAcademic": "学術",
+      "groupConversation": "対話",
+      "groupProgramming": "プログラミング",
+      "advancedExpand": "詳細設定を表示",
+      "advancedCollapse": "詳細設定を隠す",
+      "quickCoreTitle": "よく使う基本機能",
+      "quickToolTitle": "よく使う研究ツール",
+      "customInstructionLabel": "カスタム指示",
+      "customInstructionPlaceholderInactive": "ツールを選択してから入力してください",
+      "customInstructionPlaceholder": "例: Agent などの専門用語は翻訳しない",
+      "customInstructionHint": "用語、出力形式、翻訳方針を制約したい場合にのみ入力してください。",
+      "workflowLabel": "現在のワークフロー",
+      "workflowFallbackLabel": "研究ワークフローは未設定です",
+      "workflowFallbackDesc": "基本機能または高度なツールを選択して、現在の研究ワークフローを設定してください。",
+      "selectedKindCore": "基本機能",
+      "selectedKindTool": "高度なツール",
+      "selectedKindPending": "未設定"
+    },
+    "academicEntities": {
+      "core": {
+        "chinesePolish": {
+          "label": "中国語の推敲",
+          "description": "中国語の学術表現を推敲し、構成を整えます。"
+        },
+        "englishPolish": {
+          "label": "英語の推敲",
+          "description": "英語論文の文法、文体、明瞭さを整えます。"
+        },
+        "mindMap": {
+          "label": "マインドマップ作成",
+          "description": "テキストを構造化されたマインドマップに変換します。"
+        },
+        "translation": {
+          "label": "中日英翻訳",
+          "description": "学術文脈で中国語と英語を相互翻訳します。"
+        },
+        "bibtex": {
+          "label": "参考文献をBibTeXへ変換",
+          "description": "参考文献を BibTeX 形式に変換します。"
+        },
+        "codeExplain": {
+          "label": "学術コード解説",
+          "description": "コードの意味、入出力、主要ロジックを解説します。"
+        }
+      },
+      "tool": {
+        "paperSummary": {
+          "label": "論文クイック要約",
+          "description": "論文の研究課題、手法、結論、貢献を素早く要約します。"
+        },
+        "pdfBatchSummary": {
+          "label": "PDF一括要約",
+          "description": "複数の PDF を一度に要約します。"
+        },
+        "pdfDeepRead": {
+          "label": "PDF詳細読解",
+          "description": "PDF の主要論点、手法、結果を抽出して分析します。"
+        },
+        "wordBatchSummary": {
+          "label": "Word一括要約",
+          "description": "複数の Word 文書を一度に要約します。"
+        },
+        "arxivSummary": {
+          "label": "arXiv要約",
+          "description": "識別子を使って arXiv 論文を取得し要約します。"
+        },
+        "arxivEnglishSummary": {
+          "label": "arXiv英語要約",
+          "description": "arXiv 論文の英語要約を生成します。"
+        },
+        "latexSummary": {
+          "label": "LaTeX要約",
+          "description": "構造を保ったまま LaTeX 原稿を要約します。"
+        },
+        "latexPreciseTranslation": {
+          "label": "LaTeX精密翻訳",
+          "description": "数式とコマンドを保持したまま LaTeX を翻訳します。"
+        },
+        "latexEnglishPolish": {
+          "label": "LaTeX英語推敲",
+          "description": "コマンドを壊さずに LaTeX 英文を推敲します。"
+        },
+        "latexChinesePolish": {
+          "label": "LaTeX中国語推敲",
+          "description": "コマンドを壊さずに LaTeX 中国語文を推敲します。"
+        },
+        "latexProofreading": {
+          "label": "LaTeXハイライト校正",
+          "description": "LaTeX の問題点を強調表示しながら修正します。"
+        }
+      }
+    }
+  }
+}

@@ -11,7 +11,7 @@ from crazy_functions.pdf_fns.breakdown_txt import breakdown_text_to_satisfy_toke
 from crazy_functions.rag_fns.rag_file_support import extract_text,  convert_to_markdown
 from request_llms.bridge_all import model_info
 from toolbox import update_ui, CatchException, report_exception, promote_file_to_downloadzone, write_history_to_file
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 
 # 新增：导入结构化论文提取器
 from crazy_functions.doc_fns.read_fns.unstructured_all.paper_structure_extractor import PaperStructureExtractor, ExtractorConfig, StructuredPaper

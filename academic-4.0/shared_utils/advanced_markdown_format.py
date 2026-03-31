@@ -273,7 +273,8 @@ def markdown_convertion_for_file(txt):
     """
     将Markdown格式的文本转换为HTML格式。如果包含数学公式，则先将公式转换为HTML格式。
     """
-    from themes.theme import advanced_css
+    from shared_utils.report_style import get_academic_report_css
+    advanced_css = get_academic_report_css()
     pre = f"""
     <!DOCTYPE html><head><meta charset="utf-8"><title>Lens Report｜昱镜报告</title><style>{advanced_css}</style></head>
     <body>

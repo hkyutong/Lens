@@ -18,10 +18,10 @@ import PinyinMatch from 'pinyin-match'
 
 // import { getDocument } from 'pdfjs-dist';
 import { uploadFile } from '@/api/upload'
+import { getAcademicEntityDisplayLabel } from '@/utils/academicI18n'
 import { message } from '@/utils/message'
 import {
   computed,
-  defineExpose,
   inject,
   nextTick,
   onMounted,
@@ -31,6 +31,7 @@ import {
   watch,
 } from 'vue'
 import FilePreview from './components/FilePreview.vue'
+import ModelSelector from '../ModelSelector.vue'
 
 interface Emit {
   (ev: 'pause-request'): void
@@ -121,7 +122,6 @@ const academicMode = computed({
     chatStore.setAcademicMode(value)
   },
 })
-const mobileAcademicPanelVisible = computed(() => chatStore.mobileAcademicPanelVisible)
 const { isMobile } = useBasicLayout()
 const usingPlugin = computed(() => chatStore.currentPlugin)
 const isStreamIn = computed(() => {
@@ -210,14 +210,6 @@ const buttonDisabled = computed(
 
 const isExpanded = ref(false) // 控制输入框是否扩展
 const shouldShowExpandButton = ref(false) // 控制是否显示扩展按钮
-
-const handleAcademicModeToggle = () => {
-  const nextValue = !academicMode.value
-  academicMode.value = nextValue
-  if (isMobile.value && (nextValue || !mobileAcademicPanelVisible.value)) {
-    chatStore.setMobileAcademicPanelVisible(true)
-  }
-}
 
 const autoResize = () => {
   if (inputRef.value) {
@@ -357,47 +349,9 @@ const activeModelAvatar = computed(() => {
 })
 
 const selectedAcademicLabel = computed(() => {
-  return (
-    chatStore.currentAcademicPlugin?.displayName ||
-    chatStore.currentAcademicPlugin?.name ||
-    chatStore.currentAcademicCore?.displayName ||
-    chatStore.currentAcademicCore?.name ||
-    ''
+  return getAcademicEntityDisplayLabel(
+    chatStore.currentAcademicPlugin || chatStore.currentAcademicCore
   )
-})
-
-const composerModelLabel = computed(() => {
-  return (
-    selectedApp?.value?.name ||
-    usingPlugin?.value?.pluginName ||
-    activeModelName.value ||
-    '默认模型'
-  )
-})
-
-const researchModeLabel = computed(() => {
-  return academicMode.value ? '研究模式已启用' : '研究模式待启用'
-})
-
-const uploadSupportSummary = computed(() => {
-  if (isFilesModel.value && isImageModel.value) return '支持图片与文档'
-  if (isFilesModel.value) return '支持文档上传'
-  if (isImageModel.value) return '支持图片上传'
-  if (academicMode.value) return '支持学术文档上传'
-  return '无附件能力'
-})
-
-const composerHeadline = computed(() => {
-  if (selectedApp.value?.name) {
-    return `应用工作流已就绪：${selectedApp.value.name}`
-  }
-  if (academicMode.value && selectedAcademicLabel.value) {
-    return `当前研究流程：${selectedAcademicLabel.value}`
-  }
-  if (academicMode.value) {
-    return '研究模式已开启，适合处理论文速读、润色、Arxiv 与 LaTeX 任务'
-  }
-  return '把研究问题、论文文件、写作段落和分析任务组织在同一个输入区'
 })
 
 const createNewChatGroup = inject('createNewChatGroup', () =>
@@ -605,7 +559,6 @@ const openFilePicker = (accept?: string) => {
 
 const fileList = ref<File[]>([]) // 使用 ref 来创建响应式的文件列表
 const dataBase64List = ref<string[]>([]) // 使用 ref 来创建响应式的 Base64 数据列表
-const pendingAttachmentCount = computed(() => fileList.value.length + savedFiles.value.length)
 const MAX_IMAGE_FILES = 10
 const MAX_DOCUMENT_FILES = 10
 const filterPendingFiles = (keep: (file: File) => boolean) => {
@@ -997,7 +950,7 @@ const containerResizeObserver = ref<ResizeObserver | null>(null)
 // 计算输入框占位符文本，根据不同工具状态显示不同提示
 const placeholderText = computed(() => {
   if (!isLogin.value) {
-    return '登录后即可开启研究会话、上传论文并保存工作流'
+    return '登录后即可上传资料、开始研究并保存项目'
   }
 
   if (isDragging.value) {
@@ -1005,25 +958,25 @@ const placeholderText = computed(() => {
   }
 
   if (selectedApp.value?.name) {
-    return `继续 ${selectedApp.value.name} 工作流，补充你的目标、数据或写作要求`
+    return `继续 ${selectedApp.value.name}，补充目标、数据或写作要求`
   }
 
   if (academicMode.value && selectedAcademicLabel.value) {
-    return `围绕 ${selectedAcademicLabel.value} 输入你的研究问题、论文段落、审稿意见或处理要求`
+    return `围绕 ${selectedAcademicLabel.value} 添加问题、论文段落或处理要求`
   }
 
   if (academicMode.value) {
-    return '输入研究问题、论文段落、引用需求或希望分析的学术文件'
+    return '添加研究问题、论文段落、引用需求或学术文件'
   }
 
   const activeFeatures = []
   if (usingDeepThinking.value) activeFeatures.push('推理')
   if (usingNetwork.value) activeFeatures.push('联网搜索')
   if (activeFeatures.length > 0) {
-    return `当前已启用${activeFeatures.join(' + ')}，继续描述你的研究任务`
+    return `当前已启用${activeFeatures.join(' + ')}，继续描述要处理的内容`
   }
 
-  return '输入研究问题、写作需求、方法设计想法或下一步要推进的工作'
+  return '添加研究问题、写作需求、方法设计想法或下一步工作'
 })
 
 const shouldShowNetworkSearch = computed(() => {
@@ -1264,62 +1217,23 @@ defineExpose({
       <footer
         ref="footerRef"
         class="flex flex-col items-center justify-center w-full bg-transparent"
-        :class="[dataSources.length > 0 ? 'max-w-[1120px]' : 'max-w-[1080px]']"
+        :class="[isMobile ? 'max-w-full' : 'max-w-[1048px]']"
         @dragover="handleDragOver"
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
         <div
-          v-if="!isLogin"
-          class="mb-3 flex w-full items-center justify-between gap-3 rounded-[24px] border border-[var(--paper-border)] bg-[var(--paper-bg)] px-4 py-3 backdrop-blur"
-        >
-          <div class="text-sm text-[var(--ink-soft)]">
-            登录后可启用研究模式、同步会话、切换模型并保存学术工作流。
-          </div>
-          <button class="btn-pill btn-md" @click="authStore.setLoginDialog(true)">去登录</button>
-        </div>
-        <div
-          class="chat-input-card flex w-full flex-col justify-center rounded-[32px] border px-3 py-3 transition-all duration-200"
-          :class="{
-            'ring-1 ring-[var(--accent)]': isDragging,
-            'bg-[var(--surface-muted)]': isFileDraggingOverPage,
-            'opacity-70 cursor-not-allowed': !isLogin,
-          }"
+          class="chat-input-card flex w-full flex-col justify-center border transition-all duration-200"
+          :class="[
+            isMobile ? 'rounded-[16px] px-3 py-3' : 'rounded-[22px] px-4 py-2',
+            {
+              'ring-1 ring-[var(--accent)]': isDragging,
+              'bg-[var(--surface-muted)]': isFileDraggingOverPage,
+              'opacity-70 cursor-not-allowed': !isLogin,
+            },
+          ]"
           :style="{ minHeight: '1.5rem', position: 'relative' }"
         >
-          <div
-            class="mb-3 flex w-full flex-col gap-3 rounded-[26px] border border-[var(--border-color)] bg-white/50 px-4 py-4 dark:bg-white/5"
-          >
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div class="min-w-0">
-                <div
-                  class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
-                >
-                  Research Composer
-                </div>
-                <div class="mt-2 text-base font-semibold text-[var(--text-main)]">
-                  {{ composerHeadline }}
-                </div>
-                <div class="mt-1 text-sm text-[var(--ink-soft)]">
-                  模型 {{ composerModelLabel }} · {{ uploadSupportSummary }}
-                </div>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <span class="research-chip" :class="{ 'research-chip-active': academicMode }">
-                  {{ researchModeLabel }}
-                </span>
-                <span v-if="selectedAcademicLabel" class="research-chip">
-                  流程：{{ selectedAcademicLabel }}
-                </span>
-                <span class="research-chip">附件 {{ pendingAttachmentCount }}</span>
-                <span v-if="usingNetwork" class="research-chip research-chip-active">联网搜索</span>
-                <span v-if="usingDeepThinking" class="research-chip research-chip-active">
-                  深度推理
-                </span>
-              </div>
-            </div>
-          </div>
-
           <div
             v-if="showSuggestions && !isSelectedApp && searchResults.length !== 0"
             class="z-50 my-2 flex w-full flex-col items-center justify-center rounded-[24px] border border-[var(--paper-border)] bg-[var(--paper-bg)] px-1 py-1 resize-none"
@@ -1376,9 +1290,7 @@ defineExpose({
             @clear-select-app="clearSelectApp"
           />
 
-          <div
-            class="relative w-full rounded-[26px] border border-[var(--border-color)] bg-white/70 px-2 py-2 dark:bg-[var(--surface-panel)]/55"
-          >
+          <div class="relative w-full rounded-[18px] px-2 py-1.5" :style="{ background: 'transparent' }">
             <!-- 扩展按钮 - 只在内容高度超过阈值时显示 -->
             <div v-if="shouldShowExpandButton" class="absolute right-1 top-2 z-10 group">
               <button
@@ -1425,170 +1337,263 @@ defineExpose({
             <!-- 文本区域 - 非拖拽状态显示 -->
             <textarea
               v-show="!isFileDraggingOverPage"
+              id="workspace-composer"
               ref="inputRef"
               v-model="prompt"
               :placeholder="placeholderText"
-              class="custom-scrollbar mt-2 mb-1 flex w-full flex-grow items-center justify-center bg-transparent px-3 text-base text-[var(--text-main)] placeholder:text-[var(--ink-faint)] resize-none transition-all duration-300 ease-in-out dark:text-white"
+              class="custom-scrollbar flex w-full flex-grow items-center justify-center bg-transparent px-0 py-1.5 text-[14px] text-[var(--text-main)] placeholder:text-[var(--ink-faint)] resize-none transition-all duration-300 ease-in-out dark:text-white"
               :disabled="!isLogin || isStreamIn"
               @input="autoResize"
               @keypress="handleEnter"
               @keyup="handleInput"
               @paste="handlePaste"
               :style="{
-                maxHeight: isExpanded ? '14rem' : '9rem',
-                minHeight: '2.5rem',
+                maxHeight: isExpanded ? '7rem' : '3.6rem',
+                minHeight: '1.5rem',
               }"
-              aria-label="聊天消息输入框"
+              aria-label="研究输入框"
               role="textbox"
             ></textarea>
           </div>
 
           <div
             ref="buttonContainerRef"
-            class="mt-3 flex w-full flex-col gap-3 pb-1 lg:flex-row lg:items-end lg:justify-between"
+            class="mt-1 flex w-full flex-col gap-2 px-2 pb-0.5 lg:flex-row lg:items-center lg:justify-between"
           >
-            <div class="flex flex-wrap items-center gap-2">
-              <div
-                v-if="showUploadButton && !isUploading"
-                class="group relative"
-                @dragover.prevent="
-                  e => {
-                    e.stopPropagation()
-                    isDragging = true
-                  }
-                "
-                @dragleave.prevent="
-                  e => {
-                    e.stopPropagation()
-                    isDragging = false
-                  }
-                "
-                @drop.prevent="
-                  e => {
-                    e.stopPropagation()
-                    isDragging = false
-                    isFileDraggingOverPage = false
-                    handleUnifiedFileDrop(e, 'button')
-                  }
-                "
-              >
-                <button
-                  type="button"
-                  class="btn-pill btn-md"
-                  @click="triggerUpload"
-                  :aria-label="uploadButtonTooltip"
-                >
-                  <Plus size="15" />
-                  <span v-if="shouldShowButtonText" class="ml-1">导入资料</span>
-                </button>
-                <div v-if="!isMobile" class="tooltip tooltip-top">{{ uploadButtonTooltip }}</div>
-              </div>
+            <template v-if="isMobile">
+              <div class="flex w-full items-center gap-2">
+                <div class="flex min-w-0 flex-1 items-center gap-2">
+                  <ModelSelector />
 
-              <LoadingFour
-                v-if="isUploading"
-                size="15"
-                class="p-1 mx-2 animate-rotate text-gray-500 dark:text-gray-500"
-              />
+                  <div
+                    v-if="showUploadButton && !isUploading"
+                    class="group relative shrink-0"
+                    @dragover.prevent="
+                      e => {
+                        e.stopPropagation()
+                        isDragging = true
+                      }
+                    "
+                    @dragleave.prevent="
+                      e => {
+                        e.stopPropagation()
+                        isDragging = false
+                      }
+                    "
+                    @drop.prevent="
+                      e => {
+                        e.stopPropagation()
+                        isDragging = false
+                        isFileDraggingOverPage = false
+                        handleUnifiedFileDrop(e, 'button')
+                      }
+                    "
+                  >
+                    <button
+                      type="button"
+                      class="btn-pill btn-sm"
+                      @click="triggerUpload"
+                      :aria-label="uploadButtonTooltip"
+                    >
+                      <Plus size="15" />
+                      <span v-if="!isMobile" class="ml-1">资料</span>
+                    </button>
+                  </div>
 
-              <!-- 隐藏的文件输入框 - 保持原有的两个input，但共用同一个按钮触发 -->
-              <input
-                ref="fileInput"
-                type="file"
-                class="hidden"
-                multiple
-                @change="handleFileSelect"
-              />
-              <input
-                ref="imageInput"
-                type="file"
-                accept="image/*"
-                class="hidden"
-                @change="handleImageSelect"
-              />
+                  <LoadingFour
+                    v-if="isUploading"
+                    size="15"
+                    class="animate-rotate text-gray-500 dark:text-gray-500"
+                  />
+                </div>
 
-              <div class="group relative">
-                <button
-                  type="button"
-                  class="inline-flex items-center rounded-full border px-4 py-2 text-sm font-medium transition-all"
-                  :class="
-                    academicMode
-                      ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]'
-                      : 'border-[var(--border-color)] bg-[var(--surface-muted)] text-[var(--text-main)]'
-                  "
-                  @click="handleAcademicModeToggle"
-                  :aria-pressed="academicMode"
-                  aria-label="启用或禁用研究模式"
-                >
-                  <span>{{ academicMode ? '关闭研究模式' : '启用研究模式' }}</span>
-                </button>
-                <div v-if="!isMobile" class="tooltip tooltip-top">切换研究工作流</div>
-              </div>
+                <div class="flex shrink-0 items-center">
+                  <button
+                    v-if="!isStreamIn"
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f]"
+                    :class="{ 'cursor-not-allowed bg-[#424242] text-white/90 hover:bg-[#424242]': buttonDisabled }"
+                    :disabled="buttonDisabled"
+                    @click="handleSubmit()"
+                    aria-label="发送消息"
+                  >
+                    <SendOne size="15" />
+                    <span class="ml-1.5 whitespace-nowrap">提交研究任务</span>
+                  </button>
 
-              <div v-if="shouldShowDeepThinking" class="group relative">
-                <button
-                  type="button"
-                  class="btn-pill btn-md"
-                  :class="[usingDeepThinking ? 'btn-pill-active' : '']"
-                  @click="usingDeepThinking = !usingDeepThinking"
-                  :aria-pressed="usingDeepThinking"
-                  aria-label="启用或禁用推理功能"
-                >
-                  <TwoEllipses size="15" />
-                  <span v-if="shouldShowButtonText" class="ml-1">推理</span>
-                </button>
-                <div v-if="!isMobile" class="tooltip tooltip-top">
-                  AI 推理能力，帮助寻找更深层次的答案
+                  <button
+                    v-else
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f]"
+                    @click="handleStop()"
+                    aria-label="停止生成"
+                  >
+                    <Square size="15" />
+                    <span class="ml-1.5 whitespace-nowrap">停止生成</span>
+                  </button>
                 </div>
               </div>
 
-              <div v-if="shouldShowNetworkSearch" class="group relative">
-                <button
-                  type="button"
-                  class="btn-pill btn-md"
-                  :class="[usingNetwork ? 'btn-pill-active' : '']"
-                  @click="usingNetwork = !usingNetwork"
-                  :aria-pressed="usingNetwork"
-                  aria-label="启用或禁用网络搜索"
-                >
-                  <Sphere size="15" />
-                  <span v-if="shouldShowButtonText" class="ml-1">搜索</span>
-                </button>
-                <div v-if="!isMobile" class="tooltip tooltip-top">启用网络搜索，获取最新信息</div>
-              </div>
-            </div>
+              <div
+                v-if="shouldShowDeepThinking || shouldShowNetworkSearch"
+                class="flex w-full flex-wrap items-center gap-2"
+              >
+                <div v-if="shouldShowDeepThinking" class="group relative">
+                  <button
+                    type="button"
+                    class="btn-pill btn-sm"
+                    :class="[usingDeepThinking ? 'btn-pill-active' : '']"
+                    @click="usingDeepThinking = !usingDeepThinking"
+                    :aria-pressed="usingDeepThinking"
+                    aria-label="启用或禁用推理功能"
+                  >
+                    <TwoEllipses size="15" />
+                    <span class="ml-1">推理</span>
+                  </button>
+                </div>
 
-            <div class="flex items-center justify-between gap-3 lg:justify-end">
-              <div class="text-xs leading-6 text-[var(--ink-faint)]">
-                支持 PDF、DOCX、Markdown、LaTeX、图片等资料在同一会话内处理。
+                <div v-if="shouldShowNetworkSearch" class="group relative">
+                  <button
+                    type="button"
+                    class="btn-pill btn-sm"
+                    :class="[usingNetwork ? 'btn-pill-active' : '']"
+                    @click="usingNetwork = !usingNetwork"
+                    :aria-pressed="usingNetwork"
+                    aria-label="启用或禁用网络搜索"
+                  >
+                    <Sphere size="15" />
+                    <span class="ml-1">搜索</span>
+                  </button>
+                </div>
               </div>
-              <div v-if="!isStreamIn" class="group relative">
-                <button
-                  type="button"
-                  class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--accent-strong)]"
-                  :class="{ 'opacity-60 cursor-not-allowed': buttonDisabled }"
-                  :disabled="buttonDisabled"
-                  @click="handleSubmit()"
-                  aria-label="发送消息"
+            </template>
+
+            <template v-else>
+              <div class="flex flex-wrap items-center gap-2">
+                <ModelSelector />
+
+                <div
+                  v-if="showUploadButton && !isUploading"
+                  class="group relative"
+                  @dragover.prevent="
+                    e => {
+                      e.stopPropagation()
+                      isDragging = true
+                    }
+                  "
+                  @dragleave.prevent="
+                    e => {
+                      e.stopPropagation()
+                      isDragging = false
+                    }
+                  "
+                  @drop.prevent="
+                    e => {
+                      e.stopPropagation()
+                      isDragging = false
+                      isFileDraggingOverPage = false
+                      handleUnifiedFileDrop(e, 'button')
+                    }
+                  "
                 >
-                  <SendOne size="15" />
-                  <span class="ml-2">开始研究</span>
-                </button>
-                <div v-if="!isMobile" class="tooltip tooltip-top">发送</div>
+                  <button
+                    type="button"
+                    class="btn-pill btn-sm"
+                    @click="triggerUpload"
+                    :aria-label="uploadButtonTooltip"
+                  >
+                    <Plus size="15" />
+                    <span v-if="shouldShowButtonText" class="ml-1">资料</span>
+                  </button>
+                  <div v-if="!isMobile" class="tooltip tooltip-top">{{ uploadButtonTooltip }}</div>
+                </div>
+
+                <LoadingFour
+                  v-if="isUploading"
+                  size="15"
+                  class="p-1 mx-2 animate-rotate text-gray-500 dark:text-gray-500"
+                />
+
+                <div v-if="shouldShowDeepThinking" class="group relative">
+                  <button
+                    type="button"
+                    class="btn-pill btn-sm"
+                    :class="[usingDeepThinking ? 'btn-pill-active' : '']"
+                    @click="usingDeepThinking = !usingDeepThinking"
+                    :aria-pressed="usingDeepThinking"
+                    aria-label="启用或禁用推理功能"
+                  >
+                    <TwoEllipses size="15" />
+                    <span v-if="shouldShowButtonText" class="ml-1">推理</span>
+                  </button>
+                  <div v-if="!isMobile" class="tooltip tooltip-top">
+                    AI 推理能力，帮助寻找更深层次的答案
+                  </div>
+                </div>
+
+                <div v-if="shouldShowNetworkSearch" class="group relative">
+                  <button
+                    type="button"
+                    class="btn-pill btn-sm"
+                    :class="[usingNetwork ? 'btn-pill-active' : '']"
+                    @click="usingNetwork = !usingNetwork"
+                    :aria-pressed="usingNetwork"
+                    aria-label="启用或禁用网络搜索"
+                  >
+                    <Sphere size="15" />
+                    <span v-if="shouldShowButtonText" class="ml-1">搜索</span>
+                  </button>
+                  <div v-if="!isMobile" class="tooltip tooltip-top">
+                    启用网络搜索，获取最新信息
+                  </div>
+                </div>
               </div>
 
-              <div v-if="isStreamIn" class="group relative">
-                <button
-                  type="button"
-                  class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--text-main)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 dark:bg-white dark:text-[var(--bg-body)]"
-                  @click="handleStop()"
-                  aria-label="停止生成"
-                >
-                  <Square size="16" />
-                  <span class="ml-2">停止生成</span>
-                </button>
-                <div v-if="!isMobile" class="tooltip tooltip-top">停止生成</div>
+              <div class="flex items-center justify-end gap-3 lg:justify-end">
+                <div v-if="!isStreamIn" class="group relative">
+                  <button
+                    type="button"
+                    class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 py-1.5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f]"
+                    :class="{ 'cursor-not-allowed bg-[#424242] text-white/90 hover:bg-[#424242]': buttonDisabled }"
+                    :disabled="buttonDisabled"
+                    @click="handleSubmit()"
+                    aria-label="发送消息"
+                  >
+                    <SendOne size="15" />
+                    <span class="ml-2">提交研究任务</span>
+                  </button>
+                  <div v-if="!isMobile" class="tooltip tooltip-top">发送</div>
+                </div>
+
+                <div v-if="isStreamIn" class="group relative">
+                  <button
+                    type="button"
+                    class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 py-1.5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f] dark:bg-white dark:text-[var(--bg-body)]"
+                    @click="handleStop()"
+                    aria-label="停止生成"
+                  >
+                    <Square size="16" />
+                    <span class="ml-2">停止生成</span>
+                  </button>
+                  <div v-if="!isMobile" class="tooltip tooltip-top">停止生成</div>
+                </div>
               </div>
-            </div>
+            </template>
+
+            <input
+              ref="fileInput"
+              type="file"
+              class="hidden"
+              multiple
+              @change="handleFileSelect"
+            />
+            <input
+              ref="imageInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="handleImageSelect"
+            />
           </div>
         </div>
       </footer>

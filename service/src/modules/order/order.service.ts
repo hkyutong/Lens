@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
 import { In, Repository } from 'typeorm';
 import { CramiPackageEntity } from '../crami/cramiPackage.entity';
+import { getPackageBillingOffer, normalizeBillingCycle } from '../crami/package-pricing.util';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { PayService } from '../pay/pay.service';
 import { UserEntity } from './../user/user.entity';
@@ -11,6 +12,9 @@ import { BuyDto } from './dto/buy.dto';
 import { QuerAllOrderDto } from './dto/queryAllOrder.dto';
 import { QueryByOrderIdDto } from './dto/queryByOrder.dto';
 import { OrderEntity } from './order.entity';
+
+const roundPrice = (value: number) =>
+  Number((Math.round(Number(value || 0) * 100) / 100).toFixed(2));
 
 @Injectable()
 export class OrderService {
@@ -28,12 +32,12 @@ export class OrderService {
   /* 购买商品 */
   async buy(params: BuyDto, req: Request) {
     try {
-      const { goodsId, count = 1, payType } = params;
+      const { goodsId, count = 1, payType, billingCycle } = params;
       const { id: userId } = req.user;
       if (userId > 1000000) {
         throw new HttpException('请先注册账号后购买商品！', HttpStatus.UNAUTHORIZED);
       }
-      const order = await this.create(userId, goodsId, count, payType);
+      const order = await this.create(userId, goodsId, count, payType, billingCycle);
       Logger.debug('order: ', order);
       const res = await this.payService.pay(userId, order.orderId, payType);
       return {
@@ -63,21 +67,41 @@ export class OrderService {
   }
 
   /* 创建工单 */
-  async create(userId: number, goodsId: number, count: number, payType: string) {
+  async create(
+    userId: number,
+    goodsId: number,
+    count: number,
+    payType: string,
+    billingCycle?: string,
+  ) {
     const payPlatform = await this.globalConfigService.queryPayType();
     // query goods
     const goods = await this.cramiPackageEntity.findOne({
       where: { id: goodsId },
     });
     if (!goods) throw new HttpException('套餐不存在!', HttpStatus.BAD_REQUEST);
+    const normalizedCount = Math.max(Number(count || 1), 1);
+    const cycle = normalizeBillingCycle(billingCycle);
+    const billingOffer = getPackageBillingOffer(goods, cycle);
     // assemble order
     const doc = {};
     doc['orderId'] = createOrderId();
     doc['userId'] = userId;
     doc['goodsId'] = goodsId;
-    doc['price'] = Number(goods.price);
-    doc['count'] = count;
-    doc['total'] = Number(goods.price) * count;
+    doc['count'] = normalizedCount;
+    doc['billingCycle'] = billingOffer.billingCycle;
+    doc['billingMonths'] = billingOffer.billingMonths;
+    doc['price'] = billingOffer.price;
+    doc['originalTotal'] = roundPrice(billingOffer.originalTotal * normalizedCount);
+    doc['discountRate'] = billingOffer.discountRate;
+    doc['total'] = roundPrice(billingOffer.price * normalizedCount);
+    doc['packageNameSnapshot'] = goods.name;
+    doc['daysSnapshot'] =
+      billingOffer.days > 0 ? billingOffer.days * normalizedCount : billingOffer.days;
+    doc['model3CountSnapshot'] = billingOffer.model3Count * normalizedCount;
+    doc['model4CountSnapshot'] = billingOffer.model4Count * normalizedCount;
+    doc['drawMjCountSnapshot'] = billingOffer.drawMjCount * normalizedCount;
+    doc['appCatsSnapshot'] = billingOffer.appCats;
     doc['payPlatform'] = payPlatform;
     doc['channel'] = payType;
     // create order
@@ -127,7 +151,7 @@ export class OrderService {
     const totalPrice = await this.orderEntity
       .createQueryBuilder('order')
       .where('order.status = :status', { status: 1 })
-      .select('SUM(order.price)', 'total_price')
+      .select('SUM(order.total)', 'total_price')
       .getRawOne();
 
     return { rows, count, ...totalPrice };

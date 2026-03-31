@@ -15,7 +15,7 @@ P.S. 如果您按照以下步骤成功接入了新的大模型，欢迎发Pull R
 
 5. 测试通过后，在`request_llms/bridge_all.py`中做最后的修改，把你的模型完全接入到框架中（聪慧如您，只需要看一眼该文件就明白怎么修改了）
 
-6. 修改`LLM_MODEL`配置，然后运行`python main.py`，测试最后的效果
+6. 修改`LLM_MODEL`配置，然后运行`python main.py`，验证 API-only 学术服务是否能正常加载你的模型桥接
 
 
 # 如何接入其他在线大语言模型
@@ -32,4 +32,4 @@ P.S. 如果您按照以下步骤成功接入了新的大模型，欢迎发Pull R
 
 5. 测试通过后，在`request_llms/bridge_all.py`中做最后的修改，把你的模型完全接入到框架中（聪慧如您，只需要看一眼该文件就明白怎么修改了）
 
-6. 修改`LLM_MODEL`配置，然后运行`python main.py`，测试最后的效果
+6. 修改`LLM_MODEL`配置，然后运行`python main.py`，验证 API-only 学术服务是否能正常加载你的模型桥接

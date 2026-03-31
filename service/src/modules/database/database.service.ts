@@ -89,8 +89,8 @@ export class DatabaseService implements OnModuleInit {
       const code = ``;
 
       const noticeInfo = `
-#### YutoLens 欢迎您
- - 欢迎使用 YutoLens
+#### Lens 欢迎您
+ - 欢迎使用 Lens
  - 初始管理员账号密码  super  123456 【前台后台登录都可以修改】
  - 初始预览账号密码  admin  123456 【为后台查看账号 仅可查看部分非敏感数据】
 `;
@@ -177,7 +177,7 @@ export class DatabaseService implements OnModuleInit {
         { configKey: 'isVerifyEmail', configVal: '1', public: 1, encrypt: 0 },
         { configKey: 'model3Name', configVal: '普通积分', public: 1, encrypt: 0 },
         { configKey: 'model4Name', configVal: '高级积分', public: 1, encrypt: 0 },
-        { configKey: 'drawMjName', configVal: '顶级积分', public: 1, encrypt: 0 },
+        { configKey: 'drawMjName', configVal: '顶级模型额度', public: 1, encrypt: 0 },
         {
           configKey: 'drawingStyles',
           configVal:

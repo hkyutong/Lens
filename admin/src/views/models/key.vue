@@ -503,7 +503,7 @@ meta:
       </template>
       <template #content>
         <div class="text-sm/6">
-          <div>模型分为（基础对话｜创意模型｜特殊模型三类）。</div>
+          <div>模型分为（基础对话｜创意模型｜顶级模型三类）。</div>
           <div>
             基础对话：用户可以在用户端选择的模型，用于对话、问答、聊天等功能，仅支持 OpenAI Chat
             格式，其他模型需自行使用分发程序适配。
@@ -517,7 +517,7 @@ meta:
             <a href="https://api.openai.com" target="_blank">YutoAPI</a>
             格式。
           </div>
-          <div>特殊模型：用户端不展示，包含【TTS朗读】【GPTs】。</div>
+          <div>顶级模型：用户端不展示，包含【TTS朗读】【GPTs】。</div>
         </div>
       </template>
       <HButton outline type="success" @click="visible = true">
@@ -633,7 +633,7 @@ meta:
                   ? '普通积分'
                   : scope.row.deductType === 2
                     ? '高级积分'
-                    : '顶级积分'
+                    : '顶级模型额度'
               }}
             </el-tag>
           </template>
@@ -917,7 +917,7 @@ meta:
 
         <el-form-item
           v-if="[2].includes(Number(formPackage.keyType))"
-          label="特殊模型类型"
+          label="顶级模型类型"
           prop="drawingType"
         >
           <div class="flex items-center">
@@ -936,7 +936,7 @@ meta:
             <el-tooltip class="box-item" effect="dark" placement="right">
               <template #content>
                 <div style="width: 250px">
-                  选择特殊模型类型：dalle兼容、gpt-image-1兼容、midjourney、chat正则提取、豆包等不同的特殊模型兼容格式
+                  选择顶级模型类型：dalle兼容、gpt-image-1兼容、midjourney、chat正则提取、豆包等不同的顶级模型兼容格式
                 </div>
               </template>
               <el-icon class="ml-3 cursor-pointer">

@@ -1,8 +1,8 @@
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 const swaggerOptions = new DocumentBuilder()
-  .setTitle('YutoLens Team api document')
-  .setDescription('YutoLens Team api document')
+  .setTitle('Lens Team api document')
+  .setDescription('Lens Team api document')
   .setVersion('1.0.0')
   .addBearerAuth()
   .build();

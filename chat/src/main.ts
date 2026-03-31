@@ -27,18 +27,13 @@ if (disableConsole) {
   console.error = () => {}
 }
 
-// 检测系统主题并设置应用主题
 function detectSystemTheme() {
-  const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)')
-  const storedTheme = localStorage.getItem('theme')
-  const theme = storedTheme || (prefersDarkScheme.matches ? 'dark' : 'light')
+  const theme = 'light'
   localStorage.setItem('theme', theme)
-  document.documentElement.classList.toggle('dark', theme === 'dark')
+  document.documentElement.classList.remove('dark')
   document.documentElement.style.colorScheme = theme
-
-  // 设置 data-theme 方式的主题系统
   document.documentElement.dataset.theme = theme
-  window.theme = theme as 'dark' | 'light'
+  window.theme = theme
 }
 
 const authStore = useAuthStoreWithout()

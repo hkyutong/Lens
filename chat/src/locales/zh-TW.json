@@ -99,5 +99,197 @@
     "pleaseEnterCardDetails": "請輸入卡密資訊",
     "exchange": "兌換",
     "buyCardSecret": "購買卡密"
+  },
+  "lens": {
+    "header": {
+      "projects": "你的項目",
+      "workspaceSettings": "工作區設定",
+      "language": "語言"
+    },
+    "language": {
+      "zh-CN": "简体中文",
+      "zh-TW": "繁體中文",
+      "en-US": "English",
+      "ja-JP": "日本語",
+      "ko-KR": "한국어"
+    },
+    "sidebar": {
+      "newProject": "新建項目",
+      "searchProject": "搜尋項目",
+      "researchProject": "研究項目",
+      "recent": "最近",
+      "pinned": "置頂",
+      "login": "登入",
+      "account": "研究偏好與帳戶",
+      "signedIn": "已登入",
+      "loginDesc": "保存項目和研究記錄"
+    },
+    "settings": {
+      "setting": "設定",
+      "accountSecurity": "帳戶安全",
+      "upgradePlan": "升級方案",
+      "notice": "使用必讀",
+      "logout": "登出"
+    },
+    "member": {
+      "planList": "方案列表",
+      "planSubtitle": "月付靈活開通，年付可節省年度費用。",
+      "monthly": "月付",
+      "annual": "年付",
+    "annualBetter": "年付更省",
+    "openNow": "立即開通",
+    "max": "Max",
+    "pro": "Pro",
+    "plus": "Plus",
+    "plusSummary": "適合輕量研究、日常問答與基礎寫作，涵蓋論文速讀與英文潤色。",
+    "proSummary": "適合高頻科研寫作與深度閱讀，支援 PDF 深讀、LaTeX 翻譯與正式交付。",
+    "maxSummary": "適合重度研究與複雜工作流，開放完整模型層級與研究工具鏈。",
+    "annualSave": "年度訂閱省 {value}%",
+    "pricePerMonth": "/月付",
+    "pricePerYear": "/年付",
+    "monthlyEquivalent": "折合 ￥{value}/月",
+    "usdPerMonth": "{value} USD/月",
+    "features": {
+      "basicModels": "基礎模型",
+      "advancedModelsLite": "少量高級模型",
+      "advancedModels": "高級模型",
+      "allModels": "全部模型",
+      "paperSummary": "論文速讀",
+      "englishPolish": "英文潤色",
+      "pdfDeepRead": "PDF 深度理解",
+      "latexTranslation": "LaTeX 翻譯",
+      "bibtex": "參考文獻轉 Bib",
+      "fullResearchTools": "全研究工具",
+      "complexReasoning": "複雜推理",
+      "specialModels": "頂級模型"
+    }
+  },
+    "workspace": {
+      "introWithProjects": "開始新的研究任務",
+      "introFirstUse": "第一次使用，從這裡開始",
+      "introDesc": "直接在下方輸入問題，或者先添加資料。",
+      "importData": "導入資料",
+      "guideWithProjects": "開始研究，按這三步即可",
+      "guideFirstUse": "第一次使用，按這三步即可",
+      "stepAddData": "添加資料",
+      "stepInputTask": "輸入任務",
+      "stepFollowUp": "繼續追問",
+      "starterTitle": "也可以點擊使用這些高頻能力",
+      "starterPaperSummary": "總結論文",
+      "starterPaperSummaryPrompt": "請幫我總結這篇論文的研究問題、方法、核心結論和創新點。",
+      "starterEnglishPolish": "英文潤色",
+      "starterEnglishPolishPrompt": "請幫我潤色這段英文摘要，保持學術表達準確、簡潔、自然。",
+      "starterLatexTranslation": "LaTeX 翻譯",
+      "starterLatexTranslationPrompt": "請保留 LaTeX 公式與命令不變，把這段內容翻譯成中文。",
+      "starterCodeExplain": "程式碼解釋",
+      "starterCodeExplainPrompt": "請解釋這段程式碼的作用、輸入輸出和關鍵實現邏輯。"
+    },
+    "academicPanel": {
+      "title": "工作區設定",
+      "subtitle": "配置當前流程、能力和高級工具。",
+      "close": "關閉工作區設定",
+      "pinnedPanel": "常駐面板",
+      "modeLabel": "模式",
+      "researchMode": "研究模式",
+      "advancedInstruction": "高級指令",
+      "filled": "已填寫",
+      "empty": "未填寫",
+      "coreLabel": "基礎功能",
+      "pluginLabel": "高級工具",
+      "corePlaceholder": "不啟用",
+      "pluginPlaceholder": "不啟用",
+      "groupLabel": "工具分組",
+      "groupAcademic": "學術",
+      "groupConversation": "對話",
+      "groupProgramming": "編程",
+      "advancedExpand": "展開高級設定",
+      "advancedCollapse": "收起高級設定",
+      "quickCoreTitle": "高頻核心能力",
+      "quickToolTitle": "高頻研究工具",
+      "customInstructionLabel": "自定義指令",
+      "customInstructionPlaceholderInactive": "選擇工具後填寫",
+      "customInstructionPlaceholder": "例如：不要翻譯 Agent 專業名詞",
+      "customInstructionHint": "僅在需要約束術語、輸出格式或翻譯策略時填寫。",
+      "workflowLabel": "目前工作流",
+      "workflowFallbackLabel": "未配置研究流程",
+      "workflowFallbackDesc": "選擇一個核心能力或高級工具，配置目前研究流程。",
+      "selectedKindCore": "核心能力",
+      "selectedKindTool": "高級工具",
+      "selectedKindPending": "待配置"
+    },
+    "academicEntities": {
+      "core": {
+        "chinesePolish": {
+          "label": "中文潤色",
+          "description": "中文學術表達潤色與結構優化。"
+        },
+        "englishPolish": {
+          "label": "英文潤色",
+          "description": "英文論文潤色與語法優化。"
+        },
+        "mindMap": {
+          "label": "繪製腦圖",
+          "description": "將文字總結為結構化腦圖。"
+        },
+        "translation": {
+          "label": "中英互譯",
+          "description": "學術場景中英文互譯。"
+        },
+        "bibtex": {
+          "label": "參考文獻轉Bib",
+          "description": "將參考文獻轉換為 BibTeX。"
+        },
+        "codeExplain": {
+          "label": "學術型程式碼解釋",
+          "description": "解釋程式碼含義、輸入輸出與關鍵邏輯。"
+        }
+      },
+      "tool": {
+        "paperSummary": {
+          "label": "論文速讀",
+          "description": "快速總結論文的研究問題、方法、結論和貢獻。"
+        },
+        "pdfBatchSummary": {
+          "label": "PDF 批量總結",
+          "description": "一次性總結多個 PDF 文件。"
+        },
+        "pdfDeepRead": {
+          "label": "PDF 深度理解",
+          "description": "提取並分析 PDF 中的關鍵論點、方法和結果。"
+        },
+        "wordBatchSummary": {
+          "label": "Word 批量總結",
+          "description": "一次性總結多個 Word 文件。"
+        },
+        "arxivSummary": {
+          "label": "Arxiv摘要",
+          "description": "按編號取得並總結 Arxiv 論文。"
+        },
+        "arxivEnglishSummary": {
+          "label": "Arxiv 英文摘要",
+          "description": "為 Arxiv 論文生成英文摘要。"
+        },
+        "latexSummary": {
+          "label": "LaTeX 摘要",
+          "description": "在保留結構的前提下總結 LaTeX 文稿。"
+        },
+        "latexPreciseTranslation": {
+          "label": "LaTeX 精準翻譯",
+          "description": "保留公式與命令，對 LaTeX 內容進行精準翻譯。"
+        },
+        "latexEnglishPolish": {
+          "label": "LaTeX 英文潤色",
+          "description": "在不破壞命令的前提下潤色 LaTeX 英文內容。"
+        },
+        "latexChinesePolish": {
+          "label": "LaTeX 中文潤色",
+          "description": "在不破壞命令的前提下潤色 LaTeX 中文內容。"
+        },
+        "latexProofreading": {
+          "label": "LaTeX 高亮糾錯",
+          "description": "對 LaTeX 內容進行高亮糾錯與修訂。"
+        }
+      }
+    }
   }
 }

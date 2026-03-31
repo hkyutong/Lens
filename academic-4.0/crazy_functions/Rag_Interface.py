@@ -1,11 +1,11 @@
 import os,glob
 from typing import List
 
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 
 from toolbox import report_exception
 from toolbox import CatchException, update_ui, get_conf, get_log_folder, update_ui_latest_msg
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 from crazy_functions.crazy_utils import input_clipping
 from crazy_functions.crazy_utils import request_gpt_model_in_new_thread_with_ui_alive
 

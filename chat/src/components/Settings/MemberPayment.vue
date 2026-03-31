@@ -4,6 +4,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore, useGlobalStore } from '@/store'
 import { message } from '@/utils/message'
+import { formatCurrency } from '@/utils/memberPricing'
 import { ArrowLeft } from '@icon-park/vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -25,7 +26,7 @@ const useGlobal = useGlobalStore()
 const POLL_INTERVAL = 1000
 const ms = message()
 const active = ref(true)
-const payType = ref('wxpay')
+const payType = ref('alipay')
 
 /* 是否是微信环境 */
 /* 是否是微信移动端环境 */
@@ -126,6 +127,7 @@ function handleFinish() {
 }
 
 watch(payType, () => {
+  if (!props.visible) return
   getQrCode()
   // 重新开始倒计时
   if (countdownRef.value) {
@@ -154,6 +156,19 @@ const payTypes = computed(() => {
   ].filter(item => payChannel.value.includes(item.payChannel))
 })
 
+function getPreferredPayType() {
+  if (payTypes.value.some(item => item.value === 'alipay')) return 'alipay'
+  if (payTypes.value.some(item => item.value === 'wxpay')) return 'wxpay'
+  return payTypes.value[0]?.value || 'alipay'
+}
+
+function syncPreferredPayType() {
+  const preferred = getPreferredPayType()
+  const changed = payType.value !== preferred
+  payType.value = preferred
+  return changed
+}
+
 const queryOrderStatus = async () => {
   if (!orderId.value) return
   const result: ResData = await fetchOrderQueryAPI({ orderId: orderId.value })
@@ -173,6 +188,7 @@ const queryOrderStatus = async () => {
 }
 
 const orderInfo = computed(() => useGlobal?.orderInfo)
+const billingInfo = computed(() => orderInfo.value?.billing)
 const url_qrcode = ref('')
 const qrCodeloading = ref(true)
 const redirectloading = ref(true)
@@ -196,6 +212,7 @@ async function getQrCode() {
     const res: ResData = await fetchOrderBuyAPI({
       goodsId: orderInfo.value.pkgInfo.id,
       payType: qsPayType,
+      billingCycle: orderInfo.value.billingCycle,
     })
     const { data, success } = res
     if (!success) {
@@ -238,6 +255,9 @@ function cleanupResources() {
 }
 
 async function handleOpenPayment() {
+  const payTypeChanged = syncPreferredPayType()
+  if (payTypeChanged) return
+
   await getQrCode()
   if (!timer) {
     // 检查定时器是否已存在
@@ -300,15 +320,60 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="p-2">
-        <div>
-          <span class="whitespace-nowrap font-bold">{{ t('pay.amountDue') }}</span>
-          <span class="ml-1 text-xl font-bold tracking-tight">{{
-            `￥${orderInfo.pkgInfo?.price}`
-          }}</span>
-        </div>
-        <div class="mt-2 flex">
-          <span class="whitespace-nowrap font-bold">{{ t('pay.packageName') }}</span
-          ><span class="ml-2"> {{ orderInfo.pkgInfo?.name }}</span>
+        <div
+          class="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 dark:border-gray-700 dark:bg-gray-900/40"
+        >
+          <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                {{ t('pay.amountDue') }}
+              </div>
+              <div class="mt-1 flex items-baseline gap-2">
+                <span class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+                  ￥{{ formatCurrency(billingInfo?.price || 0) }}
+                </span>
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ orderInfo.billingCycle === 'annual' ? '/年' : '/月' }}
+                </span>
+              </div>
+            </div>
+            <div
+              class="rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            >
+              {{ orderInfo.billingCycle === 'annual' ? '按年支付' : '按月支付' }}
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <div class="flex justify-between gap-4">
+              <span class="font-medium">套餐</span>
+              <span>{{ orderInfo.pkgInfo?.name }}</span>
+            </div>
+            <div class="flex justify-between gap-4">
+              <span class="font-medium">计费</span>
+              <span>{{ orderInfo.billingCycle === 'annual' ? '一年' : '一个月' }}</span>
+            </div>
+            <div class="flex justify-between gap-4">
+              <span class="font-medium">有效期</span>
+              <span>{{ billingInfo?.days > 0 ? `${billingInfo.days} 天` : '长期权益' }}</span>
+            </div>
+            <div class="flex justify-between gap-4">
+              <span class="font-medium">折合每月</span>
+              <span>￥{{ formatCurrency(billingInfo?.monthlyEquivalentPrice || 0) }}/月</span>
+            </div>
+            <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
+              <span class="font-medium">按月购买</span>
+              <span class="text-gray-400 line-through dark:text-gray-500">
+                ￥{{ formatCurrency(billingInfo?.originalTotal || 0) }}/年
+              </span>
+            </div>
+            <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
+              <span class="font-medium">节省</span>
+              <span class="font-semibold text-emerald-600 dark:text-emerald-300">
+                ￥{{ formatCurrency(billingInfo?.saveAmount || 0) }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div
@@ -375,7 +440,7 @@ onBeforeUnmount(() => {
                 <button
                   v-if="isRedirectPay"
                   type="button"
-                  class="btn btn-primary btn-md"
+                  class="inline-flex h-12 items-center justify-center rounded-[999px] bg-[#080808] px-8 text-[15px] font-medium text-white shadow-[0_8px_20px_rgba(8,8,8,0.12)] transition hover:bg-[#1b1b1b] disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="redirectloading"
                   @click="handleRedPay"
                 >
@@ -425,7 +490,16 @@ onBeforeUnmount(() => {
             </div>
             <!-- 支付方式选择区域 -->
             <div class="mt-6 space-y-6">
-              <div v-for="pay in payTypes" :key="pay.value" class="flex items-center">
+              <div
+                v-if="payTypes.length === 1"
+                class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
+              >
+                <img class="mr-2 inline-block h-4 object-contain" :src="payTypes[0].icon" alt="" />
+                <span class="block text-sm font-medium leading-6 text-gray-900 dark:text-gray-300">
+                  {{ payTypes[0].label }}
+                </span>
+              </div>
+              <div v-else v-for="pay in payTypes" :key="pay.value" class="flex items-center">
                 <input
                   type="radio"
                   :id="pay.value"
@@ -438,7 +512,7 @@ onBeforeUnmount(() => {
                   :for="pay.value"
                   class="ml-3 block text-sm font-medium leading-6 text-gray-900 dark:text-gray-300"
                 >
-                  <img class="h-4 object-contain mr-2 inline-block" :src="pay.icon" alt="" />
+                  <img class="mr-2 inline-block h-4 object-contain" :src="pay.icon" alt="" />
                   {{ pay.label }}
                 </label>
               </div>

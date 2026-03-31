@@ -2,21 +2,28 @@
 import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
-import { useAppStore, useChatStore, useGlobalStoreWithOut } from '@/store'
+import { useAppStore, useChatStore } from '@/store'
 import { message } from '@/utils/message'
-import { ApplicationTwo, EditTwo } from '@icon-park/vue-next'
-import { computed, inject, ref, watch } from 'vue'
+import { computed, inject, nextTick, ref, watch } from 'vue'
 import ListItem from './ListItem.vue'
 
 const { isMobile } = useBasicLayout()
 const appStore = useAppStore()
 const chatStore = useChatStore()
-const useGlobalStore = useGlobalStoreWithOut()
 const ms = message()
+const createNewChatGroup = inject('createNewChatGroup', () =>
+  Promise.resolve()
+) as () => Promise<void>
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const showSearchInput = ref(false)
 
 const customKeyId = ref(100)
 const dataSources = computed(() => chatStore.groupList || [])
 const groupKeyWord = computed(() => chatStore.groupKeyWord || '')
+const groupKeyWordModel = computed({
+  get: () => chatStore.groupKeyWord || '',
+  set: value => chatStore.setGroupKeyWord(String(value || '')),
+})
 
 watch(dataSources, () => (customKeyId.value += 1))
 watch(groupKeyWord, () => (customKeyId.value += 1))
@@ -38,18 +45,6 @@ const historyList = computed(() =>
   })
 )
 
-const createNewChatGroup = inject('createNewChatGroup', async () => {})
-
-async function handleNewChat() {
-  await createNewChatGroup()
-  if (isMobile.value) appStore.setSiderCollapsed(true)
-}
-
-function handleOpenAppCenter() {
-  useGlobalStore.updateShowAppListComponent(true)
-  if (isMobile.value) appStore.setSiderCollapsed(true)
-}
-
 async function handleSelect(group: Chat.History) {
   if (isStreamIn.value) {
     ms.info('AI回复中，请稍后再试')
@@ -67,47 +62,63 @@ async function handleDelete(params: Chat.History) {
   await chatStore.queryMyGroup()
   if (isMobile.value) appStore.setSiderCollapsed(true)
 }
+
+async function handleCreate() {
+  await createNewChatGroup()
+}
+
+async function toggleSearch() {
+  showSearchInput.value = !showSearchInput.value
+  if (!showSearchInput.value) {
+    closeSearch()
+    return
+  }
+  await nextTick()
+  searchInputRef.value?.focus()
+}
+
+function closeSearch() {
+  showSearchInput.value = false
+  groupKeyWordModel.value = ''
+}
 </script>
 
 <template>
-  <div class="custom-scrollbar px-4 overflow-y-auto h-full">
+  <div class="custom-scrollbar px-5 overflow-y-auto h-full">
     <div class="flex flex-col gap-3 text-sm">
-      <div
-        class="mb-3 rounded-[24px] border border-[var(--border-color)] bg-[var(--surface-card)] p-3 space-y-2"
-      >
-        <div class="px-1 pb-1">
-          <div
-            class="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-faint)]"
-          >
-            Workspace
+      <div class="flex items-center">
+        <button
+          type="button"
+          class="flex flex-1 items-center rounded-[14px] bg-transparent px-0 py-2.5 text-left text-[var(--accent)] transition hover:bg-[var(--surface-muted)]"
+          @click="handleCreate"
+        >
+          <div class="flex items-center gap-2.5">
+            <span class="flex h-[26px] w-[26px] shrink-0 items-center justify-center">
+              <SvgIcon icon="ri:edit-line" class="text-[16px]" />
+            </span>
+            <span class="text-[14px] font-normal">{{ t('lens.sidebar.newProject') }}</span>
           </div>
-          <div class="mt-1 text-sm text-[var(--ink-soft)]">组织研究会话、论文任务和工作流。</div>
-        </div>
-        <button
-          type="button"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-2xl bg-[var(--surface-muted)] text-[var(--text-main)] hover:bg-white/90 dark:hover:bg-white/5"
-          @click="handleNewChat"
-        >
-          <EditTwo size="18" />
-          <span class="text-sm font-medium">新建研究</span>
-        </button>
-        <button
-          type="button"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-2xl bg-transparent text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5"
-          @click="handleOpenAppCenter"
-        >
-          <ApplicationTwo size="18" />
-          <span class="text-sm font-medium">研究能力库</span>
         </button>
       </div>
 
+      <input
+        v-if="showSearchInput"
+        ref="searchInputRef"
+        v-model="groupKeyWordModel"
+        type="text"
+        :placeholder="t('lens.sidebar.searchProject')"
+        class="h-[42px] w-full rounded-[14px] border border-[var(--paper-border)] bg-[var(--surface-muted)] px-3 text-sm text-[var(--text-main)] outline-none placeholder:text-[var(--ink-faint)] focus:border-[var(--border-color)]"
+        @keydown.esc="closeSearch"
+      />
+
       <template v-if="!dataSources.length">
         <div
-          class="flex flex-col items-center rounded-[24px] border border-dashed border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-8 text-center text-[var(--ink-faint)]"
+          class="flex items-center rounded-[12px] bg-[var(--surface-muted)] px-3 py-3 text-[var(--ink-soft)] transition-colors hover:bg-[var(--surface-panel)]"
         >
-          <SvgIcon icon="ri:inbox-line" class="mb-2 text-3xl" />
-          <span class="text-sm">{{ t('common.noData') }}</span>
-          <span class="mt-1 text-xs">从一篇论文、一个问题或一个新会话开始。</span>
+          <SvgIcon icon="ri:inbox-line" class="mr-3 text-xl" />
+          <div class="min-w-0">
+            <div class="text-sm font-normal">{{ t('lens.sidebar.researchProject') }}</div>
+          </div>
         </div>
       </template>
       <template v-else>
@@ -115,17 +126,19 @@ async function handleDelete(params: Chat.History) {
           <ListItem
             v-if="stickyList.length"
             :key="'sticky-' + customKeyId"
-            title="置顶研究"
+            :title="t('lens.sidebar.pinned')"
             :data-sources="stickyList"
             @select="handleSelect"
             @delete="handleDelete"
           />
           <ListItem
             :key="'history-' + customKeyId"
-            title="最近研究"
+            :title="t('lens.sidebar.researchProject')"
             :data-sources="historyList"
+            :show-search-action="true"
             @select="handleSelect"
             @delete="handleDelete"
+            @search="toggleSearch"
           />
         </div>
       </template>

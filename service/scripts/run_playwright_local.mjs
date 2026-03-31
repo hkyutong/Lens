@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const serviceDir = path.resolve(__dirname, '..')
 const guardScript = path.join(serviceDir, 'scripts/guard_playwright_policy.mjs')
 
-const guard = spawnSync(process.execPath, [guardScript, '--require-edge'], {
+const guard = spawnSync(process.execPath, [guardScript, '--require-local-browser'], {
   cwd: serviceDir,
   stdio: 'inherit',
   env: {

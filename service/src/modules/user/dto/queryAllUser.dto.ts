@@ -10,7 +10,7 @@ export class QueryAllUserDto {
   @IsOptional()
   size: number;
 
-  @ApiProperty({ example: 'YutoLens', description: '用户姓名', required: false })
+  @ApiProperty({ example: 'Lens', description: '用户姓名', required: false })
   @IsOptional()
   username: string;
 

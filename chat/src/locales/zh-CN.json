@@ -51,7 +51,7 @@
     "preview": "预览",
     "showRawText": "显示原文",
     "size": "尺寸：",
-    "generatedContentDisclaimer": "YutoLens 也可能会犯错，请核查重要信息。版权所有 ©",
+    "generatedContentDisclaimer": "Lens 也可能会犯错，请核查重要信息。版权所有 ©",
     "square1": "方形（1:1）",
     "illustration": "配图（4:3）",
     "wallpaper": "壁纸（16:9）",
@@ -75,7 +75,7 @@
     "remaining": "剩余：",
     "ordinaryPoints": "普通积分",
     "advancedPoints": "高级积分",
-    "drawingPoints": "顶级积分",
+    "drawingPoints": "顶级模型额度",
     "points": "积分",
     "clearConversation": "清空对话",
     "clearAllNonFavoriteConversations": "清空所有非收藏的对话？",
@@ -295,7 +295,7 @@
     "permanentAddOnCard": "叠加永久次卡",
     "baseModelQuota": "普通积分",
     "advancedModelQuota": "高级积分",
-    "MJDrawingQuota": "顶级积分",
+    "MJDrawingQuota": "顶级模型额度",
     "packageValidity": "套餐有效期",
     "days": "天",
     "permanent": "永久",
@@ -308,14 +308,14 @@
     "wechat": "微信",
     "alipay": "支付宝",
     "wechatPay": "微信支付",
-    "alipayPay": "支付宝支付",
+    "alipayPay": "支付宝",
     "paymentSuccess": "恭喜你支付成功、祝您使用愉快！",
     "paymentTimeout": "支付超时，请重新下单!",
     "productPayment": "商品支付",
     "amountDue": "需要支付：",
     "packageName": "套餐名称：",
     "packageDescription": "套餐描述：",
-    "siteAdminEnabledRedirect": "当前站长开通了跳转支付",
+    "siteAdminEnabledRedirect": "安全支付已准备就绪，点击即可完成开通",
     "clickToPay": "点击前往支付",
     "completePaymentWithin": "请在",
     "timeToCompletePayment": "时间内完成支付！",
@@ -384,7 +384,7 @@
     "inviteOneUser": "邀请一位用户赠送",
     "basicModelCredits1": "积分基础额度+",
     "advancedModelCredits1": "积分高级额度+",
-    "mjDrawingCredits": "MJ顶级积分额度",
+    "mjDrawingCredits": "MJ顶级模型额度",
     "receiveInvitation": "收到邀请用户获得",
     "creditsEnd": "积分",
     "invitationRecord": "邀请记录",
@@ -409,7 +409,7 @@
     "rechargeType": "充值类型",
     "basicModelQuota": "普通积分",
     "advancedModelQuota": "高级积分",
-    "mjDrawingQuota": "顶级积分",
+    "mjDrawingQuota": "顶级模型额度",
     "validity": "有效期",
     "rechargeTime": "充值时间",
     "enterCardSecret": "请先填写卡密！",
@@ -419,7 +419,7 @@
     "creditUsageNote": "每次对话根据模型消费不同积分！",
     "advancedModelBalance": "高级模型余额",
     "modelConsumptionNote": "每次对话根据模型消费不同积分！",
-    "mjDrawingBalance": "MJ特殊模型余额",
+    "mjDrawingBalance": "MJ顶级模型余额",
     "drawingConsumptionNote": "根据画图动作消耗不同的积分！",
     "cardRecharge": "卡密充值",
     "enterCardDetails": "请粘贴或填写您的卡密信息！",
@@ -560,7 +560,7 @@
     "selectProducts": "选购套餐",
     "basicModelQuota": "普通积分",
     "advancedModelQuota": "高级积分",
-    "drawingQuota": "顶级积分",
+    "drawingQuota": "顶级模型额度",
     "buyPackage": "购买套餐"
   },
   "rechargeTypes": {
@@ -581,5 +581,197 @@
   },
   "messages": {
     "logoutSuccess": "登出账户成功！"
+  },
+  "lens": {
+    "header": {
+      "projects": "你的项目",
+      "workspaceSettings": "工作区设置",
+      "language": "语言"
+    },
+    "language": {
+      "zh-CN": "简体中文",
+      "zh-TW": "繁體中文",
+      "en-US": "English",
+      "ja-JP": "日本語",
+      "ko-KR": "한국어"
+    },
+    "sidebar": {
+      "newProject": "新建项目",
+      "searchProject": "搜索项目",
+      "researchProject": "研究项目",
+      "recent": "最近",
+      "pinned": "置顶",
+      "login": "登录",
+      "account": "研究偏好与账户",
+      "signedIn": "已登录",
+      "loginDesc": "保存项目和研究记录"
+    },
+    "settings": {
+      "setting": "设置",
+      "accountSecurity": "账户安全",
+      "upgradePlan": "升级套餐",
+      "notice": "使用必读",
+      "logout": "退出登录"
+    },
+    "member": {
+      "planList": "套餐列表",
+      "planSubtitle": "月付灵活开通，年付可节省年度费用。",
+      "monthly": "月付",
+      "annual": "年付",
+    "annualBetter": "年付更省",
+    "openNow": "立即开通",
+    "max": "Max",
+    "pro": "Pro",
+    "plus": "Plus",
+    "plusSummary": "适合轻量研究、日常问答与基础写作，覆盖论文速读、英文润色和基础资料整理。",
+    "proSummary": "适合高频科研写作与深度阅读，支持 PDF 深读、LaTeX 翻译、参考文献整理与正式交付。",
+    "maxSummary": "适合重度研究与复杂工作流，开放全部模型层级与完整研究工具链。",
+    "annualSave": "年度订阅省 {value}%",
+    "pricePerMonth": "/月付",
+    "pricePerYear": "/年付",
+    "monthlyEquivalent": "折合 ￥{value}/月",
+    "usdPerMonth": "{value} USD/月",
+    "features": {
+      "basicModels": "基础模型",
+      "advancedModelsLite": "少量高级模型",
+      "advancedModels": "高级模型",
+      "allModels": "全部模型",
+      "paperSummary": "论文速读",
+      "englishPolish": "英文润色",
+      "pdfDeepRead": "PDF 深度理解",
+      "latexTranslation": "LaTeX 翻译",
+      "bibtex": "参考文献转 Bib",
+      "fullResearchTools": "全研究工具",
+      "complexReasoning": "复杂推理",
+      "specialModels": "顶级模型"
+    }
+  },
+    "workspace": {
+      "introWithProjects": "开始新的研究任务",
+      "introFirstUse": "第一次使用，从这里开始",
+      "introDesc": "直接在下方输入问题，或者先添加资料。",
+      "importData": "导入资料",
+      "guideWithProjects": "开始研究，按这三步即可",
+      "guideFirstUse": "第一次使用，按这三步即可",
+      "stepAddData": "添加资料",
+      "stepInputTask": "输入任务",
+      "stepFollowUp": "继续追问",
+      "starterTitle": "也可以点击使用这些高频能力",
+      "starterPaperSummary": "总结论文",
+      "starterPaperSummaryPrompt": "请帮我总结这篇论文的研究问题、方法、核心结论和创新点。",
+      "starterEnglishPolish": "英文润色",
+      "starterEnglishPolishPrompt": "请帮我润色这段英文摘要，保持学术表达准确、简洁、自然。",
+      "starterLatexTranslation": "LaTeX 翻译",
+      "starterLatexTranslationPrompt": "请保留 LaTeX 公式与命令不变，把这段内容翻译成中文。",
+      "starterCodeExplain": "代码解释",
+      "starterCodeExplainPrompt": "请解释这段代码的作用、输入输出和关键实现逻辑。"
+    },
+    "academicPanel": {
+      "title": "工作区设置",
+      "subtitle": "配置当前流程、能力和高级工具。",
+      "close": "关闭工作区设置",
+      "pinnedPanel": "常驻面板",
+      "modeLabel": "模式",
+      "researchMode": "研究模式",
+      "advancedInstruction": "高级指令",
+      "filled": "已填写",
+      "empty": "未填写",
+      "coreLabel": "基础功能",
+      "pluginLabel": "高级工具",
+      "corePlaceholder": "不启用",
+      "pluginPlaceholder": "不启用",
+      "groupLabel": "工具分组",
+      "groupAcademic": "学术",
+      "groupConversation": "对话",
+      "groupProgramming": "编程",
+      "advancedExpand": "展开高级设置",
+      "advancedCollapse": "收起高级设置",
+      "quickCoreTitle": "高频核心能力",
+      "quickToolTitle": "高频研究工具",
+      "customInstructionLabel": "自定义指令",
+      "customInstructionPlaceholderInactive": "选择工具后填写",
+      "customInstructionPlaceholder": "例如：不翻译 Agent 专业名词",
+      "customInstructionHint": "仅在需要约束术语、输出格式或翻译策略时填写。",
+      "workflowLabel": "当前工作流",
+      "workflowFallbackLabel": "未配置研究流程",
+      "workflowFallbackDesc": "选择一个核心能力或高级工具，配置当前研究流程。",
+      "selectedKindCore": "核心能力",
+      "selectedKindTool": "高级工具",
+      "selectedKindPending": "待配置"
+    },
+    "academicEntities": {
+      "core": {
+        "chinesePolish": {
+          "label": "中文润色",
+          "description": "中文学术表达润色与结构优化。"
+        },
+        "englishPolish": {
+          "label": "英文润色",
+          "description": "英文论文润色与语法优化。"
+        },
+        "mindMap": {
+          "label": "绘制脑图",
+          "description": "将文本总结为结构化脑图。"
+        },
+        "translation": {
+          "label": "中英互译",
+          "description": "学术场景中英文互译。"
+        },
+        "bibtex": {
+          "label": "参考文献转Bib",
+          "description": "将参考文献转换为 BibTeX。"
+        },
+        "codeExplain": {
+          "label": "学术型代码解释",
+          "description": "解释代码含义、输入输出与关键逻辑。"
+        }
+      },
+      "tool": {
+        "paperSummary": {
+          "label": "论文速读",
+          "description": "快速总结论文的研究问题、方法、结论和贡献。"
+        },
+        "pdfBatchSummary": {
+          "label": "PDF 批量总结",
+          "description": "一次性总结多个 PDF 文件。"
+        },
+        "pdfDeepRead": {
+          "label": "PDF 深度理解",
+          "description": "提取并分析 PDF 中的关键论点、方法和结果。"
+        },
+        "wordBatchSummary": {
+          "label": "Word 批量总结",
+          "description": "一次性总结多个 Word 文档。"
+        },
+        "arxivSummary": {
+          "label": "Arxiv摘要",
+          "description": "按编号获取并总结 Arxiv 论文。"
+        },
+        "arxivEnglishSummary": {
+          "label": "Arxiv 英文摘要",
+          "description": "为 Arxiv 论文生成英文摘要。"
+        },
+        "latexSummary": {
+          "label": "LaTeX 摘要",
+          "description": "在保留结构的前提下总结 LaTeX 文稿。"
+        },
+        "latexPreciseTranslation": {
+          "label": "LaTeX 精准翻译",
+          "description": "保留公式和命令，对 LaTeX 内容进行精准翻译。"
+        },
+        "latexEnglishPolish": {
+          "label": "LaTeX 英文润色",
+          "description": "在不破坏命令的前提下润色 LaTeX 英文内容。"
+        },
+        "latexChinesePolish": {
+          "label": "LaTeX 中文润色",
+          "description": "在不破坏命令的前提下润色 LaTeX 中文内容。"
+        },
+        "latexProofreading": {
+          "label": "LaTeX 高亮纠错",
+          "description": "对 LaTeX 内容进行高亮纠错与修订。"
+        }
+      }
+    }
   }
 }

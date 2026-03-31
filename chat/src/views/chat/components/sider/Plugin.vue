@@ -39,7 +39,7 @@ function toggleSelection(plugin: any) {
       :key="plugin.parameters"
       class="select-none relative h-26 bg-white shadow flex flex-col items-start gap-3 px-3 py-1 break-all rounded-lg cursor-pointer group font-medium dark:bg-gray-800"
       role="region"
-      :aria-label="`${plugin.pluginName}插件卡片`"
+      :aria-label="`${plugin.pluginName}工具卡片`"
     >
       <div class="flex items-center w-full my-1 min-w-0">
         <div class="flex items-center space-x-2 flex-1 min-w-0">
@@ -50,7 +50,7 @@ function toggleSelection(plugin: any) {
             <img
               v-if="plugin.pluginImg"
               :src="plugin.pluginImg"
-              :alt="`${plugin.pluginName}插件图标`"
+              :alt="`${plugin.pluginName}工具图标`"
               class="w-full h-full object-cover"
             />
 
@@ -76,7 +76,7 @@ function toggleSelection(plugin: any) {
             @click.prevent="toggleSelection(plugin)"
             role="switch"
             :aria-checked="usingPlugin?.parameters === plugin.parameters"
-            :aria-label="`${usingPlugin?.parameters === plugin.parameters ? '禁用' : '启用'}${plugin.pluginName}插件`"
+            :aria-label="`${usingPlugin?.parameters === plugin.parameters ? '禁用' : '启用'}${plugin.pluginName}工具`"
           >
             <span
               aria-hidden="true"

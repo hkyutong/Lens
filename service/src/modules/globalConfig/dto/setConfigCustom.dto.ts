@@ -10,7 +10,7 @@ interface KeyValue {
 
 export class SetConfigCustomDto {
   @ApiProperty({
-    example: { configKey: 'siteName', configVal: 'YutoLens', infoKey: 'YutoLens' },
+    example: { configKey: 'siteName', configVal: 'Lens', infoKey: 'Lens' },
     description: '设置更新配置信息',
   })
   @ValidateNested({ each: true })

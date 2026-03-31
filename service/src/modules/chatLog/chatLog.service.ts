@@ -4,7 +4,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import excel from 'exceljs';
 import { Request, Response } from 'express';
-import { In, Like, MoreThan, MoreThanOrEqual, Repository } from 'typeorm';
+import { In, LessThan, Like, MoreThan, MoreThanOrEqual, Repository } from 'typeorm';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { UserEntity } from '../user/user.entity';
 import { ChatLogEntity } from './chatLog.entity';
@@ -804,17 +804,33 @@ export class ChatLogService {
   /* 查询当前对话的列表 */
   async chatList(req: Request, params: ChatListDto) {
     const { id } = req.user;
-    const { groupId } = params;
-    const where = { userId: id, isDelete: false };
+    const { groupId, size = 80, beforeChatId } = params;
+    const safeSize = Math.min(Math.max(Number(size) || 80, 1), 200);
+    const where: any = { userId: id, isDelete: false };
     groupId && Object.assign(where, { groupId });
+    if (beforeChatId) {
+      Object.assign(where, { id: LessThan(Number(beforeChatId)) });
+    }
     if (groupId) {
       const count = await this.chatGroupEntity.count({
-        where: { isDelete: false },
+        where: { id: Number(groupId), userId: id, isDelete: false },
       });
-      if (count === 0) return [];
+      if (count === 0) {
+        return {
+          rows: [],
+          hasMore: false,
+          nextBeforeChatId: 0,
+        };
+      }
     }
-    const list = await this.chatLogEntity.find({ where });
-    return list.map(item => {
+    const rawList = await this.chatLogEntity.find({
+      where,
+      order: { id: 'DESC' },
+      take: safeSize + 1,
+    });
+    const hasMore = rawList.length > safeSize;
+    const list = rawList.slice(0, safeSize).reverse();
+    const rows = list.map(item => {
       const {
         prompt,
         role,
@@ -876,6 +892,11 @@ export class ChatLogService {
         taskId: taskId,
       };
     });
+    return {
+      rows,
+      hasMore,
+      nextBeforeChatId: rows.length ? Number(rows[0].chatId || 0) : 0,
+    };
   }
 
   /* 查询历史对话的列表 */

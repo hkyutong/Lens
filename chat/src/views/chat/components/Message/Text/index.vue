@@ -33,6 +33,8 @@ import mila from 'markdown-it-link-attributes'
 import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 let mermaidModulePromise: Promise<typeof import('mermaid')> | null = null
+const MESSAGE_RENDER_CACHE_LIMIT = 400
+const messageRenderCache = new Map<string, string>()
 
 const getMermaidModule = async () => {
   mermaidModulePromise ||= import('mermaid')
@@ -73,10 +75,34 @@ const injectThemeStyles = () => {
   document.head.appendChild(style)
 }
 
+const rememberRenderedMessage = (key: string, value: string) => {
+  if (!key) return value
+  if (messageRenderCache.has(key)) {
+    messageRenderCache.delete(key)
+  }
+  messageRenderCache.set(key, value)
+  if (messageRenderCache.size > MESSAGE_RENDER_CACHE_LIMIT) {
+    const oldestKey = messageRenderCache.keys().next().value
+    if (oldestKey) {
+      messageRenderCache.delete(oldestKey)
+    }
+  }
+  return value
+}
+
+const hashMessageContent = (input: string) => {
+  let hash = 0
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash).toString(36)
+}
+
 interface Props {
   chatId?: number | string
   index: number
   isUserMessage?: boolean
+  modelName?: string
   content?: string
   modelType?: number
   status?: number
@@ -2009,13 +2035,11 @@ mdi.renderer.rules.image = function (tokens, idx, options, env, self) {
 
   if (!src) return ''
 
-  return `<img src="${src}" alt="${alt || ''}" title="${title || alt || ''}" class="rounded-md max-h-[30vh] cursor-pointer hover:opacity-90 transition-opacity" 
-    onclick="(function(event) { 
-      event.stopPropagation();
-      const customEvent = new CustomEvent('previewMdImage', { detail: { src: '${src}' } });
-      document.dispatchEvent(customEvent);
-    })(event)"
-  />`
+  const safeSrc = String(src).replace(/"/g, '&quot;')
+  const safeAlt = String(alt || '').replace(/"/g, '&quot;')
+  const safeTitle = String(title || alt || '').replace(/"/g, '&quot;')
+
+  return `<img src="${safeSrc}" alt="${safeAlt}" title="${safeTitle}" data-preview-src="${safeSrc}" class="rounded-md max-h-[30vh] cursor-pointer hover:opacity-90 transition-opacity" />`
 }
 
 const imageUrlArray = computed(() => {
@@ -2072,6 +2096,14 @@ mdi.use(mdKatex, {
 const text = computed(() => {
   // 显式依赖 loading，确保流式结束后重新走 markdown 渲染（由源码切到图容器）。
   const streamLoading = Boolean(props.loading)
+  const rawContent = String(props.content || '')
+  const cacheKey = `${props.isUserMessage ? 'user' : 'assistant'}:${String(
+    props.chatId ?? props.index
+  )}:${streamLoading ? 'loading' : 'stable'}:${hashMessageContent(rawContent)}`
+  const cached = messageRenderCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
   const sanitizeDisplayText = (input: string) => {
     const source = String(input || '')
       .replace(/[​⁠﻿]/g, '')
@@ -2121,7 +2153,7 @@ const text = computed(() => {
     }
     return out.join('\n')
   }
-  let value = sanitizeDisplayText(props.content || '')
+  let value = sanitizeDisplayText(rawContent)
   value = normalizeMarkdownTables(value)
   value = stripLeakedPolishTableInstructions(value)
   if (!props.isUserMessage) {
@@ -2144,10 +2176,10 @@ const text = computed(() => {
 
   if (!props.isUserMessage) {
     void streamLoading
-    return mdi.render(modifiedValue)
+    return rememberRenderedMessage(cacheKey, mdi.render(modifiedValue))
   }
 
-  return modifiedValue
+  return rememberRenderedMessage(cacheKey, modifiedValue)
 })
 
 watch(
@@ -2183,6 +2215,61 @@ const showThinkingPill = computed(
   () => !props.isUserMessage && (props.loading || hasReasoning.value)
 )
 const shouldAnimateThinking = computed(() => props.loading)
+const promptReferenceItems = computed(() =>
+  props.promptReference
+    ? props.promptReference
+        .match(/{(.*?)}/g)
+        ?.map((str: string | any[]) => str.slice(1, -1))
+        .slice(0, 3) || []
+    : []
+)
+const recordEyebrow = computed(() => (props.isUserMessage ? '研究请求' : '研究结果'))
+const recordTitle = computed(() => {
+  if (props.isUserMessage) return '你的输入'
+  return ''
+})
+const recordStatus = computed(() => {
+  if (props.loading) return '进行中'
+  return ''
+})
+const recordSummary = computed(() => {
+  if (props.isUserMessage) {
+    if (parsedUserUploadedFiles.value.length || imageUrlArray.value.length) {
+      return `附带 ${parsedUserUploadedFiles.value.length + imageUrlArray.value.length} 项研究资料。`
+    }
+    return ''
+  }
+
+  if (props.loading) {
+    return '正在整理分析、引用和可交付结果。'
+  }
+  if (props.usingNetwork && searchResult.value.length) {
+    return `引用 ${searchResult.value.length} 个网页来源。`
+  }
+  if (parsedFileVectorFiles.value.length) {
+    return `生成 ${parsedFileVectorFiles.value.length} 份可下载结果。`
+  }
+  return ''
+})
+const recordMeta = computed(() => {
+  const items: string[] = []
+  if (props.isUserMessage) return items
+
+  if (props.usingNetwork) {
+    items.push(searchResult.value.length ? `来源 ${searchResult.value.length}` : '联网搜索')
+  }
+  if (props.usingDeepThinking || hasReasoning.value) {
+    items.push('推理')
+  }
+  if (parsedFileVectorFiles.value.length) {
+    items.push(`附件 ${parsedFileVectorFiles.value.length}`)
+  }
+  return items
+})
+const recordStatusClass = computed(() => ({
+  'workspace-record__status--active': props.loading,
+  'workspace-record__status--user': props.isUserMessage,
+}))
 
 const startReasoningTips = () => {
   if (reasoningTipTimer || reasoningTips.length === 0) return
@@ -2431,117 +2518,53 @@ watch(
 
 defineExpose({ textRef })
 
+const handleTextContainerClick = (event: Event) => {
+  const target = event.target as HTMLElement | null
+  if (!target) return
+
+  const container = textRef.value
+  if (!container) return
+
+  const copyButton = target.closest<HTMLElement>('.btn-copy[data-block-id]')
+  if (copyButton && container.contains(copyButton)) {
+    event.stopPropagation()
+    event.preventDefault()
+    const blockId = copyButton.getAttribute('data-block-id')
+    if (blockId) {
+      handleCodeCopy(blockId, copyButton)
+    }
+    return
+  }
+
+  const previewButton = target.closest<HTMLElement>('.btn-preview[data-block-id]')
+  if (previewButton && container.contains(previewButton)) {
+    event.stopPropagation()
+    event.preventDefault()
+    const blockId = previewButton.getAttribute('data-block-id')
+    if (!blockId) return
+    const codeBlock = document.getElementById(blockId)
+    const code = codeBlock?.querySelector('code')?.textContent || ''
+    if (!code) return
+    globalStore.updateHtmlContent(code, previewButton.classList.contains('preview-markmap') ? 'markmap' : 'html')
+    globalStore.updateHtmlPreviewer(true)
+    return
+  }
+
+  const previewImage = target.closest<HTMLElement>('img[data-preview-src]')
+  if (previewImage && container.contains(previewImage)) {
+    event.stopPropagation()
+    const src = previewImage.getAttribute('data-preview-src')
+    if (src) {
+      openSingleImagePreview(src)
+    }
+  }
+}
+
 onMounted(() => {
   // 注入主题覆盖样式
   injectThemeStyles()
   scheduleRenderMermaidBlocks()
-
-  // 添加复制功能
-  const setupCodeCopy = () => {
-    // 选择包含btn-copy类的按钮
-    const copyButtons = document.querySelectorAll('.btn-copy[data-block-id]')
-    copyButtons.forEach(button => {
-      const blockId = button.getAttribute('data-block-id')
-      if (!blockId) return
-
-      // 检查按钮是否已经绑定了事件（添加自定义属性标记）
-      if (button.getAttribute('data-listener-attached') === 'true') {
-        return
-      }
-
-      // 添加新的事件处理程序
-      button.addEventListener('click', event => {
-        event.stopPropagation()
-        event.preventDefault()
-        handleCodeCopy(blockId, button as HTMLElement)
-      })
-
-      // 标记按钮已绑定事件
-      button.setAttribute('data-listener-attached', 'true')
-    })
-  }
-
-  // 初始设置和DOM更新后重新设置
-  setupCodeCopy()
-
-  // 监听DOM变化，当新的代码块出现时设置复制功能
-  const observer = new MutationObserver(mutations => {
-    // 检查是否有新的代码块按钮被添加
-    let hasNewButtons = false
-    mutations.forEach(mutation => {
-      if (mutation.type === 'childList') {
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === 1) {
-            // 元素节点
-            const element = node as HTMLElement
-            // 检查是否包含未绑定事件的复制按钮
-            const newButtons = element.querySelectorAll(
-              '.btn-copy:not([data-listener-attached="true"])'
-            )
-            if (newButtons.length > 0) {
-              hasNewButtons = true
-            }
-          }
-        })
-      }
-    })
-
-    // 只有在确实有新按钮时才执行设置
-    if (hasNewButtons) {
-      setupCodeCopy()
-    }
-  })
-  observer.observe(document.body, { childList: true, subtree: true })
-
-  // 卸载时清理
-  onUnmounted(() => {
-    observer.disconnect()
-    // 清理所有定时器
-    copyTimeoutsMap.forEach(timeoutId => clearTimeout(timeoutId))
-    copyTimeoutsMap.clear()
-  })
-
-  const handlePreviewClick = (event: MouseEvent) => {
-    const target = event.target as HTMLElement
-    // 查找包含btn-preview类的按钮或其父元素
-    const previewButton = target.classList?.contains('btn-preview')
-      ? target
-      : target.closest('.btn-preview')
-
-    if (previewButton && previewButton.getAttribute('data-block-id')) {
-      event.stopPropagation()
-      event.preventDefault()
-
-      const blockId = previewButton.getAttribute('data-block-id')
-      if (blockId) {
-        const codeBlock = document.getElementById(blockId)
-        if (codeBlock) {
-          const codeElement = codeBlock.querySelector('code')
-          if (codeElement && codeElement.textContent) {
-            // 更新当前点击的内容到全局存储，标记类型
-            globalStore.updateHtmlContent(codeElement.textContent || '', 'html')
-            // 打开预览器，由预览器自动收集所有代码块
-            globalStore.updateHtmlPreviewer(true)
-          }
-        }
-      }
-    }
-  }
-
-  document.addEventListener('click', handlePreviewClick)
-
-  // 添加对markdown图片的预览监听
-  const handleMdImagePreview = (event: CustomEvent) => {
-    const { src } = event.detail
-    openSingleImagePreview(src)
-  }
-
-  document.addEventListener('previewMdImage', handleMdImagePreview as EventListener)
-
-  onUnmounted(() => {
-    document.removeEventListener('click', handlePreviewClick)
-    document.removeEventListener('previewMdImage', handleMdImagePreview as EventListener)
-  })
+  textRef.value?.addEventListener('click', handleTextContainerClick)
 
   // 初始化代码块样式
   nextTick(() => {
@@ -2591,80 +2614,13 @@ onMounted(() => {
   if (speechSynthesisUtterance) {
     window.speechSynthesis.cancel()
   }
-
-  // 监听 code button 点击事件
-  setTimeout(() => {
-    // 预览按钮
-    const htmlPreviewBtns = document.querySelectorAll('.btn-preview:not(.preview-markmap)')
-    const markmapPreviewBtns = document.querySelectorAll('.preview-markmap')
-    const copyBtns = document.querySelectorAll('.btn-copy')
-
-    // HTML预览按钮点击处理
-    htmlPreviewBtns.forEach(btn => {
-      btn.addEventListener('click', (e: Event) => {
-        // 获取代码块ID
-        const blockId = (e.currentTarget as HTMLElement).dataset.blockId || ''
-        const codeBlock = document.getElementById(blockId)
-        if (codeBlock && codeBlock.querySelector('code')) {
-          const code = codeBlock.querySelector('code')?.textContent || ''
-          globalStore.updateHtmlContent(code, 'html')
-          globalStore.updateHtmlPreviewer(true)
-        }
-      })
-    })
-
-    // Markmap预览按钮点击处理
-    markmapPreviewBtns.forEach(btn => {
-      btn.addEventListener('click', (e: Event) => {
-        // 获取代码块ID
-        const blockId = (e.currentTarget as HTMLElement).dataset.blockId || ''
-        const codeBlock = document.getElementById(blockId)
-        if (codeBlock && codeBlock.querySelector('code')) {
-          const code = codeBlock.querySelector('code')?.textContent || ''
-          globalStore.updateHtmlContent(code, 'markmap')
-          globalStore.updateHtmlPreviewer(true)
-        }
-      })
-    })
-
-    // Copy button click handlers
-    copyBtns.forEach(btn => {
-      btn.addEventListener('click', (e: Event) => {
-        const blockId = (e.currentTarget as HTMLElement).dataset.blockId || ''
-        const codeBlock = document.getElementById(blockId)
-        if (codeBlock && codeBlock.querySelector('code')) {
-          const code = codeBlock.querySelector('code')?.textContent || ''
-          // 复制代码到剪贴板
-          navigator.clipboard.writeText(code).then(() => {
-            const copyBtn = e.currentTarget as HTMLElement
-            // const copyIcon = copyBtn.querySelector('.copy-icon')
-            const originalHTML = copyBtn.innerHTML
-
-            // 显示成功状态
-            copyBtn.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-green-500">
-                  <path fill-rule="evenodd" clip-rule="evenodd" d="M4 24L9 19L19 29L39 9L44 14L19 39L4 24Z" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                已复制
-              `
-
-            // 2秒后恢复原样
-            setTimeout(() => {
-              copyBtn.innerHTML = originalHTML
-            }, 2000)
-          })
-          // .catch(() => {
-          //   // 复制失败处理
-          //   alert('复制失败，请手动复制')
-          // })
-        }
-      })
-    })
-  }, 100)
 })
 
 onUnmounted(() => {
   stopReasoningTips()
+  textRef.value?.removeEventListener('click', handleTextContainerClick)
+  copyTimeoutsMap.forEach(timeoutId => clearTimeout(timeoutId))
+  copyTimeoutsMap.clear()
   if (mermaidTimer) {
     clearTimeout(mermaidTimer)
     mermaidTimer = null
@@ -2687,46 +2643,82 @@ function openSingleImagePreview(src: string) {
 </script>
 
 <template>
-  <div class="text-wrap flex w-full flex-col px-1 group">
-    <!-- 网页搜索结果 -->
-    <div v-if="!isUserMessage && (searchResult.length || (loading && usingNetwork))" class="mb-2">
-      <div
-        @click="showSearchResult = !showSearchResult"
-        class="text-gray-600 mb-1 cursor-pointer items-center btn-pill glow-container"
-      >
-        <Sphere theme="outline" size="18" class="mr-1 flex" />
-        <span v-if="searchResult.length">已浏览 {{ searchResult.length }} 个网页</span>
-        <span v-else-if="loading && usingNetwork">联网搜索中</span>
-        <LoadingOne v-if="loading && usingNetwork" class="rotate-icon flex mx-1" />
-        <Down v-if="!showSearchResult && searchResult.length" size="18" class="ml-1 flex" />
-        <Up v-else-if="searchResult.length" size="18" class="ml-1 flex" />
-        <div v-if="loading && usingNetwork && !searchResult.length" class="glow-band"></div>
+  <section
+    class="workspace-record group"
+    :class="{
+      'workspace-record--user': isUserMessage,
+      'workspace-record--assistant': !isUserMessage,
+      'workspace-record--loading': loading,
+    }"
+  >
+    <header v-if="!isUserMessage" class="workspace-record__header">
+      <div class="workspace-record__header-main">
+        <div class="workspace-record__eyebrow">{{ recordEyebrow }}</div>
+        <div v-if="recordTitle || recordStatus" class="workspace-record__title-row">
+          <h3 v-if="recordTitle" class="workspace-record__title">{{ recordTitle }}</h3>
+          <span v-if="recordStatus" class="workspace-record__status" :class="recordStatusClass">
+            {{ recordStatus }}
+          </span>
+        </div>
+        <p v-if="recordSummary" class="workspace-record__summary">{{ recordSummary }}</p>
+        <div v-if="recordMeta.length" class="workspace-record__meta">
+          <span v-for="item in recordMeta" :key="item" class="workspace-record__meta-chip">
+            {{ item }}
+          </span>
+        </div>
       </div>
+    </header>
+
+    <div v-else class="workspace-record__request-head">
+      <div class="workspace-record__eyebrow">{{ recordEyebrow }}</div>
+      <div v-if="recordMeta.length" class="workspace-record__meta">
+        <span v-for="item in recordMeta" :key="item" class="workspace-record__meta-chip">
+          {{ item }}
+        </span>
+      </div>
+    </div>
+
+    <div
+      v-if="!isUserMessage && (searchResult.length || (loading && usingNetwork))"
+      class="workspace-record__section"
+    >
+      <button
+        type="button"
+        @click="showSearchResult = !showSearchResult"
+        class="workspace-record__toggle"
+      >
+        <div class="workspace-record__toggle-copy">
+          <Sphere theme="outline" size="18" class="flex" />
+          <span v-if="searchResult.length">已浏览 {{ searchResult.length }} 个网页来源</span>
+          <span v-else-if="loading && usingNetwork">联网搜索中</span>
+        </div>
+        <div class="workspace-record__toggle-icons">
+          <LoadingOne v-if="loading && usingNetwork" class="rotate-icon flex" />
+          <Down v-if="!showSearchResult && searchResult.length" size="18" class="flex" />
+          <Up v-else-if="searchResult.length" size="18" class="flex" />
+        </div>
+      </button>
 
       <transition name="fold">
-        <div
-          v-if="showSearchResult && searchResult.length"
-          class="text-gray-600 dark:text-gray-400 border-l-2 pl-5 mt-2"
-        >
-          <div class="flex flex-col gap-2 text-base">
-            <a
-              v-for="(item, index) in searchResult"
-              :key="index"
-              :href="item.link"
-              target="_blank"
-              class="hover:underline mr-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
-            >
-              {{ index + 1 }}. {{ item.title.slice(0, 80)
-              }}{{ item.title.length > 80 ? '...' : '' }}
+        <div v-if="showSearchResult && searchResult.length" class="workspace-record__source-list">
+          <a
+            v-for="(item, index) in searchResult"
+            :key="index"
+            :href="item.link"
+            target="_blank"
+            class="workspace-record__source-item"
+          >
+            <span class="workspace-record__source-index">{{ index + 1 }}</span>
+            <span class="workspace-record__source-title">
+              {{ item.title.slice(0, 80) }}{{ item.title.length > 80 ? '...' : '' }}
               <span v-if="item.media">[{{ item.media }}]</span>
-            </a>
-          </div>
+            </span>
+          </a>
         </div>
       </transition>
     </div>
 
-    <!-- 深度思考内容 -->
-    <div v-if="showThinkingPill" class="mb-2">
+    <div v-if="showThinkingPill" class="workspace-record__section">
       <div
         :class="[
           'reasoning-pill glow-container',
@@ -2745,106 +2737,68 @@ function openSingleImagePreview(src: string) {
       </div>
     </div>
 
-    <!-- 主文本内容 -->
-    <div ref="textRef" class="flex w-full">
-      <!-- AI回复内容 -->
-      <div v-if="!isUserMessage" class="w-full">
-        <span
-          v-if="loading && !text && !hasReasoning"
-          class="inline-block w-3.5 h-3.5 ml-0.5 align-middle rounded-full animate-breathe dark:bg-gray-100 bg-gray-950"
-        ></span>
-        <div
-          :class="[
-            'markdown-body text-gray-950 dark:text-gray-100',
-            { 'markdown-body-generate': loading || !text },
-          ]"
-          v-html="text"
-        ></div>
-      </div>
+    <div class="workspace-record__body">
+      <div ref="textRef" class="workspace-record__content">
+        <div v-if="!isUserMessage" class="workspace-record__assistant">
+          <span
+            v-if="loading && !text && !hasReasoning"
+            class="inline-block h-3.5 w-3.5 align-middle rounded-full animate-breathe bg-gray-950 dark:bg-gray-100"
+          ></span>
+          <div
+            :class="[
+              'markdown-body workspace-record__markdown text-gray-950 dark:text-gray-100',
+              { 'markdown-body-generate': loading || !text },
+            ]"
+            v-html="text"
+          ></div>
+        </div>
 
-      <!-- 用户消息内容 -->
-      <div
-        v-else
-        class="flex justify-end w-full"
-        :class="[isMobile ? 'pl-20' : 'pl-28']"
-        style="max-width: 100%"
-      >
-        <!-- 编辑模式 -->
-        <div
-          v-if="isEditable"
-          class="p-3 rounded-2xl w-full bg-opacity dark:bg-gray-750 break-words"
-          style="max-width: 100%"
-        >
-          <textarea
-            v-model="editableContent"
-            class="min-w-full text-base resize-none overflow-y-auto bg-transparent whitespace-pre-wrap text-gray-950 dark:text-gray-100"
-            style="max-height: 60vh"
-            @input="adjustTextareaHeight"
-            ref="textarea"
-          ></textarea>
-          <div class="flex justify-end mt-3">
-            <!-- 取消按钮 -->
-            <div class="group relative">
-              <button
-                type="button"
-                class="btn-floating btn-md mx-3"
-                :class="{
-                  'h-8 w-8': isMobile,
-                  'bg-[#F4F4F4] border-[#F4F4F4] dark:bg-[#2f2f2f] dark:border-[#2f2f2f]': isMobile,
-                }"
-                @click="cancelEdit"
-                aria-label="取消"
-              >
+        <div v-else class="workspace-record__user">
+          <div v-if="isEditable" class="workspace-record__editor">
+            <textarea
+              ref="textarea"
+              v-model="editableContent"
+              class="workspace-record__editor-textarea"
+              style="max-height: 60vh"
+              @input="adjustTextareaHeight"
+            ></textarea>
+            <div class="workspace-record__editor-actions">
+              <button type="button" class="btn-pill btn-md" @click="cancelEdit" aria-label="取消">
                 <Close size="16" />
+                <span class="ml-1">取消</span>
               </button>
-              <div v-if="!isMobile" class="tooltip tooltip-top">取消</div>
-            </div>
-            <!-- 发送按钮 -->
-            <div class="group relative">
               <button
                 type="button"
-                class="btn-send"
-                :class="{ 'h-8 w-8': isMobile }"
+                class="btn btn-primary btn-md"
                 @click="handleEditMessage"
-                aria-label="发送"
+                aria-label="保存修改"
               >
                 <Send size="16" />
+                <span class="ml-1">保存修改</span>
               </button>
-              <div v-if="!isMobile" class="tooltip tooltip-top">发送</div>
             </div>
           </div>
+          <div v-else class="workspace-record__user-text" v-text="text" />
         </div>
-        <!-- 只读模式 -->
-        <div
-          v-else
-          class="p-3 rounded-2xl text-base bg-opacity dark:bg-gray-750 break-words whitespace-pre-wrap text-gray-950 dark:text-gray-100"
-          v-text="text"
-          style="max-width: 100%"
-        />
       </div>
     </div>
 
     <div
       v-if="isUserMessage && parsedUserUploadedFiles.length"
-      class="mt-2 w-full flex justify-end"
-      :class="[isMobile ? 'pl-20' : 'pl-28']"
+      class="workspace-record__section workspace-record__section--files"
     >
-      <div class="flex w-full max-w-[560px] flex-col items-end gap-2">
+      <div class="workspace-record__file-grid">
         <button
           v-for="(file, index) in parsedUserUploadedFiles"
           :key="`${file.url}-${index}`"
           type="button"
-          class="group inline-flex w-full max-w-[360px] items-center gap-3 rounded-2xl border border-gray-300/80 bg-white/95 px-3 py-2 text-left shadow-sm transition-colors hover:border-gray-400 dark:border-gray-700 dark:bg-[#1f1f1f] dark:hover:border-gray-600"
-          :class="{
-            'cursor-wait opacity-80': isDownloadingFile(file.url),
-          }"
+          class="workspace-record__file-card"
+          :class="{ 'cursor-wait opacity-80': isDownloadingFile(file.url) }"
           :title="file.name"
           :disabled="isDownloadingFile(file.url)"
           @click="downloadUserUploadedFile(file)"
         >
-          <div
-            class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300"
-          >
+          <div class="workspace-record__file-icon">
             {{ getUserFileTypeLabel(file).replace(' 文件', '') }}
           </div>
           <div class="min-w-0 flex-1">
@@ -2859,19 +2813,17 @@ function openSingleImagePreview(src: string) {
       </div>
     </div>
 
-    <!-- 图片显示部分 -->
     <div
       v-if="imageUrlArray && imageUrlArray.length > 0 && isImageUrl"
-      :class="['my-2 w-full flex', isUserMessage ? 'justify-end' : 'justify-start']"
+      class="workspace-record__section"
     >
+      <div class="workspace-record__section-label">
+        {{ isUserMessage ? '图片资料' : '图像结果' }}
+      </div>
       <div
-        class="gap-2"
+        class="workspace-record__image-grid"
         :style="{
-          display: 'grid',
           gridTemplateColumns: `repeat(${Math.min(imageUrlArray.length, 4)}, 1fr)`,
-          gridAutoRows: '1fr',
-          maxWidth: isUserMessage ? (isMobile ? '60vw' : '40vw') : '80vw',
-          width: 'auto',
         }"
       >
         <img
@@ -2880,7 +2832,7 @@ function openSingleImagePreview(src: string) {
           :src="file"
           alt="图片"
           @click="openImagePreview(index)"
-          class="rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-90 transition-opacity w-auto h-auto max-h-[30vh] object-cover"
+          class="workspace-record__image"
           :style="{
             aspectRatio: '1/1',
             width: '160px',
@@ -2890,96 +2842,69 @@ function openSingleImagePreview(src: string) {
       </div>
     </div>
 
-    <div v-if="!isUserMessage && parsedFileVectorFiles.length" class="mt-3 flex w-full">
-      <div
-        class="w-full rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-3"
-      >
-        <div class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">下载文件</div>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="(file, index) in parsedFileVectorFiles"
-            :key="`${file.path}-${index}`"
-            type="button"
-            class="btn-pill inline-flex items-center"
-            :class="{ 'opacity-70 cursor-not-allowed': isDownloadingFile(file.path) }"
-            :disabled="isDownloadingFile(file.path)"
-            @click="downloadAcademicFile(file)"
-            :title="file.name"
-          >
-            <span class="truncate max-w-[260px]">{{ file.name }}</span>
-            <LoadingOne v-if="isDownloadingFile(file.path)" class="ml-1 rotate-icon flex" />
-          </button>
-        </div>
+    <div
+      v-if="!isUserMessage && parsedFileVectorFiles.length"
+      class="workspace-record__section workspace-record__section--downloads"
+    >
+      <div class="workspace-record__section-label">可交付结果</div>
+      <div class="workspace-record__download-list">
+        <button
+          v-for="(file, index) in parsedFileVectorFiles"
+          :key="`${file.path}-${index}`"
+          type="button"
+          class="workspace-record__download-chip"
+          :class="{ 'opacity-70 cursor-not-allowed': isDownloadingFile(file.path) }"
+          :disabled="isDownloadingFile(file.path)"
+          @click="downloadAcademicFile(file)"
+          :title="file.name"
+        >
+          <span class="truncate max-w-[260px]">{{ file.name }}</span>
+          <LoadingOne v-if="isDownloadingFile(file.path)" class="ml-1 rotate-icon flex" />
+        </button>
       </div>
     </div>
 
-    <!-- 后续提问建议 -->
     <div
-      v-if="promptReference && !isUserMessage && isLast"
-      class="flex-row transition-opacity duration-500"
+      v-if="promptReferenceItems.length && !isUserMessage && isLast"
+      class="workspace-record__section"
     >
-      <button
-        v-for="(item, index) in promptReference
-          ? promptReference
-              .match(/{(.*?)}/g)
-              ?.map((str: string | any[]) => str.slice(1, -1))
-              .slice(0, 3)
-          : []"
-        :key="index"
-        @click="handleMessage(item as string)"
-        class="flex items-center overflow-hidden btn-pill py-4 px-4 mt-3"
-      >
-        {{ item }}
-        <ArrowRight class="ml-1" />
-      </button>
+      <div class="workspace-record__section-label">下一步</div>
+      <div class="workspace-record__followups">
+        <button
+          v-for="(item, index) in promptReferenceItems"
+          :key="index"
+          @click="handleMessage(item as string)"
+          class="workspace-record__followup-btn"
+        >
+          {{ item }}
+          <ArrowRight class="ml-1" />
+        </button>
+      </div>
     </div>
 
-    <!-- 操作按钮区域 -->
-    <div
-      :class="[
-        'flex transition-opacity duration-300 text-gray-700',
-        buttonGroupClass,
-        { 'justify-end': isUserMessage },
-      ]"
-    >
-      <div class="mt-2 flex group">
-        <!-- 复制按钮 -->
+    <div class="workspace-record__footer" :class="buttonGroupClass">
+      <div class="workspace-record__actions">
         <div v-if="!isEditable" class="relative group-btn">
-          <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
-            @click="handleCopy"
-            aria-label="复制"
-          >
+          <button class="btn-icon btn-sm btn-icon-action mx-1" @click="handleCopy" aria-label="复制">
             <Copy />
           </button>
           <div v-if="!isMobile" class="tooltip tooltip-top">{{ t('chat.copy') }}</div>
         </div>
 
-        <!-- 删除按钮 -->
         <div v-if="!isEditable" class="relative group-btn">
-          <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
-            @click="handleDelete"
-            aria-label="删除"
-          >
+          <button class="btn-icon btn-sm btn-icon-action mx-1" @click="handleDelete" aria-label="删除">
             <Delete />
           </button>
           <div v-if="!isMobile" class="tooltip tooltip-top">{{ t('chat.delete') }}</div>
         </div>
 
-        <!-- 编辑按钮 -->
         <div v-if="isUserMessage && !isEditable" class="relative group-btn">
-          <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
-            @click="handleEditMessage"
-            aria-label="编辑"
-          >
+          <button class="btn-icon btn-sm btn-icon-action mx-1" @click="handleEditMessage" aria-label="编辑">
             <Edit />
           </button>
           <div v-if="!isMobile" class="tooltip tooltip-top">编辑</div>
         </div>
 
-        <!-- 重新生成按钮 -->
         <div v-if="!isUserMessage" class="relative group-btn">
           <button
             class="btn-icon btn-sm btn-icon-action mx-1"
@@ -2993,13 +2918,8 @@ function openSingleImagePreview(src: string) {
           <div v-if="!isMobile" class="tooltip tooltip-top">重新生成</div>
         </div>
 
-        <!-- 朗读按钮 -->
         <div v-if="!isUserMessage && !isHideTts" class="relative group-btn">
-          <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
-            @click="playOrPause"
-            aria-label="朗读"
-          >
+          <button class="btn-icon btn-sm btn-icon-action mx-1" @click="playOrPause" aria-label="朗读">
             <VoiceMessage v-if="playbackState === 'paused'" />
             <Rotation v-if="playbackState === 'loading'" class="rotate-icon" />
             <PauseOne v-else-if="playbackState === 'playing'" />
@@ -3015,7 +2935,6 @@ function openSingleImagePreview(src: string) {
           </div>
         </div>
 
-        <!-- 浏览器朗读按钮 -->
         <div v-if="!isUserMessage && isHideTts" class="relative group-btn">
           <button
             class="btn-icon btn-sm btn-icon-action mx-1"
@@ -3031,7 +2950,7 @@ function openSingleImagePreview(src: string) {
         </div>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <style lang="less">
@@ -3128,6 +3047,457 @@ pre.fold-leave-to {
 }
 
 /* 使用全局样式配置，在global.less中定义 */
+
+.workspace-record {
+  width: 100%;
+  overflow: visible;
+  padding: 0.95rem 0 0.25rem;
+}
+
+.workspace-record:first-child {
+  padding-top: 0.2rem;
+}
+
+.workspace-record--user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.workspace-record__request-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.55rem;
+}
+
+.workspace-record__header,
+.workspace-record__section,
+.workspace-record__body,
+.workspace-record__footer {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.workspace-record__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-top: 0;
+  padding-bottom: 0.65rem;
+}
+
+.workspace-record__header-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.workspace-record__eyebrow,
+.workspace-record__section-label {
+  font-size: 0.68rem;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+
+.workspace-record__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
+  flex-wrap: wrap;
+}
+
+.workspace-record__title {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.2;
+  font-weight: 650;
+  color: var(--text-main);
+}
+
+.workspace-record__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.55rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: #f2f2ee;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.workspace-record__status--active {
+  border-color: transparent;
+  background: #e9e9e4;
+  color: var(--text-main);
+}
+
+.workspace-record__status--user {
+  border-color: transparent;
+  color: var(--text-main);
+}
+
+.workspace-record__summary {
+  margin: 0;
+  max-width: 58ch;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+.workspace-record__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.workspace-record__meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.workspace-record__meta-chip::before {
+  content: '•';
+  opacity: 0.4;
+}
+
+.workspace-record__meta-chip:first-child::before {
+  content: '';
+}
+
+.workspace-record__download-chip,
+.workspace-record__followup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.8rem;
+  padding: 0.34rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: #f2f2ee;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.workspace-record__section {
+  padding-top: 0.8rem;
+}
+
+.workspace-record__toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.72rem 0.9rem;
+  border: none;
+  border-radius: 12px;
+  background: #f7f7f4;
+  color: var(--text-main);
+  text-align: left;
+}
+
+.workspace-record__toggle-copy,
+.workspace-record__toggle-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.workspace-record__source-list {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.workspace-record__source-item {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  padding: 0.76rem 0.9rem;
+  border-radius: 12px;
+  border: none;
+  background: #f7f7f4;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.workspace-record__source-item:hover,
+.workspace-record__download-chip:hover,
+.workspace-record__followup-btn:hover {
+  border-color: transparent;
+  background: #edede8;
+}
+
+.workspace-record__source-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.workspace-record__source-title {
+  min-width: 0;
+  flex: 1;
+  line-height: 1.55;
+}
+
+.workspace-record__body {
+  padding-top: 0.15rem;
+}
+
+.workspace-record__assistant,
+.workspace-record__user {
+  width: 100%;
+}
+
+.workspace-record--user .workspace-record__request-head,
+.workspace-record--user .workspace-record__body,
+.workspace-record--user .workspace-record__section {
+  width: min(100%, 46rem);
+  margin-left: auto;
+}
+
+.workspace-record--user .workspace-record__request-head {
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.workspace-record--user .workspace-record__eyebrow,
+.workspace-record--user .workspace-record__section-label {
+  text-align: right;
+}
+
+.workspace-record--user .workspace-record__meta {
+  justify-content: flex-end;
+}
+
+.workspace-record--user .workspace-record__file-grid {
+  justify-content: flex-end;
+}
+
+.workspace-record__markdown,
+.workspace-record__user-text,
+.workspace-record__editor {
+  border-radius: 12px;
+}
+
+.workspace-record__markdown {
+  padding: 0.1rem 0 0.25rem;
+  border: none;
+  background: transparent;
+}
+
+.workspace-record__user-text {
+  display: inline-block;
+  width: fit-content;
+  max-width: min(100%, 46rem);
+  padding: 0.9rem 1rem;
+  border: none;
+  background: var(--surface-muted);
+  white-space: pre-wrap;
+  line-height: 1.75;
+  color: var(--text-main);
+  border-radius: 1.2rem;
+  border-top-right-radius: 0.45rem;
+  box-shadow: none;
+}
+
+.dark .workspace-record__user-text {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.workspace-record__editor {
+  max-width: min(100%, 46rem);
+  margin-left: auto;
+  padding: 0.95rem;
+  border: none;
+  background: var(--surface-muted);
+  border-radius: 1.2rem;
+  border-top-right-radius: 0.45rem;
+}
+
+.workspace-record__user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.workspace-record__editor-textarea {
+  width: 100%;
+  min-height: 7rem;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.workspace-record__editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.workspace-record__section--files,
+.workspace-record__section--downloads {
+  padding-top: 0.95rem;
+}
+
+.workspace-record__file-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.workspace-record__file-card {
+  display: inline-flex;
+  width: auto;
+  min-width: 240px;
+  max-width: min(100%, 320px);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.72rem 0.82rem;
+  border-radius: 16px;
+  border: 1px solid var(--paper-border);
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+}
+
+.workspace-record__file-icon {
+  display: inline-flex;
+  width: 2.3rem;
+  height: 2.3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.workspace-record__image-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  max-width: min(100%, 760px);
+}
+
+.workspace-record__image {
+  border-radius: 12px;
+  border: none;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  object-fit: cover;
+  transition:
+    opacity 0.2s ease;
+}
+
+.workspace-record__image:hover {
+  opacity: 0.92;
+}
+
+.workspace-record__download-list,
+.workspace-record__followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.workspace-record__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.45rem;
+  padding-bottom: 0.4rem;
+}
+
+.workspace-record__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+@media (max-width: 960px) {
+  .workspace-record__header {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace-record__title {
+    font-size: 0.9rem;
+  }
+
+  .workspace-record__summary {
+    font-size: 0.8rem;
+  }
+
+  .workspace-record--user .workspace-record__request-head,
+  .workspace-record--user .workspace-record__body,
+  .workspace-record--user .workspace-record__section,
+  .workspace-record__user-text,
+  .workspace-record__editor {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .workspace-record__file-grid {
+    flex-direction: column;
+  }
+
+  .workspace-record__file-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .workspace-record__image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .workspace-record__image {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .workspace-record__footer {
+    justify-content: flex-start;
+  }
+}
 
 /* Markdown样式 */
 .markdown-body {

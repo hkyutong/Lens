@@ -5,6 +5,6 @@ export enum VerificationUseStatusEnum {
 
 export const ModelsMapCn = {
   1: '普通模型',
-  2: '特殊模型',
-  3: '特殊模型',
+  2: '顶级模型',
+  3: '顶级模型',
 };

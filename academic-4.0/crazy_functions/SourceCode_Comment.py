@@ -1,6 +1,6 @@
 import os, copy, time
 from toolbox import CatchException, report_exception, update_ui, zip_result, promote_file_to_downloadzone, update_ui_latest_msg, get_conf, generate_file_link
-from shared_utils.fastapi_server import validate_path_safety
+from shared_utils.path_safety import validate_path_safety
 from crazy_functions.crazy_utils import input_clipping
 from crazy_functions.crazy_utils import request_gpt_model_multi_threads_with_very_awesome_ui_and_high_efficiency
 from crazy_functions.crazy_utils import request_gpt_model_in_new_thread_with_ui_alive
@@ -91,8 +91,8 @@ def 注释源代码(file_manifest, project_folder, llm_kwargs, plugin_kwargs, ch
         with open("crazy_functions/agent_fns/python_comment_compare.html", 'r', encoding='utf-8') as f:
             html_template = f.read()
         warp = lambda x: "```python\n\n" + x + "\n\n```"
-        from themes.theme import load_dynamic_theme
-        _, advanced_css, _, _ = load_dynamic_theme("Default")
+        from shared_utils.report_style import get_academic_report_css
+        advanced_css = get_academic_report_css()
         html_template = html_template.replace("ADVANCED_CSS", advanced_css)
         html_template = html_template.replace("REPLACE_CODE_FILE_LEFT", pcc.get_markdown_block_in_html(markdown_convertion_for_file(warp(pcc.original_content))))
         html_template = html_template.replace("REPLACE_CODE_FILE_RIGHT", pcc.get_markdown_block_in_html(markdown_convertion_for_file(warp(revised_content))))

@@ -11,7 +11,8 @@ def write_chat_to_file_legacy(chatbot, history=None, file_name=None):
     """
     import os
     import time
-    from themes.theme import advanced_css
+    from shared_utils.report_style import get_academic_report_css
+    advanced_css = get_academic_report_css()
 
     if (file_name is not None) and (file_name != "") and (not file_name.endswith('.html')): file_name += '.html'
     else: file_name = None

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import logo from '@/assets/logo.png'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { t } from '@/locales'
 import { useAppStore, useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { ExpandRight } from '@icon-park/vue-next'
 import type { CSSProperties } from 'vue'
@@ -97,19 +98,16 @@ function openSettings(tab?: number) {
       :style="getMobileClass"
     >
       <div
-        class="flex flex-col h-full bg-[var(--bg-sidebar)] dark:bg-[#080808] select-none side-surface"
+        class="flex flex-col h-full bg-[var(--bg-sidebar)] select-none side-surface"
         :style="mobileSafeArea"
       >
         <main class="flex flex-col h-full flex-1">
-          <div class="flex items-center justify-between px-5 pt-4 pb-3">
+          <div class="flex items-center justify-between px-5 pt-5 pb-4">
             <div class="flex items-center gap-3">
-              <img :src="logoPath" alt="Logo" class="h-7 w-7 rounded-lg" />
+              <img :src="logoPath" alt="Logo" class="h-[26px] w-[26px] rounded-md" />
               <div class="min-w-0">
-                <div class="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
+                <div class="text-[16px] font-semibold text-gray-900 dark:text-gray-100 truncate">
                   {{ siteName }}
-                </div>
-                <div class="text-[11px] tracking-[0.14em] uppercase text-[var(--ink-faint)]">
-                  Research Desk
                 </div>
               </div>
             </div>
@@ -127,42 +125,42 @@ function openSettings(tab?: number) {
             <List />
           </div>
 
-          <div class="px-5 py-4">
-            <div v-if="isLogin" class="flex items-center justify-between gap-3">
+          <div v-if="isLogin" class="px-5 py-4">
+            <div class="flex items-center justify-between gap-3">
               <button
                 type="button"
-                class="group flex items-center gap-3 min-w-0 w-full rounded-[18px] border border-[var(--border-color)] bg-[var(--surface-card)] px-3 py-3 transition-colors hover:bg-white/90 dark:hover:bg-white/10"
+                class="group flex items-center gap-3 min-w-0 w-full rounded-[12px] bg-[var(--surface-muted)] px-3 py-3 transition-colors hover:bg-[var(--surface-panel)]"
                 @click="openSettings(undefined)"
                 aria-label="打开设置"
               >
                 <div
-                  class="flex h-8 w-8 items-center justify-center rounded-full bg-[#22c55e] text-white text-xs font-semibold"
+                  class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--user-avatar-bg)] text-white text-xs font-semibold"
                 >
                   {{ avatarText }}
                 </div>
                 <div class="flex flex-col min-w-0 text-left">
                   <span class="text-sm text-gray-800 dark:text-gray-200 truncate">
-                    {{ displayEmailPrefix || '已登录' }}
+                    {{ displayEmailPrefix || t('lens.sidebar.signedIn') }}
                   </span>
-                  <span class="text-[11px] text-[var(--ink-faint)]">研究偏好与账户</span>
+                  <span class="text-[11px] text-[var(--ink-faint)]">{{ t('lens.sidebar.account') }}</span>
                 </div>
               </button>
             </div>
-            <div
-              v-else
-              class="rounded-[20px] border border-[var(--border-color)] bg-[var(--surface-card)] px-4 py-4 text-sm leading-6 text-[var(--ink-soft)]"
+          </div>
+          <div v-else class="px-5 py-4">
+            <button
+              type="button"
+              class="flex items-center justify-between gap-3 w-full rounded-[12px] bg-[var(--surface-muted)] px-3 py-3 text-left transition-colors hover:bg-[var(--surface-panel)]"
+              @click="toggleLogin"
             >
-              登录后可同步研究项目、学术记录与文件上下文。
-              <div class="mt-3">
-                <button
-                  type="button"
-                  class="btn btn-primary btn-md w-full rounded-full"
-                  @click="toggleLogin"
-                >
-                  登录或注册
-                </button>
+              <div class="min-w-0">
+                <div class="text-sm font-medium text-[var(--text-main)]">{{ t('lens.sidebar.login') }}</div>
+                <div class="mt-1 text-[11px] text-[var(--ink-faint)]">
+                  {{ t('lens.sidebar.loginDesc') }}
+                </div>
               </div>
-            </div>
+              <div class="text-[var(--ink-faint)]">&gt;</div>
+            </button>
           </div>
         </main>
       </div>
