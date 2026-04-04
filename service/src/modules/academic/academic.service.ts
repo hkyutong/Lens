@@ -42,6 +42,43 @@ interface AcademicChatBody {
   };
 }
 
+interface AcademicWorkflowStep {
+  kind?: 'core' | 'plugin';
+  name?: string;
+  displayName?: string;
+  args?: string;
+}
+
+interface AcademicWorkflowBody extends AcademicChatBody {
+  workflow?: {
+    steps?: AcademicWorkflowStep[];
+  };
+}
+
+interface AcademicWorkflowStageMeta {
+  index: number;
+  kind: 'core' | 'plugin';
+  name: string;
+  displayName: string;
+  args?: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  contentPreview?: string;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+interface AcademicWorkflowTaskData {
+  type: 'academic-workflow';
+  enabled: true;
+  status: 'pending' | 'running' | 'done' | 'error';
+  currentStage: number;
+  totalStages: number;
+  modelName?: string;
+  steps: AcademicWorkflowStageMeta[];
+  lastUpdatedAt: string;
+}
+
 interface AcademicStreamState {
   fullContent: string;
   hasStreamContent: boolean;
@@ -59,6 +96,39 @@ interface AcademicStreamState {
 @Injectable()
 export class AcademicService {
   private readonly logger = new Logger(AcademicService.name);
+  private readonly academicDirectReadExtensions = new Set([
+    'pdf',
+    'doc',
+    'docx',
+    'ppt',
+    'pptx',
+    'xls',
+    'xlsx',
+    'csv',
+    'txt',
+    'md',
+    'tex',
+    'bib',
+    'json',
+    'yaml',
+    'yml',
+    'xml',
+    'html',
+    'css',
+    'js',
+    'ts',
+    'py',
+    'java',
+    'c',
+    'cpp',
+    'h',
+    'ipynb',
+    'png',
+    'jpg',
+    'jpeg',
+    'webp',
+  ]);
+  private readonly academicArchiveExtensions = new Set(['zip', 'rar', '7z', 'tar', 'gz']);
   private readonly academicPluginOrder = [
     '论文速读',
     'PDF 批量总结',
@@ -112,6 +182,127 @@ export class AcademicService {
     private readonly globalConfigService: GlobalConfigService,
     private readonly modelsService: ModelsService,
   ) {}
+
+  private formatWorkflowTimestamp(date = new Date()) {
+    return date.toISOString();
+  }
+
+  private truncateAcademicWorkflowPreview(value: string, maxLength = 1800) {
+    const normalized = this.normalizeDisplayContent(String(value || ''));
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength).trim()}…`;
+  }
+
+  private buildAcademicWorkflowTaskData(
+    steps: Array<Required<Pick<AcademicWorkflowStageMeta, 'index' | 'kind' | 'name' | 'displayName'>> & {
+      args?: string;
+    }>,
+    modelName = '',
+  ): AcademicWorkflowTaskData {
+    return {
+      type: 'academic-workflow',
+      enabled: true,
+      status: 'pending',
+      currentStage: 0,
+      totalStages: steps.length,
+      modelName: String(modelName || '').trim(),
+      steps: steps.map(step => ({
+        index: step.index,
+        kind: step.kind,
+        name: step.name,
+        displayName: step.displayName,
+        args: step.args || '',
+        status: 'pending',
+      })),
+      lastUpdatedAt: this.formatWorkflowTimestamp(),
+    };
+  }
+
+  private patchAcademicWorkflowTaskData(
+    taskData: AcademicWorkflowTaskData,
+    stageIndex: number,
+    patch: Partial<AcademicWorkflowStageMeta>,
+    statusPatch?: Partial<Pick<AcademicWorkflowTaskData, 'status' | 'currentStage'>>,
+  ) {
+    const nextSteps = (taskData.steps || []).map(step =>
+      step.index === stageIndex ? { ...step, ...patch } : step,
+    );
+    return {
+      ...taskData,
+      ...statusPatch,
+      steps: nextSteps,
+      lastUpdatedAt: this.formatWorkflowTimestamp(),
+    };
+  }
+
+  private emitAcademicWorkflowEvent(
+    res: Response,
+    payload: Record<string, any>,
+    requestId: string,
+    taskData: AcademicWorkflowTaskData,
+    chatId?: number,
+  ) {
+    res.write(
+      `${JSON.stringify({
+        ...payload,
+        requestId,
+        chatId,
+        taskData,
+      })}\n`,
+    );
+  }
+
+  private async ensureAcademicWorkflowMember(userId: number) {
+    const balance: any = await this.userBalanceService.queryUserBalance(userId);
+    const packageId = Number(balance?.packageId || 0);
+    const expirationTime = String(balance?.expirationTime || '').trim();
+    const expiration = expirationTime ? new Date(`${expirationTime}T23:59:59`) : null;
+    const hasMember = packageId > 0 && (!expiration || expiration.getTime() > Date.now());
+    if (!hasMember) {
+      throw new HttpException('多能力编排仅限会员使用，请升级套餐后使用', HttpStatus.PAYMENT_REQUIRED);
+    }
+    return balance;
+  }
+
+  private async normalizeAcademicWorkflowSteps(body: AcademicWorkflowBody) {
+    const rawSteps = Array.isArray(body?.workflow?.steps) ? body.workflow?.steps || [] : [];
+    const normalized = rawSteps
+      .slice(0, 3)
+      .map((step): AcademicWorkflowStep => ({
+        kind: step?.kind === 'plugin' ? 'plugin' : 'core',
+        name: String(step?.name || '').trim(),
+        displayName: String(step?.displayName || step?.name || '').trim(),
+        args: String(step?.args || '').trim().slice(0, 300),
+      }))
+      .filter(step => Boolean(step.name));
+
+    const resolved: Array<{
+      index: number;
+      kind: 'core' | 'plugin';
+      name: string;
+      displayName: string;
+      args?: string;
+    }> = [];
+
+    for (let index = 0; index < normalized.length; index += 1) {
+      const step = normalized[index];
+      const resolvedName =
+        step.kind === 'plugin'
+          ? await this.resolvePluginName(step.name)
+          : await this.resolveCoreFunction(step.name);
+      const finalName = String(resolvedName || step.name || '').trim();
+      if (!finalName) continue;
+      resolved.push({
+        index: index + 1,
+        kind: step.kind,
+        name: finalName,
+        displayName: step.displayName || finalName,
+        args: step.args || '',
+      });
+    }
+
+    return resolved.slice(0, 3);
+  }
 
   private normalizeAcademicBaseUrl(url: string) {
     const normalized = String(url || '').trim();
@@ -283,6 +474,154 @@ export class AcademicService {
     }
 
     return null;
+  }
+
+  private cloneAcademicPayload(payload: Record<string, any>) {
+    return JSON.parse(JSON.stringify(payload || {}));
+  }
+
+  private applyAcademicRuntimeModel(
+    payload: Record<string, any>,
+    modelInfo: Record<string, any> | null,
+  ) {
+    if (!modelInfo) return payload;
+    if (!payload.llm_kwargs || typeof payload.llm_kwargs !== 'object') {
+      payload.llm_kwargs = {};
+    }
+    payload.llm_kwargs.llm_model = String(modelInfo.model || '').trim();
+    const modelApiKey = String(modelInfo.key || '').trim();
+    if (modelApiKey) {
+      payload.llm_kwargs.api_key = modelApiKey;
+      payload.llm_kwargs.api_key_passthrough = true;
+    } else {
+      delete payload.llm_kwargs.api_key;
+      delete payload.llm_kwargs.api_key_passthrough;
+    }
+    const academicModelEndpoint = this.buildAcademicModelEndpoint(
+      String(modelInfo.proxyUrl || '').trim(),
+    );
+    if (academicModelEndpoint) {
+      payload.llm_kwargs.api_endpoint = academicModelEndpoint;
+    } else {
+      delete payload.llm_kwargs.api_endpoint;
+    }
+    const academicMaxToken = Number(modelInfo.maxModelTokens || 0);
+    if (Number.isFinite(academicMaxToken) && academicMaxToken > 0) {
+      payload.llm_kwargs.max_token = academicMaxToken;
+    } else {
+      delete payload.llm_kwargs.max_token;
+    }
+    return payload;
+  }
+
+  private async resolveAcademicRuntimeFallbackModelInfo(currentModelInfo: any) {
+    const currentModel = String(currentModelInfo?.model || '').trim();
+    const currentDeduct = Number(currentModelInfo?.deduct || 0);
+    const allModels = await this.modelsService.getAllKey();
+    const enabledModels = (Array.isArray(allModels) ? allModels : [])
+      .filter(item => this.isModelEnabled(item))
+      .filter(item => String(item?.model || '').trim())
+      .filter(item => String(item?.model || '').trim() !== currentModel)
+      .filter(item => {
+        if (!Number.isFinite(currentDeduct) || currentDeduct <= 0) return true;
+        const candidateDeduct = Number(item?.deduct || 0);
+        if (!Number.isFinite(candidateDeduct) || candidateDeduct <= 0) return true;
+        return candidateDeduct <= currentDeduct;
+      })
+      .sort((a, b) => Number(a?.modelOrder || 0) - Number(b?.modelOrder || 0));
+    if (!enabledModels.length) return null;
+
+    const preferredModels = ['gpt-5-nano', 'gpt-5-mini', 'gpt-4.1-mini', 'gpt-4o-mini'];
+    for (const preferred of preferredModels) {
+      const exact = enabledModels.find(
+        item =>
+          this.normalizeAcademicModelLookup(item?.model) ===
+          this.normalizeAcademicModelLookup(preferred),
+      );
+      if (exact) return exact;
+      const fuzzy = enabledModels.find(
+        item =>
+          this.normalizeAcademicModelLookup(item?.model).includes(
+            this.normalizeAcademicModelLookup(preferred),
+          ) ||
+          this.normalizeAcademicModelLookup(item?.modelName).includes(
+            this.normalizeAcademicModelLookup(preferred),
+          ),
+      );
+      if (fuzzy) return fuzzy;
+    }
+    return enabledModels[0] || null;
+  }
+
+  private async tryAcademicRuntimeFallback(
+    payload: Record<string, any>,
+    signal: AbortSignal,
+    currentModelInfo: any,
+    currentState: AcademicStreamState,
+    requestId: string,
+    userId: number,
+    scene: 'chat' | 'workflow',
+  ) {
+    const currentContent = this.preserveStablePolishDisplay(
+      currentState,
+      this.pickBestAcademicOutput(currentState),
+    );
+    const shouldFallback =
+      Boolean(currentState?.streamError) &&
+      !currentState?.fileVectorResult &&
+      !this.isMeaningfulAcademicContent(currentContent);
+    if (!shouldFallback) return null;
+
+    const fallbackModelInfo = await this.resolveAcademicRuntimeFallbackModelInfo(currentModelInfo);
+    if (!fallbackModelInfo) return null;
+
+    const fallbackPayload = this.cloneAcademicPayload(payload);
+    this.applyAcademicRuntimeModel(fallbackPayload, fallbackModelInfo);
+
+    try {
+      const fallbackState = await this.collectAcademicStreamState(fallbackPayload, signal);
+      let fallbackContent = this.preserveStablePolishDisplay(
+        fallbackState,
+        this.pickBestAcademicOutput(fallbackState),
+      );
+      if (!this.isMeaningfulAcademicContent(fallbackContent) && fallbackState.fileVectorResult) {
+        fallbackContent = '文件已生成，可在下方下载。';
+      }
+      const recovered = Boolean(
+        this.isMeaningfulAcademicContent(fallbackContent) || fallbackState.fileVectorResult,
+      );
+      if (!recovered) {
+        return null;
+      }
+      this.logger.warn(
+        JSON.stringify({
+          event: 'academic_runtime_model_fallback',
+          requestId,
+          userId,
+          scene,
+          fromModel: String(currentModelInfo?.model || ''),
+          toModel: String(fallbackModelInfo?.model || ''),
+        }),
+      );
+      return {
+        state: fallbackState,
+        content: fallbackContent,
+        modelInfo: fallbackModelInfo,
+      };
+    } catch (error) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'academic_runtime_model_fallback_failed',
+          requestId,
+          userId,
+          scene,
+          fromModel: String(currentModelInfo?.model || ''),
+          toModel: String(fallbackModelInfo?.model || ''),
+          message: (error as Error)?.message || 'fallback_failed',
+        }),
+      );
+      return null;
+    }
   }
 
   /**
@@ -2575,6 +2914,35 @@ export class AcademicService {
               );
             }
           }
+          if (Boolean(state.streamError) && !state.fileVectorResult && !this.isMeaningfulAcademicContent(finalContent)) {
+            const runtimeFallback = await this.tryAcademicRuntimeFallback(
+              academicPayload,
+              controller.signal,
+              modelInfo,
+              state,
+              requestId,
+              userId,
+              'chat',
+            );
+            if (runtimeFallback) {
+              state.fullContent = runtimeFallback.state.fullContent || runtimeFallback.content;
+              state.hasStreamContent = runtimeFallback.state.hasStreamContent;
+              state.tracebackMode = runtimeFallback.state.tracebackMode;
+              state.fullReasoning = runtimeFallback.state.fullReasoning || state.fullReasoning;
+              state.stablePolishContent =
+                runtimeFallback.state.stablePolishContent || state.stablePolishContent;
+              state.fileVectorResult =
+                runtimeFallback.state.fileVectorResult || state.fileVectorResult;
+              state.networkSearchResult =
+                runtimeFallback.state.networkSearchResult || state.networkSearchResult;
+              state.promptReference =
+                runtimeFallback.state.promptReference || state.promptReference;
+              state.toolCalls = runtimeFallback.state.toolCalls || state.toolCalls;
+              state.finishReason = runtimeFallback.state.finishReason || state.finishReason;
+              state.streamError = '';
+              finalContent = runtimeFallback.content;
+            }
+          }
           if (isArxivPlugin) {
             finalContent = await this.ensureArxivSummary(
               finalContent || contentForOutput,
@@ -3043,6 +3411,693 @@ export class AcademicService {
     }
   }
 
+  async academicWorkflowProcess(body: AcademicWorkflowBody, req: Request, res: Response) {
+    const requestId = (req as any).requestId;
+    const userId = req.user?.id;
+    const startTime = Date.now();
+
+    await this.userBalanceService.checkUserCertification(userId);
+    await this.userService.checkUserStatus(req.user);
+    await this.ensureAcademicWorkflowMember(userId);
+
+    const openaiBaseModelConfig = await this.globalConfigService.getConfigs(['openaiBaseModel']);
+    const openaiBaseModel =
+      typeof openaiBaseModelConfig === 'string'
+        ? openaiBaseModelConfig
+        : openaiBaseModelConfig?.openaiBaseModel;
+    const requestedModel = String(body.model || '').trim();
+    const requestedModelName = String(body.modelName || '').trim();
+    const resolvedModel = await this.resolveAcademicModelInfo(
+      requestedModel || (requestedModelName ? '' : String(openaiBaseModel || '').trim()),
+      requestedModelName,
+    );
+    if (!resolvedModel || !resolvedModel.modelInfo) {
+      throw new HttpException('系统未配置可用模型，请联系管理员', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    const modelInfo = resolvedModel.modelInfo;
+    const {
+      deduct,
+      deductType,
+      keyType: modelType,
+      model: useModel,
+      modelName: useModelName,
+      id: keyId,
+      isTokenBased,
+      tokenFeeRatio,
+      deductDeepThink = 1,
+    } = modelInfo;
+    const groupId = body.options?.groupId || null;
+    const usingDeepThinking = body.options?.usingDeepThinking || false;
+
+    let prompt = String(body.main_input || body.prompt || '').trim();
+    const hasPrompt = Boolean(prompt);
+    const hasFile = Boolean(body.fileUrl);
+    if (!hasPrompt && !hasFile) {
+      throw new HttpException('请输入内容或上传文件后再提问', HttpStatus.BAD_REQUEST);
+    }
+
+    const normalizedWorkflowSteps = await this.normalizeAcademicWorkflowSteps(body);
+    if (!normalizedWorkflowSteps.length) {
+      throw new HttpException('请至少添加一个能力步骤后再执行', HttpStatus.BAD_REQUEST);
+    }
+
+    if (groupId) {
+      try {
+        await this.chatGroupService.updateTime(groupId);
+      } catch (error) {
+        this.logger.warn(`Failed to update workflow group time: ${(error as Error).message}`);
+      }
+    }
+
+    const overwriteReply = Boolean(body.overwriteReply);
+    const requestedUserLogId = Number(body.chatId || 0);
+    const requestedAssistantLogId = Number(body.replyChatId || 0);
+    const staleConversationMessage = '当前会话状态已更新，请刷新页面后重试';
+    if (overwriteReply && requestedUserLogId <= 0) {
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
+    }
+    if (overwriteReply && requestedAssistantLogId <= 0) {
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
+    }
+
+    let userLogId = 0;
+    if (overwriteReply && requestedUserLogId > 0) {
+      const existingUserLog = await this.chatLogService.findOneChatLog(requestedUserLogId);
+      if (
+        existingUserLog &&
+        Number(existingUserLog.userId) === Number(req.user.id) &&
+        Number(existingUserLog.groupId || 0) === Number(groupId || 0) &&
+        String(existingUserLog.role || '').toLowerCase() === 'user'
+      ) {
+        userLogId = Number(existingUserLog.id);
+        await this.chatLogService.updateChatLog(userLogId, {
+          content: prompt,
+          fileUrl: body.fileUrl || null,
+          model: useModel,
+          modelName: '我',
+          type: modelType || 1,
+        });
+      }
+    }
+    if (overwriteReply && !userLogId) {
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
+    }
+    if (!userLogId) {
+      const userSaveLog = await this.chatLogService.saveChatLog({
+        appId: body.appId || null,
+        userId: req.user.id,
+        type: modelType || 1,
+        fileUrl: body.fileUrl || null,
+        imageUrl: null,
+        content: prompt,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        model: useModel,
+        modelName: '我',
+        role: 'user',
+        groupId: groupId || null,
+      });
+      userLogId = Number(userSaveLog.id);
+    }
+
+    let assistantLogId = 0;
+    if (overwriteReply && requestedAssistantLogId > 0) {
+      const existingAssistantLog =
+        await this.chatLogService.findOneChatLog(requestedAssistantLogId);
+      if (
+        existingAssistantLog &&
+        Number(existingAssistantLog.userId) === Number(req.user.id) &&
+        Number(existingAssistantLog.groupId || 0) === Number(groupId || 0) &&
+        String(existingAssistantLog.role || '').toLowerCase() === 'assistant'
+      ) {
+        assistantLogId = Number(existingAssistantLog.id);
+        await this.chatLogService.updateChatLog(assistantLogId, {
+          appId: body.appId || null,
+          type: modelType || 1,
+          progress: '0%',
+          model: useModel,
+          modelName: body.modelName || useModelName,
+          modelAvatar: body.modelAvatar || '',
+          content: '',
+          reasoning_content: '',
+          tool_calls: null,
+          fileVectorResult: null,
+          networkSearchResult: null,
+          promptReference: null,
+          taskData: null,
+          status: 2,
+        });
+      }
+    }
+    if (overwriteReply && !assistantLogId) {
+      throw new HttpException(staleConversationMessage, HttpStatus.BAD_REQUEST);
+    }
+    if (!assistantLogId) {
+      const assistantSaveLog = await this.chatLogService.saveChatLog({
+        appId: body.appId || null,
+        userId: req.user.id,
+        type: modelType || 1,
+        progress: '0%',
+        model: useModel,
+        modelName: body.modelName || useModelName,
+        role: 'assistant',
+        groupId: groupId || null,
+        status: 2,
+        modelAvatar: body.modelAvatar || '',
+        taskData: JSON.stringify(
+          this.buildAcademicWorkflowTaskData(normalizedWorkflowSteps, body.modelName || useModelName),
+        ),
+      });
+      assistantLogId = Number(assistantSaveLog.id);
+    }
+
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.write(`${JSON.stringify({ chatId: assistantLogId, requestId })}\n`);
+
+    const controller = new AbortController();
+    let responseCompleted = false;
+    const cleanupConnectionListeners = () => {
+      req.off('aborted', handleReqAborted);
+      req.off('close', handleReqClose);
+    };
+    const handleReqAborted = () => {
+      if (!controller.signal.aborted) controller.abort();
+    };
+    const handleReqClose = () => {
+      if (responseCompleted || res.writableEnded || res.writableFinished) return;
+      const closedByClient = Boolean(
+        (req as any).aborted || (req as any).readableAborted || (req as any).destroyed,
+      );
+      if (closedByClient && !controller.signal.aborted) {
+        controller.abort();
+      }
+    };
+    req.on('close', handleReqClose);
+    req.on('aborted', handleReqAborted);
+    res.on('finish', () => {
+      responseCompleted = true;
+      cleanupConnectionListeners();
+    });
+
+    let uploadDir = '';
+    let uploadErrorMessage = '';
+    if (body.fileUrl) {
+      try {
+        uploadDir = await this.pullFilesToAcademic(body.fileUrl, String(req.user.id), req);
+      } catch (error) {
+        uploadErrorMessage = String((error as Error)?.message || '文件上传处理失败');
+        this.logger.warn(`Failed to pull files to academic workflow: ${uploadErrorMessage}`);
+      }
+    }
+
+    const buildWorkflowInput = (stepArgs = '', previousOutput = '') => {
+      const sections = [
+        prompt,
+        previousOutput ? `上一步输出：\n${previousOutput}` : '',
+        stepArgs ? `本步补充要求：\n${stepArgs}` : '',
+      ]
+        .map(item => String(item || '').trim())
+        .filter(Boolean);
+      return sections.join('\n\n').trim();
+    };
+
+    let taskData = this.buildAcademicWorkflowTaskData(
+      normalizedWorkflowSteps,
+      body.modelName || useModelName,
+    );
+    await this.chatLogService.updateChatLog(assistantLogId, {
+      taskData: JSON.stringify(taskData),
+      content: '',
+      status: 2,
+    });
+    this.emitAcademicWorkflowEvent(
+      res,
+      {
+        nodeType: 'workflow',
+        workflowEnabled: true,
+        workflowProgress: 0,
+      },
+      requestId,
+      taskData,
+      assistantLogId,
+    );
+
+    const buildDisplayContent = (state: AcademicStreamState, fallback = '') => {
+      let finalContent = this.pickBestAcademicOutput(state);
+      finalContent = this.preserveStablePolishDisplay(state, finalContent, fallback);
+      if (!this.isMeaningfulAcademicContent(finalContent) && state.fileVectorResult) {
+        finalContent = '文件已生成，可在下方下载。';
+      }
+      if (!this.isMeaningfulAcademicContent(finalContent) && !state.fileVectorResult) {
+        finalContent =
+          this.getSafeAcademicErrorMessage(state.streamError || fallback) || '学术服务未返回可展示内容';
+      }
+      return finalContent;
+    };
+
+    let previousOutput = '';
+    let finalReasoning = '';
+    let finalFileVectorResult = '';
+    let finalNetworkSearchResult = '';
+    let finalPromptReference = '';
+    let finalToolCalls = '';
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+
+    try {
+      for (let index = 0; index < normalizedWorkflowSteps.length; index += 1) {
+        const step = normalizedWorkflowSteps[index];
+        const stageInput = buildWorkflowInput(step.args, previousOutput);
+        const rawPluginName = step.kind === 'plugin' ? step.name : '';
+        const rawCoreFunction = step.kind === 'core' ? step.name : '';
+        const normalizedPluginName = this.normalizePluginName(rawPluginName || '');
+        const isArxivPlugin = this.isArxivPlugin(normalizedPluginName);
+
+        taskData = this.patchAcademicWorkflowTaskData(
+          taskData,
+          step.index,
+          {
+            status: 'running',
+            startedAt: this.formatWorkflowTimestamp(),
+            error: '',
+          },
+          {
+            status: 'running',
+            currentStage: step.index,
+          },
+        );
+        await this.chatLogService.updateChatLog(assistantLogId, {
+          taskData: JSON.stringify(taskData),
+          status: 2,
+        });
+        this.emitAcademicWorkflowEvent(
+          res,
+          {
+            workflowStageStart: true,
+            stepName: step.displayName,
+            progress: Math.round(((step.index - 1) / taskData.totalStages) * 100),
+            nodeType: 'workflow',
+          },
+          requestId,
+          taskData,
+          assistantLogId,
+        );
+
+        await this.userBalanceService.validateBalance(
+          req,
+          deductType,
+          deduct * (usingDeepThinking ? deductDeepThink : 1),
+        );
+
+        const academicPayload: Record<string, any> = {
+          function: step.kind === 'plugin' ? 'plugin' : 'basic',
+          main_input: stageInput,
+          llm_kwargs: {
+            llm_model: useModel,
+          },
+          plugin_kwargs: {},
+          history: [],
+          system_prompt: body.system_prompt || '',
+          core_function: rawCoreFunction || undefined,
+          plugin_name: rawPluginName || undefined,
+          user_name: String(req.user.id),
+          chat_id: String(assistantLogId),
+        };
+
+        const incomingLlmKwargs = this.sanitizeIncomingLlmKwargs(body.llm_kwargs);
+        if (Object.keys(incomingLlmKwargs).length) {
+          academicPayload.llm_kwargs = { ...academicPayload.llm_kwargs, ...incomingLlmKwargs };
+        }
+
+        if (step.kind === 'plugin') {
+          const normalizedKwargs = this.normalizePluginKwargs(rawPluginName, {
+            plugin_name: rawPluginName,
+          });
+          if (stageInput) {
+            normalizedKwargs.main_input = stageInput;
+          }
+          if (step.args) {
+            normalizedKwargs.user_prompt = stageInput;
+            if (
+              normalizedKwargs.advanced_arg === undefined ||
+              normalizedKwargs.advanced_arg === null
+            ) {
+              normalizedKwargs.advanced_arg = stageInput;
+            }
+          }
+          academicPayload.plugin_kwargs = normalizedKwargs;
+        } else {
+          academicPayload.plugin_kwargs = rawCoreFunction
+            ? { core_function: rawCoreFunction }
+            : {};
+        }
+
+        if (uploadDir) {
+          if (step.kind === 'plugin' && !isArxivPlugin) {
+            academicPayload.main_input = uploadDir;
+            academicPayload.plugin_kwargs = {
+              ...academicPayload.plugin_kwargs,
+              main_input: uploadDir,
+            };
+            if (stageInput) {
+              academicPayload.plugin_kwargs.user_prompt = stageInput;
+              if (
+                academicPayload.plugin_kwargs.advanced_arg === undefined ||
+                academicPayload.plugin_kwargs.advanced_arg === null
+              ) {
+                academicPayload.plugin_kwargs.advanced_arg = stageInput;
+              }
+            }
+          } else if (!academicPayload.main_input) {
+            academicPayload.main_input = uploadDir;
+          } else if (step.kind === 'core') {
+            academicPayload.main_input = `${academicPayload.main_input}\n\n参考资料目录：${uploadDir}`;
+          }
+        }
+
+        const allowQuickReadByReference =
+          normalizedPluginName === this.normalizePluginName('论文速读') &&
+          this.hasAcademicPaperReference(stageInput || String(academicPayload.main_input || ''));
+
+        if (
+          step.kind === 'plugin' &&
+          this.isFileRequiredPlugin(normalizedPluginName) &&
+          !uploadDir &&
+          !allowQuickReadByReference
+        ) {
+          throw new Error(
+            uploadErrorMessage
+              ? this.getSafeAcademicErrorMessage(uploadErrorMessage) || '文件上传处理失败，请重新上传后重试'
+              : normalizedPluginName === this.normalizePluginName('论文速读')
+                ? '论文速读需要上传 PDF 文件，或直接输入有效 DOI / arXiv ID。'
+                : '该研究工具需要先上传文件，再发送消息',
+          );
+        }
+
+        let state = await this.collectAcademicStreamState(academicPayload, controller.signal);
+        let stageContent = buildDisplayContent(state, stageInput);
+        if (state.streamError && !state.fileVectorResult && !this.isMeaningfulAcademicContent(stageContent)) {
+          const runtimeFallback = await this.tryAcademicRuntimeFallback(
+            academicPayload,
+            controller.signal,
+            modelInfo,
+            state,
+            requestId,
+            userId,
+            'workflow',
+          );
+          if (runtimeFallback) {
+            state = runtimeFallback.state;
+            stageContent = runtimeFallback.content;
+          }
+        }
+        if (isArxivPlugin) {
+          stageContent = await this.ensureArxivSummary(
+            stageContent || this.pickBestAcademicOutput(state),
+            stageInput || String(academicPayload.main_input || ''),
+          );
+        }
+        if (
+          step.kind === 'plugin' &&
+          this.isPdfPlugin(normalizedPluginName) &&
+          body.fileUrl &&
+          this.isAcademicPlaceholderContent(stageContent)
+        ) {
+          const fallbackSummary = await this.buildPdfFallbackSummary(body.fileUrl, req);
+          if (fallbackSummary) {
+            stageContent = fallbackSummary;
+            state.fullContent = fallbackSummary;
+          }
+        }
+        if (
+          step.kind === 'plugin' &&
+          this.isWordPlugin(normalizedPluginName) &&
+          body.fileUrl &&
+          this.isAcademicPlaceholderContent(stageContent)
+        ) {
+          const fallbackSummary = await this.buildWordFallbackSummary(body.fileUrl, req);
+          if (fallbackSummary) {
+            stageContent = fallbackSummary;
+            state.fullContent = fallbackSummary;
+          }
+        }
+        if (
+          step.kind === 'plugin' &&
+          this.isLatexPlugin(normalizedPluginName) &&
+          body.fileUrl &&
+          this.isAcademicPlaceholderContent(stageContent)
+        ) {
+          const fallbackSummary = await this.buildLatexFallbackSummary(body.fileUrl, req);
+          if (fallbackSummary) {
+            stageContent = fallbackSummary;
+            state.fullContent = fallbackSummary;
+          }
+        }
+
+        const persistedStageContent = this.resolvePersistedAcademicContent(
+          state,
+          stageContent,
+          this.pickBestAcademicOutput(state),
+        );
+
+        if (state.streamError && !this.isMeaningfulAcademicContent(persistedStageContent)) {
+          throw new Error(this.getSafeAcademicErrorMessage(state.streamError) || '学术服务处理失败，请重试');
+        }
+
+        const promptTokens = await getTokenCount(stageInput || prompt || '');
+        const completionTokens = await getTokenCount(`${state.fullReasoning}${persistedStageContent}`);
+        let charge = deduct * (usingDeepThinking ? deductDeepThink : 1);
+        if (isTokenBased === true) {
+          charge =
+            deduct *
+            Math.ceil((promptTokens + completionTokens) / tokenFeeRatio) *
+            (usingDeepThinking ? deductDeepThink : 1);
+        }
+
+        await this.userBalanceService.deductFromBalance(
+          req.user.id,
+          deductType,
+          charge,
+          promptTokens + completionTokens,
+        );
+        await this.modelsService.saveUseLog(keyId, promptTokens + completionTokens);
+
+        totalPromptTokens += promptTokens;
+        totalCompletionTokens += completionTokens;
+        previousOutput = persistedStageContent;
+        finalReasoning = state.fullReasoning || finalReasoning;
+        finalFileVectorResult = state.fileVectorResult || finalFileVectorResult;
+        finalNetworkSearchResult = state.networkSearchResult || finalNetworkSearchResult;
+        finalPromptReference = state.promptReference || finalPromptReference;
+        finalToolCalls = state.toolCalls || finalToolCalls;
+
+        taskData = this.patchAcademicWorkflowTaskData(
+          taskData,
+          step.index,
+          {
+            status: 'done',
+            completedAt: this.formatWorkflowTimestamp(),
+            contentPreview: this.truncateAcademicWorkflowPreview(persistedStageContent),
+          },
+          {
+            status: step.index === taskData.totalStages ? 'done' : 'running',
+            currentStage: step.index,
+          },
+        );
+
+        await this.chatLogService.updateChatLog(assistantLogId, {
+          taskData: JSON.stringify(taskData),
+          content: persistedStageContent,
+          reasoning_content: finalReasoning || null,
+          fileVectorResult: finalFileVectorResult || null,
+          networkSearchResult: finalNetworkSearchResult || null,
+          promptReference: finalPromptReference || null,
+          tool_calls: finalToolCalls || null,
+          status: 2,
+        });
+        this.emitAcademicWorkflowEvent(
+          res,
+          {
+            workflowStageDone: true,
+            workflowStageChunk: true,
+            stepName: step.displayName,
+            progress: Math.round((step.index / taskData.totalStages) * 100),
+            content: this.truncateAcademicWorkflowPreview(persistedStageContent, 600),
+            nodeType: 'workflow',
+          },
+          requestId,
+          taskData,
+          assistantLogId,
+        );
+      }
+
+      await this.chatLogService.updateChatLog(userLogId, {
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalPromptTokens + totalCompletionTokens,
+      });
+
+      const finalContent = previousOutput || '已完成多能力编排任务';
+      const persistedFinalContent = this.resolvePersistedAcademicContent(
+        {
+          fullContent: finalContent,
+          hasStreamContent: true,
+          tracebackMode: false,
+          fullReasoning: finalReasoning,
+          stablePolishContent: '',
+          fileVectorResult: finalFileVectorResult,
+          networkSearchResult: finalNetworkSearchResult,
+          promptReference: finalPromptReference,
+          toolCalls: finalToolCalls,
+          streamError: '',
+          finishReason: 'stop',
+        },
+        finalContent,
+      );
+
+      await this.chatLogService.updateChatLog(assistantLogId, {
+        content: persistedFinalContent,
+        reasoning_content: finalReasoning || null,
+        tool_calls: finalToolCalls || null,
+        fileVectorResult: finalFileVectorResult || null,
+        networkSearchResult: finalNetworkSearchResult || null,
+        promptReference: finalPromptReference || null,
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalPromptTokens + totalCompletionTokens,
+        taskData: JSON.stringify({
+          ...taskData,
+          status: 'done',
+          currentStage: taskData.totalStages,
+          lastUpdatedAt: this.formatWorkflowTimestamp(),
+        }),
+        status: 3,
+      });
+
+      const userBalance = await this.userBalanceService.queryUserBalance(req.user.id);
+      res.write(`${JSON.stringify({ userBalance, requestId })}\n`);
+      res.write(
+        `${JSON.stringify({
+          finalContent: persistedFinalContent,
+          requestId,
+          finishReason: 'stop',
+          nodeType: 'workflow',
+          taskData: {
+            ...taskData,
+            status: 'done',
+            currentStage: taskData.totalStages,
+            lastUpdatedAt: this.formatWorkflowTimestamp(),
+          },
+        })}\n`,
+      );
+      responseCompleted = true;
+      res.end();
+
+      this.logger.log(
+        JSON.stringify({
+          event: 'academic_workflow_end',
+          requestId,
+          userId,
+          model: useModel,
+          durationMs: Date.now() - startTime,
+          stepCount: normalizedWorkflowSteps.length,
+          promptTokens: totalPromptTokens,
+          completionTokens: totalCompletionTokens,
+        }),
+      );
+    } catch (error) {
+      const err = error as Error;
+      const currentStage = Math.min(
+        Math.max(taskData.currentStage || 0, 1),
+        Math.max(taskData.totalStages || 1, 1),
+      );
+      const currentStep =
+        taskData.steps.find(step => step.index === currentStage) || taskData.steps[currentStage - 1];
+      taskData = currentStep
+        ? this.patchAcademicWorkflowTaskData(
+            taskData,
+            currentStep.index,
+            {
+              status: 'error',
+              error: this.getSafeAcademicErrorMessage(err?.message || '') || '执行失败，请重试',
+              completedAt: this.formatWorkflowTimestamp(),
+            },
+            {
+              status: 'error',
+              currentStage: currentStep.index,
+            },
+          )
+        : {
+            ...taskData,
+            status: 'error',
+            lastUpdatedAt: this.formatWorkflowTimestamp(),
+          };
+
+      const finalContent =
+        previousOutput && this.isMeaningfulAcademicContent(previousOutput)
+          ? `${previousOutput}\n\n---\n\n第 ${currentStage} 步执行失败：${
+              this.getSafeAcademicErrorMessage(err?.message || '') || '请稍后重试'
+            }`
+          : this.getSafeAcademicErrorMessage(err?.message || '') || '多能力编排执行失败，请稍后重试';
+
+      await this.chatLogService.updateChatLog(userLogId, {
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalPromptTokens + totalCompletionTokens,
+      });
+      await this.chatLogService.updateChatLog(assistantLogId, {
+        content: finalContent,
+        reasoning_content: finalReasoning || null,
+        tool_calls: finalToolCalls || null,
+        fileVectorResult: finalFileVectorResult || null,
+        networkSearchResult: finalNetworkSearchResult || null,
+        promptReference: finalPromptReference || null,
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalPromptTokens + totalCompletionTokens,
+        taskData: JSON.stringify(taskData),
+        status: 4,
+      });
+      this.emitAcademicWorkflowEvent(
+        res,
+        {
+          workflowStageError: true,
+          stepName: currentStep?.displayName || '',
+          progress: Math.round(((currentStage - 1) / Math.max(taskData.totalStages || 1, 1)) * 100),
+          nodeType: 'workflow',
+          message: this.getSafeAcademicErrorMessage(err?.message || '') || '执行失败，请重试',
+        },
+        requestId,
+        taskData,
+        assistantLogId,
+      );
+      res.write(
+        `${JSON.stringify({
+          finalContent: finalContent,
+          requestId,
+          finishReason: 'error',
+          nodeType: 'workflow',
+          taskData,
+        })}\n`,
+      );
+      responseCompleted = true;
+      res.end();
+      this.logger.error(
+        JSON.stringify({
+          event: 'academic_workflow_failed',
+          requestId,
+          userId,
+          model: useModel,
+          step: currentStep?.displayName || '',
+          message: err?.message,
+        }),
+        err?.stack,
+      );
+    }
+  }
+
   private redactFilePaths(text: string) {
     if (!text) return '';
     let result = text;
@@ -3188,6 +4243,7 @@ export class AcademicService {
     const normalized = this.sanitizeAcademicOutput(String(text || '')).trim();
     if (!normalized) return true;
     if (normalized === '已收到请求，但学术后端未返回可展示内容。') return true;
+    if (normalized === '学术后端未返回可展示内容') return true;
     if (
       /(使用方式|点击插件开始分析|正在分析论文|正在提取文本内容|请稍作等待|paper_file类型)/i.test(
         normalized,
@@ -5325,6 +6381,126 @@ export class AcademicService {
     return `${baseUrl}/${trimmed}`;
   }
 
+  private getAcademicSharedUploadRoot() {
+    const configured = String(process.env.ACADEMIC_SHARED_UPLOAD_ROOT || '').trim();
+    if (configured) {
+      return path.isAbsolute(configured)
+        ? path.resolve(configured)
+        : path.resolve(process.cwd(), configured);
+    }
+    return path.resolve(process.cwd(), 'public', 'file');
+  }
+
+  private getAcademicTempRoot() {
+    const configured = String(process.env.ACADEMIC_TEMP_ROOT || '').trim();
+    if (configured) {
+      return path.isAbsolute(configured)
+        ? path.resolve(configured)
+        : path.resolve(process.cwd(), configured);
+    }
+    return path.resolve(process.cwd(), '..', 'academic-4.0', 'private_upload');
+  }
+
+  private getAcademicFileExtension(filePath = '', fileName = '') {
+    const candidate = String(fileName || filePath || '')
+      .split('?')[0]
+      .split('#')[0];
+    return String(path.extname(candidate) || '')
+      .replace('.', '')
+      .trim()
+      .toLowerCase();
+  }
+
+  private canReuseAcademicSharedFile(filePath = '', fileName = '') {
+    const extension = this.getAcademicFileExtension(filePath, fileName);
+    if (!extension) return false;
+    if (this.academicArchiveExtensions.has(extension)) return false;
+    return this.academicDirectReadExtensions.has(extension);
+  }
+
+  private formatAcademicWorkspaceTag() {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, '0');
+    const date = [
+      now.getFullYear(),
+      pad(now.getMonth() + 1),
+      pad(now.getDate()),
+      pad(now.getHours()),
+      pad(now.getMinutes()),
+      pad(now.getSeconds()),
+    ].join('-');
+    const suffix = Math.random().toString(36).slice(2, 8);
+    return `${date}-lens-${suffix}`;
+  }
+
+  private sanitizeAcademicWorkspaceFileName(value: string, fallback: string) {
+    const normalized = String(value || '')
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return normalized || fallback;
+  }
+
+  private async createAcademicLinkedWorkspace(
+    files: Array<{ localPath: string; fileName: string }>,
+    userName: string,
+  ) {
+    const tempRoot = this.getAcademicTempRoot();
+    const workspaceDir = path.join(tempRoot, String(userName || 'default_user'), this.formatAcademicWorkspaceTag());
+    const relativeWorkspacePath = path.relative(tempRoot, workspaceDir);
+    if (
+      !relativeWorkspacePath ||
+      relativeWorkspacePath.startsWith('..') ||
+      path.isAbsolute(relativeWorkspacePath)
+    ) {
+      throw new Error('academic temp workspace path is invalid');
+    }
+
+    await fs.mkdir(workspaceDir, { recursive: true });
+    await fs.writeFile(
+      path.join(workspaceDir, '.lens-runtime.json'),
+      JSON.stringify({
+        kind: 'linked-workspace',
+        user: String(userName || 'default_user'),
+        createdAt: Math.floor(Date.now() / 1000),
+      }),
+      'utf8',
+    );
+    const usedNames = new Set<string>();
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const baseName = this.sanitizeAcademicWorkspaceFileName(
+          file.fileName || path.basename(file.localPath),
+          `file-${index + 1}`,
+        );
+        const ext = path.extname(baseName);
+        const stem = ext ? baseName.slice(0, -ext.length) : baseName;
+        let candidate = baseName;
+        let serial = 1;
+        while (usedNames.has(candidate)) {
+          candidate = `${stem}-${serial}${ext}`;
+          serial += 1;
+        }
+        usedNames.add(candidate);
+        const targetPath = path.join(workspaceDir, candidate);
+        try {
+          await fs.symlink(file.localPath, targetPath);
+        } catch (_symlinkError) {
+          try {
+            await fs.link(file.localPath, targetPath);
+          } catch (hardLinkError) {
+            throw hardLinkError;
+          }
+        }
+      }
+      return workspaceDir;
+    } catch (error) {
+      await fs.rm(workspaceDir, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
+  }
+
   private resolveLocalUploadedFilePath(rawUrl: string) {
     const raw = String(rawUrl || '')
       .trim()
@@ -5350,15 +6526,49 @@ export class AcademicService {
       decoded = decodeURIComponent(relativePath);
     } catch (_error) {}
 
-    const baseDir = path.join(process.cwd(), 'public', 'file');
-    const fullPath = path.join(baseDir, decoded);
-    if (!fullPath.startsWith(baseDir)) return '';
+    const baseDir = this.getAcademicSharedUploadRoot();
+    const fullPath = path.resolve(baseDir, decoded);
+    const resolvedRelativePath = path.relative(baseDir, fullPath);
+    if (
+      !resolvedRelativePath ||
+      resolvedRelativePath.startsWith('..') ||
+      path.isAbsolute(resolvedRelativePath)
+    ) {
+      return '';
+    }
     return fullPath;
   }
 
   private async pullFilesToAcademic(fileUrl: string, userName: string, req?: Request) {
     const urls = this.parseFileUrls(fileUrl);
     if (!urls.length) return '';
+
+    const localReusableFiles: Array<{ localPath: string; fileName: string }> = [];
+    let requiresAcademicUpload = false;
+    for (const item of urls) {
+      const localPath = this.resolveLocalUploadedFilePath(item.url);
+      const fileName = item.name || path.basename(localPath || item.url.split('?')[0]) || 'file';
+      if (localPath && this.canReuseAcademicSharedFile(localPath, fileName)) {
+        localReusableFiles.push({ localPath, fileName });
+        continue;
+      }
+      requiresAcademicUpload = true;
+      break;
+    }
+
+    if (!requiresAcademicUpload && localReusableFiles.length > 0) {
+      try {
+        return await this.createAcademicLinkedWorkspace(localReusableFiles, userName);
+      } catch (error) {
+        this.logger.warn(
+          JSON.stringify({
+            event: 'academic_workspace_link_fallback',
+            userName,
+            message: (error as Error)?.message || 'link workspace failed',
+          }),
+        );
+      }
+    }
 
     const preparedFiles: Array<{ buffer: Buffer; fileName: string }> = [];
     for (const item of urls) {

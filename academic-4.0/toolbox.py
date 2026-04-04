@@ -40,6 +40,13 @@ from shared_utils.handle_upload import extract_archive
 from shared_utils.context_clip_policy import clip_history
 from shared_utils.context_clip_policy import auto_context_clip_each_message
 from shared_utils.context_clip_policy import auto_context_clip_search_optimal
+from shared_utils.lens_storage import get_extract_ttl_seconds
+from shared_utils.lens_storage import get_private_upload_root
+from shared_utils.lens_storage import get_shared_upload_root
+from shared_utils.lens_storage import get_temp_ttl_seconds
+from shared_utils.lens_storage import is_private_upload_path
+from shared_utils.lens_storage import is_shared_upload_path
+from shared_utils.lens_storage import write_runtime_marker
 from typing import List
 pj = os.path.join
 default_user_name = "default_user"
@@ -771,14 +778,17 @@ def disable_auto_promotion(chatbot:ChatBotWithCookies):
 
 def del_outdated_uploads(outdate_time_seconds:float, target_path_base:str=None):
     if target_path_base is None:
-        user_upload_dir = get_conf("PATH_PRIVATE_UPLOAD")
+        user_upload_dir = get_private_upload_root()
     else:
-        user_upload_dir = target_path_base
+        user_upload_dir = os.path.abspath(target_path_base)
     current_time = time.time()
     one_hour_ago = current_time - outdate_time_seconds
     # Get a list of all subdirectories in the user_upload_dir folder
     # Remove subdirectories that are older than one hour
     for subdirectory in glob.glob(f"{user_upload_dir}/*"):
+        marker_file = os.path.join(subdirectory, ".lens-runtime.json")
+        if not os.path.isfile(marker_file):
+            continue
         subdirectory_time = os.path.getmtime(subdirectory)
         if subdirectory_time < one_hour_ago:
             try:
@@ -844,9 +854,10 @@ def on_file_uploaded(
     time_tag = gen_time_str()
     target_path_base = get_upload_folder(user_name, tag=time_tag)
     os.makedirs(target_path_base, exist_ok=True)
+    write_runtime_marker(target_path_base, "ui-upload", user_name)
 
     # 移除过时的旧文件从而节省空间&保护隐私
-    outdate_time_seconds = 3600  # 一小时
+    outdate_time_seconds = get_temp_ttl_seconds()
     del_outdated_uploads(outdate_time_seconds, get_upload_folder(user_name))
 
     # 逐个文件转移到目标路径
@@ -1122,7 +1133,7 @@ def get_log_folder(user=default_user_name, plugin_name="shared"):
 
 
 def get_upload_folder(user=default_user_name, tag=None):
-    PATH_PRIVATE_UPLOAD = get_conf("PATH_PRIVATE_UPLOAD")
+    PATH_PRIVATE_UPLOAD = get_private_upload_root()
     if user is None:
         user = default_user_name
     if tag is None or len(tag) == 0:
@@ -1133,13 +1144,18 @@ def get_upload_folder(user=default_user_name, tag=None):
 
 
 def is_the_upload_folder(string):
-    PATH_PRIVATE_UPLOAD = get_conf("PATH_PRIVATE_UPLOAD")
-    pattern = r"^PATH_PRIVATE_UPLOAD[\\/][A-Za-z0-9_-]+[\\/]\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$"
-    pattern = pattern.replace("PATH_PRIVATE_UPLOAD", PATH_PRIVATE_UPLOAD)
-    if re.match(pattern, string):
-        return True
-    else:
+    raw = str(string or "").strip()
+    if not raw:
         return False
+    abs_path = os.path.abspath(raw)
+    if is_private_upload_path(abs_path):
+        return True
+    if is_shared_upload_path(abs_path):
+        return True
+    shared_root = get_shared_upload_root()
+    if shared_root and re.match(r"^userFiles[\\/]\d{6}[\\/]\d{2}(?:[\\/].+)?$", raw, flags=re.IGNORECASE):
+        return True
+    return False
 
 
 def get_user(chatbotwithcookies:ChatBotWithCookies):

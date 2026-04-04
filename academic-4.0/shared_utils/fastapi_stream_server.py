@@ -40,6 +40,12 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 from toolbox import ChatBotWithCookies, sanitize_chatbot_text
+from shared_utils.lens_storage import cleanup_lens_runtime_artifacts
+from shared_utils.lens_storage import ensure_lens_export_dir
+from shared_utils.lens_storage import get_allowed_storage_roots
+from shared_utils.lens_storage import get_temp_ttl_seconds
+from shared_utils.lens_storage import path_is_within
+from shared_utils.lens_storage import write_runtime_marker
 import starlette
 
 ACADEMIC_LOG_PATH = os.path.abspath(
@@ -244,11 +250,43 @@ def _build_stream_context(req: AcademicStreamRequest):
 import re
 
 
+def _stage_lens_result_files(files, user_name):
+    if not isinstance(files, list) or not files:
+        return []
+    time_tag = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    export_dir = ensure_lens_export_dir(user_name, time_tag)
+    staged_paths = []
+    used_names = set()
+
+    for index, raw_path in enumerate(files):
+        src = os.path.abspath(str(raw_path or "").strip())
+        if not src or not os.path.exists(src):
+            continue
+        base_name = os.path.basename(src) or f"file-{index + 1}"
+        stem, suffix = os.path.splitext(base_name)
+        candidate_name = base_name
+        serial = 1
+        while candidate_name in used_names:
+            candidate_name = f"{stem}-{serial}{suffix}"
+            serial += 1
+        used_names.add(candidate_name)
+        target = os.path.join(export_dir, candidate_name)
+        try:
+            os.symlink(src, target)
+        except FileExistsError:
+            pass
+        except Exception:
+            try:
+                os.link(src, target)
+            except Exception:
+                shutil.copy2(src, target)
+        staged_paths.append(target)
+    return staged_paths or files
+
+
 def _validate_payload_paths(main_input, plugin_kwargs, strict_main_input=True):
-    from toolbox import get_conf
-    upload_root = os.path.abspath(get_conf("PATH_PRIVATE_UPLOAD"))
-    upload_root_norm = os.path.abspath(upload_root)
-    allowed_prefix = get_conf("PATH_PRIVATE_UPLOAD")
+    allowed_roots = [root for root in get_allowed_storage_roots() if root]
+    allowed_prefixes = [root.replace("\\", "/") for root in allowed_roots]
 
     def is_path_candidate(part: str) -> bool:
         lowered = part.lower()
@@ -257,15 +295,15 @@ def _validate_payload_paths(main_input, plugin_kwargs, strict_main_input=True):
         # 只把“明确像路径”的内容当路径，避免误伤普通文本（如 Python/C++/Java）。
         if part.startswith(("~", "/", "\\", "./", "../")) or re.match(r"^[A-Za-z]:[\\/]", part):
             return True
-        return (
-            part.startswith(allowed_prefix)
-            or part.startswith(upload_root_norm)
-            or "private_upload/" in lowered
+        return any(lowered.startswith(prefix.lower()) for prefix in allowed_prefixes) or (
+            "private_upload/" in lowered
             or "private_upload\\" in lowered
             or "userfiles/" in lowered
             or "userfiles\\" in lowered
             or "gpt_log/" in lowered
             or "gpt_log\\" in lowered
+            or "public/file/" in lowered
+            or "public\\file\\" in lowered
         )
 
     def check_value(val: str):
@@ -281,7 +319,7 @@ def _validate_payload_paths(main_input, plugin_kwargs, strict_main_input=True):
             if ".." in part.replace("\\", "/").split("/"):
                 raise ValueError("非法路径")
             abs_path = os.path.abspath(part)
-            if os.path.commonpath([upload_root_norm, abs_path]) != upload_root_norm:
+            if not any(path_is_within(abs_path, root) for root in allowed_roots):
                 raise ValueError("仅允许使用上传文件路径")
 
     if strict_main_input:
@@ -344,7 +382,9 @@ def _iter_ndjson_from_updates(generator, chat_id=None):
             new_files = [f for f in cookies.get("files_to_promote", []) if f not in promoted_files]
             if new_files:
                 promoted_files.update(new_files)
-                payload = {"fileVectorResult": json.dumps({"files": new_files}, ensure_ascii=False)}
+                user_name = str(cookies.get("user_name") or "default_user").strip() or "default_user"
+                staged_files = _stage_lens_result_files(new_files, user_name)
+                payload = {"fileVectorResult": json.dumps({"files": staged_files}, ensure_ascii=False)}
                 if chat_id:
                     payload["chatId"] = chat_id
                 yield json.dumps(payload, ensure_ascii=False) + "\n"
@@ -716,6 +756,38 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
             """
             app = FastAPI()
 
+            async def _cleanup_loop():
+                while True:
+                    await asyncio.sleep(3600)
+                    try:
+                        stats = cleanup_lens_runtime_artifacts()
+                        logger.info(
+                            f"Lens storage cleanup finished: temp={stats.get('removedTempDirs', 0)}, "
+                            f"extract={stats.get('removedExtractDirs', 0)}, "
+                            f"result={stats.get('removedResultDirs', 0)}"
+                        )
+                    except Exception:
+                        logger.exception("Lens storage cleanup loop failed")
+
+            @app.on_event("startup")
+            async def _startup_cleanup():
+                try:
+                    stats = cleanup_lens_runtime_artifacts()
+                    logger.info(
+                        f"Lens storage startup cleanup: temp={stats.get('removedTempDirs', 0)}, "
+                        f"extract={stats.get('removedExtractDirs', 0)}, "
+                        f"result={stats.get('removedResultDirs', 0)}"
+                    )
+                except Exception:
+                    logger.exception("Lens storage startup cleanup failed")
+                app.state.lens_cleanup_task = asyncio.create_task(_cleanup_loop())
+
+            @app.on_event("shutdown")
+            async def _shutdown_cleanup():
+                task = getattr(app.state, "lens_cleanup_task", None)
+                if task:
+                    task.cancel()
+
             class UserInput(BaseModel):
                 main_input: str
             @app.post("/predict_user_input")
@@ -995,7 +1067,8 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
                 time_tag = gen_time_str()
                 target_path_base = get_upload_folder(upload_user, tag=time_tag)
                 os.makedirs(target_path_base, exist_ok=True)
-                del_outdated_uploads(3600, get_upload_folder(upload_user))
+                write_runtime_marker(target_path_base, "api-upload", upload_user)
+                del_outdated_uploads(get_temp_ttl_seconds(), get_upload_folder(upload_user))
 
                 upload_msg = ""
                 for file in files:
@@ -1027,12 +1100,10 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
             async def academic_file(path: str):
                 from fastapi import HTTPException
                 from fastapi.responses import FileResponse
-                from toolbox import get_conf
 
                 abs_path = os.path.abspath(path)
-                private_root, log_root = get_conf("PATH_PRIVATE_UPLOAD", "PATH_LOGGING")
-                allowed_roots = [os.path.abspath(private_root), os.path.abspath(log_root)]
-                if not any(abs_path == root or abs_path.startswith(root + os.sep) for root in allowed_roots):
+                allowed_roots = get_allowed_storage_roots()
+                if not any(path_is_within(abs_path, root) for root in allowed_roots):
                     raise HTTPException(status_code=403, detail="path not allowed")
                 if not os.path.exists(abs_path):
                     raise HTTPException(status_code=404, detail="file not found")

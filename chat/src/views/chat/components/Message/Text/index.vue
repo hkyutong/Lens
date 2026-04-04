@@ -122,6 +122,9 @@ interface Props {
   reasoningText?: string
   fileAnalysisProgress?: number
   useFileSearch?: boolean
+  taskData?: any
+  stepName?: string
+  workflowProgress?: number
 }
 
 interface Emit {
@@ -170,6 +173,7 @@ const browserTtsState = ref('paused')
 const editableContent = ref(props.content)
 const isEditable = ref(false)
 const textarea = ref<HTMLTextAreaElement | null>(null)
+const showWorkflowDetails = ref(false)
 
 let currentAudio: HTMLAudioElement | null = null
 let speechSynthesisUtterance: SpeechSynthesisUtterance | null = null
@@ -2233,12 +2237,7 @@ const recordStatus = computed(() => {
   return ''
 })
 const recordSummary = computed(() => {
-  if (props.isUserMessage) {
-    if (parsedUserUploadedFiles.value.length || imageUrlArray.value.length) {
-      return `附带 ${parsedUserUploadedFiles.value.length + imageUrlArray.value.length} 项研究资料。`
-    }
-    return ''
-  }
+  if (props.isUserMessage) return ''
 
   if (props.loading) {
     return '正在整理分析、引用和可交付结果。'
@@ -2266,6 +2265,63 @@ const recordMeta = computed(() => {
   }
   return items
 })
+
+const parsedWorkflowTask = computed<Chat.AcademicWorkflowTaskData | null>(() => {
+  if (!props.taskData) return null
+  if (typeof props.taskData === 'object' && props.taskData?.type === 'academic-workflow') {
+    return props.taskData as Chat.AcademicWorkflowTaskData
+  }
+  if (typeof props.taskData === 'string') {
+    try {
+      const parsed = JSON.parse(props.taskData)
+      return parsed?.type === 'academic-workflow' ? parsed : null
+    } catch (_error) {
+      return null
+    }
+  }
+  return null
+})
+
+const workflowStageList = computed(() => parsedWorkflowTask.value?.steps || [])
+const hasWorkflowStageList = computed(() => !props.isUserMessage && workflowStageList.value.length > 0)
+const workflowCurrentStageLabel = computed(() => {
+  const stageName = String(props.stepName || '').trim()
+  if (stageName) return stageName
+  const current = workflowStageList.value.find(stage => stage.status === 'running')
+  return current?.displayName || ''
+})
+
+const workflowSummaryLabel = computed(() => {
+  if (!hasWorkflowStageList.value) return ''
+  if (workflowCurrentStageLabel.value && props.loading) {
+    return t('lens.message.workflowRunningAt', { name: workflowCurrentStageLabel.value })
+  }
+  const failed = workflowStageList.value.find(stage => stage.status === 'error')
+  if (failed) {
+    return t('lens.message.workflowFailedAt', { name: failed.displayName })
+  }
+  if ((parsedWorkflowTask.value?.status || '') === 'done') {
+    return t('lens.message.workflowFinished')
+  }
+  return t('lens.message.workflowQueued')
+})
+
+const workflowProgressValue = computed(() => {
+  if (typeof props.workflowProgress === 'number' && props.workflowProgress > 0) {
+    return Math.max(0, Math.min(100, Math.round(props.workflowProgress)))
+  }
+  const total = workflowStageList.value.length
+  if (!total) return 0
+  const doneCount = workflowStageList.value.filter(stage => stage.status === 'done').length
+  return Math.round((doneCount / total) * 100)
+})
+
+const workflowStatusText = (status: string) => {
+  if (status === 'done') return t('lens.message.workflowStatusDone')
+  if (status === 'running') return t('lens.message.workflowStatusRunning')
+  if (status === 'error') return t('lens.message.workflowStatusError')
+  return t('lens.message.workflowStatusPending')
+}
 const recordStatusClass = computed(() => ({
   'workspace-record__status--active': props.loading,
   'workspace-record__status--user': props.isUserMessage,
@@ -2669,6 +2725,58 @@ function openSingleImagePreview(src: string) {
       </div>
     </header>
 
+    <div v-if="hasWorkflowStageList" class="workspace-record__section workspace-record__workflow">
+      <button
+        type="button"
+        class="workspace-record__toggle"
+        @click="showWorkflowDetails = !showWorkflowDetails"
+      >
+        <div class="workspace-record__toggle-copy">
+          <ArrowRight theme="outline" size="18" class="flex" />
+          <span>{{ t('lens.message.workflowTitle') }}</span>
+          <span class="workspace-record__workflow-summary">{{ workflowSummaryLabel }}</span>
+        </div>
+        <div class="workspace-record__toggle-icons">
+          <span class="workspace-record__workflow-progress">{{ workflowProgressValue }}%</span>
+          <Down v-if="!showWorkflowDetails" size="18" class="flex" />
+          <Up v-else size="18" class="flex" />
+        </div>
+      </button>
+
+      <transition name="fold">
+        <div v-if="showWorkflowDetails" class="workspace-record__workflow-list">
+          <div
+            v-for="stage in workflowStageList"
+            :key="stage.index"
+            class="workspace-record__workflow-item"
+            :class="{
+              'workspace-record__workflow-item--active': stage.status === 'running',
+              'workspace-record__workflow-item--error': stage.status === 'error',
+            }"
+          >
+            <div class="workspace-record__workflow-step">
+              <span class="workspace-record__workflow-index">{{ stage.index }}</span>
+              <div class="workspace-record__workflow-copy">
+                <div class="workspace-record__workflow-name">{{ stage.displayName }}</div>
+                <div class="workspace-record__workflow-state">
+                  {{ workflowStatusText(stage.status) }}
+                </div>
+              </div>
+            </div>
+            <div v-if="stage.args" class="workspace-record__workflow-extra">
+              {{ stage.args }}
+            </div>
+            <div v-if="stage.contentPreview" class="workspace-record__workflow-preview">
+              {{ stage.contentPreview }}
+            </div>
+            <div v-if="stage.error" class="workspace-record__workflow-error">
+              {{ stage.error }}
+            </div>
+          </div>
+        </div>
+      </transition>
+    </div>
+
     <div v-else class="workspace-record__request-head">
       <div class="workspace-record__eyebrow">{{ recordEyebrow }}</div>
       <div v-if="recordMeta.length" class="workspace-record__meta">
@@ -2787,28 +2895,22 @@ function openSingleImagePreview(src: string) {
       v-if="isUserMessage && parsedUserUploadedFiles.length"
       class="workspace-record__section workspace-record__section--files"
     >
-      <div class="workspace-record__file-grid">
+      <div class="workspace-record__file-tags">
         <button
           v-for="(file, index) in parsedUserUploadedFiles"
           :key="`${file.url}-${index}`"
           type="button"
-          class="workspace-record__file-card"
+          class="workspace-record__file-tag"
           :class="{ 'cursor-wait opacity-80': isDownloadingFile(file.url) }"
           :title="file.name"
           :disabled="isDownloadingFile(file.url)"
           @click="downloadUserUploadedFile(file)"
         >
-          <div class="workspace-record__file-icon">
+          <span class="workspace-record__file-badge">
             {{ getUserFileTypeLabel(file).replace(' 文件', '') }}
-          </div>
-          <div class="min-w-0 flex-1">
-            <div class="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
-              {{ file.name }}
-            </div>
-            <div class="truncate text-xs text-gray-500 dark:text-gray-400">
-              {{ isDownloadingFile(file.url) ? '下载中...' : getUserFileTypeLabel(file) }}
-            </div>
-          </div>
+          </span>
+          <span class="workspace-record__file-name">{{ file.name }}</span>
+          <LoadingOne v-if="isDownloadingFile(file.url)" class="rotate-icon flex text-[13px]" />
         </button>
       </div>
     </div>
@@ -3299,7 +3401,7 @@ pre.fold-leave-to {
   justify-content: flex-end;
 }
 
-.workspace-record--user .workspace-record__file-grid {
+.workspace-record--user .workspace-record__file-tags {
   justify-content: flex-end;
 }
 
@@ -3373,39 +3475,51 @@ pre.fold-leave-to {
   padding-top: 0.95rem;
 }
 
-.workspace-record__file-grid {
+.workspace-record__file-tags {
   display: flex;
   flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.45rem;
 }
 
-.workspace-record__file-card {
+.workspace-record__file-tag {
   display: inline-flex;
-  width: auto;
-  min-width: 240px;
-  max-width: min(100%, 320px);
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.72rem 0.82rem;
-  border-radius: 16px;
+  gap: 0.55rem;
+  max-width: min(100%, 26rem);
+  padding: 0.52rem 0.72rem;
+  border-radius: 999px;
   border: 1px solid var(--paper-border);
   background: #ffffff;
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
   text-align: left;
 }
 
-.workspace-record__file-icon {
+.workspace-record__file-tag:hover {
+  background: var(--surface-muted);
+}
+
+.workspace-record__file-badge {
   display: inline-flex;
-  width: 2.3rem;
-  height: 2.3rem;
+  min-width: 2.2rem;
+  height: 1.9rem;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  padding: 0 0.5rem;
+  border-radius: 999px;
   background: var(--surface-muted);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
+  color: var(--text-main);
+}
+
+.workspace-record__file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
   color: var(--text-main);
 }
 
@@ -3475,14 +3589,14 @@ pre.fold-leave-to {
     max-width: 100%;
   }
 
-  .workspace-record__file-grid {
+  .workspace-record__file-tags {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .workspace-record__file-card {
+  .workspace-record__file-tag {
     width: 100%;
     max-width: 100%;
-    min-width: 0;
   }
 
   .workspace-record__image-grid {
@@ -3765,6 +3879,105 @@ pre.fold-leave-to {
 
 .dark .reasoning-preview {
   color: rgba(255, 255, 255, 0.7);
+}
+
+.workspace-record__workflow {
+  padding: 0;
+}
+
+.workspace-record__workflow-summary {
+  color: var(--text-sub);
+}
+
+.workspace-record__workflow-progress {
+  margin-right: 4px;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.workspace-record__workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.workspace-record__workflow-item {
+  border: 1px solid var(--paper-border);
+  border-radius: 16px;
+  background: #fff;
+  padding: 12px 14px;
+}
+
+.workspace-record__workflow-item--active {
+  border-color: rgba(8, 8, 8, 0.18);
+  background: var(--surface-muted);
+}
+
+.workspace-record__workflow-item--error {
+  border-color: rgba(220, 38, 38, 0.18);
+  background: rgba(254, 242, 242, 0.9);
+}
+
+.workspace-record__workflow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.workspace-record__workflow-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #080808;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.workspace-record__workflow-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspace-record__workflow-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.workspace-record__workflow-state,
+.workspace-record__workflow-extra,
+.workspace-record__workflow-preview,
+.workspace-record__workflow-error {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.workspace-record__workflow-state,
+.workspace-record__workflow-extra,
+.workspace-record__workflow-preview {
+  color: var(--text-sub);
+}
+
+.workspace-record__workflow-extra,
+.workspace-record__workflow-preview,
+.workspace-record__workflow-error {
+  margin-top: 8px;
+}
+
+.workspace-record__workflow-preview {
+  white-space: pre-wrap;
+}
+
+.workspace-record__workflow-error {
+  color: #dc2626;
 }
 
 @keyframes reasoningPulse {

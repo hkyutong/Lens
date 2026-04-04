@@ -186,7 +186,8 @@ async function bootstrap() {
         // 对流式响应路由禁用压缩
         if (
           req.path.includes('/api/chatgpt/chat-process') ||
-          req.path.includes('/api/academic/chat-process')
+          req.path.includes('/api/academic/chat-process') ||
+          req.path.includes('/api/academic/workflow-process')
         ) {
           return false;
         }

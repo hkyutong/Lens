@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { t } from '@/locales'
+import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { useAuthStore, useGlobalStoreWithOut, useChatStore } from '@/store'
+import { DIALOG_TABS } from '@/store/modules/global'
 import { computed, ref, watch } from 'vue'
-import { useChatStore } from '@/store'
 import {
   getAcademicEntityDisplayDescription,
   getAcademicEntityDisplayLabel,
   getAcademicEntityRawLabel,
   getAcademicEntitySelectorValue,
 } from '@/utils/academicI18n'
+import { getAcademicWorkflowChainLabel } from '@/utils/academicWorkflow'
 
 interface Props {
   embedded?: boolean
@@ -28,10 +31,33 @@ const emit = defineEmits<{
   close: []
 }>()
 const chatStore = useChatStore()
+const authStore = useAuthStore()
+const useGlobalStore = useGlobalStoreWithOut()
+const { isMobile } = useBasicLayout()
 
 const coreFunctions = computed(() => chatStore.academicCoreFunctions || [])
 const activePlugin = computed(() => chatStore.currentAcademicPlugin)
 const activeCore = computed(() => chatStore.currentAcademicCore)
+const activeModelLabel = computed(() =>
+  String(chatStore.preferredModel?.label || chatStore.activeModelName || '').trim()
+)
+const workflowEnabled = computed(() => Boolean(chatStore.academicWorkflowEnabled))
+const workflowSteps = computed(() => chatStore.academicWorkflowSteps || [])
+const workflowRunning = computed(() => Boolean(chatStore.academicWorkflowRunning))
+const workflowMemberAvailable = computed(() => {
+  const balance: any = authStore.userBalance || {}
+  return (
+    Number(balance.packageId || 0) > 0 ||
+    (balance.expirationTime && new Date(balance.expirationTime) > new Date())
+  )
+})
+const openMemberDialog = () => {
+  if (isMobile.value) {
+    useGlobalStore.updateMobileSettingsDialog(true, DIALOG_TABS.MEMBER)
+  } else {
+    useGlobalStore.updateSettingsDialog(true, DIALOG_TABS.MEMBER)
+  }
+}
 
 const getCoreLabel = (core: any) => getAcademicEntityRawLabel(core)
 const getCoreDisplayLabel = (core: any) => getAcademicEntityDisplayLabel(core)
@@ -328,11 +354,17 @@ const pluginArgs = computed({
 })
 
 const workflowLabel = computed(() => {
+  if (workflowEnabled.value && workflowSteps.value.length) {
+    return getAcademicWorkflowChainLabel(workflowSteps.value) || t('lens.workflow.empty')
+  }
   return getAcademicEntityDisplayLabel(activePlugin.value || activeCore.value) ||
     t('lens.academicPanel.workflowFallbackLabel')
 })
 
 const workflowDescription = computed(() => {
+  if (workflowEnabled.value && workflowSteps.value.length) {
+    return t('lens.workflow.currentChainDesc')
+  }
   return (
     getAcademicEntityDisplayDescription(activePlugin.value || activeCore.value) ||
     t('lens.academicPanel.workflowFallbackDesc')
@@ -340,6 +372,9 @@ const workflowDescription = computed(() => {
 })
 
 const selectedKind = computed(() => {
+  if (workflowEnabled.value && workflowSteps.value.length) {
+    return t('lens.workflow.currentChain')
+  }
   if (activePlugin.value) return t('lens.academicPanel.selectedKindTool')
   if (activeCore.value) return t('lens.academicPanel.selectedKindCore')
   return t('lens.academicPanel.selectedKindPending')
@@ -355,12 +390,90 @@ const pluginArgsPlaceholder = computed(() => {
 })
 
 const selectQuickCore = (core: any) => {
+  if (workflowEnabled.value) {
+    const nextIndex = workflowSteps.value.length
+    if (nextIndex >= 3) return
+    chatStore.addAcademicWorkflowStep({
+      kind: 'core',
+      name: String(core?.name || '').trim(),
+      displayName: getAcademicEntityDisplayLabel(core),
+    })
+    return
+  }
   chatStore.setAcademicCore(core)
 }
 
 const selectQuickPlugin = (plugin: any) => {
+  if (workflowEnabled.value) {
+    const nextIndex = workflowSteps.value.length
+    if (nextIndex >= 3) return
+    chatStore.addAcademicWorkflowStep({
+      kind: 'plugin',
+      name: String(plugin?.name || '').trim(),
+      displayName: getAcademicEntityDisplayLabel(plugin),
+    })
+    return
+  }
   chatStore.setAcademicPlugin(plugin)
 }
+
+const toggleWorkflowMode = (enabled: boolean) => {
+  if (enabled && !workflowMemberAvailable.value) {
+    openMemberDialog()
+    return
+  }
+  if (enabled) {
+    chatStore.setAcademicPlugin(undefined)
+    chatStore.setAcademicCore(undefined)
+    chatStore.setAcademicWorkflowEnabled(true)
+    if (!workflowSteps.value.length) {
+      chatStore.addAcademicWorkflowStep({ kind: 'plugin' })
+    }
+    return
+  }
+  chatStore.clearAcademicWorkflow()
+}
+
+const updateWorkflowStepKind = (index: number, kind: 'core' | 'plugin') => {
+  chatStore.updateAcademicWorkflowStep(index, {
+    kind,
+    name: '',
+    displayName: '',
+    args: workflowSteps.value[index]?.args || '',
+  })
+}
+
+const updateWorkflowStepSelection = (index: number, value: string) => {
+  const step = workflowSteps.value[index]
+  if (!step) return
+  const list = step.kind === 'plugin' ? pluginList.value : coreFunctions.value
+  const selected = list.find(
+    item => getAcademicEntitySelectorValue(item) === value || item?.name === value
+  )
+  if (!selected) return
+  chatStore.updateAcademicWorkflowStep(index, {
+    name: String(selected?.name || '').trim(),
+    displayName: getAcademicEntityDisplayLabel(selected),
+  })
+}
+
+const updateWorkflowStepArgs = (index: number, value: string) => {
+  chatStore.updateAcademicWorkflowStep(index, {
+    args: value.trim().slice(0, 300),
+  })
+}
+
+const addWorkflowStep = () => {
+  if (!workflowMemberAvailable.value) {
+    openMemberDialog()
+    return
+  }
+  if (workflowSteps.value.length >= 3) return
+  chatStore.addAcademicWorkflowStep({ kind: 'plugin' })
+}
+
+const workflowSourceOptions = (kind: 'core' | 'plugin') =>
+  kind === 'plugin' ? filteredPlugins.value : coreFunctions.value
 </script>
 
 <template>
@@ -370,9 +483,6 @@ const selectQuickPlugin = (plugin: any) => {
         <div>
           <template v-if="!props.embedded">
             <h3 class="research-controls__title">{{ t('lens.academicPanel.title') }}</h3>
-            <p class="research-controls__subtitle">
-              {{ t('lens.academicPanel.subtitle') }}
-            </p>
           </template>
         </div>
         <div class="research-controls__header-actions">
@@ -391,19 +501,48 @@ const selectQuickPlugin = (plugin: any) => {
       <div class="research-controls__overview">
         <div class="research-controls__overview-row">
           <span>{{ t('lens.academicPanel.modeLabel') }}</span>
-          <strong>{{ t('lens.academicPanel.researchMode') }}</strong>
+          <strong>
+            {{
+              workflowEnabled
+                ? t('lens.workflow.modeWorkflow')
+                : t('lens.academicPanel.researchMode')
+            }}
+          </strong>
+        </div>
+        <div v-if="activeModelLabel" class="research-controls__overview-row">
+          <span>{{ t('lens.academicPanel.modelLabel') }}</span>
+          <strong>{{ activeModelLabel }}</strong>
         </div>
         <div class="research-controls__overview-row">
           <span>{{ selectedKind }}</span>
           <strong>{{ workflowLabel }}</strong>
         </div>
-        <div class="research-controls__overview-row">
+        <div v-if="showAdvanced || pluginArgs" class="research-controls__overview-row">
           <span>{{ t('lens.academicPanel.advancedInstruction') }}</span>
           <strong>{{ pluginArgs ? t('lens.academicPanel.filled') : t('lens.academicPanel.empty') }}</strong>
         </div>
       </div>
 
-      <div class="research-controls__grid">
+      <div class="research-controls__mode-switch">
+        <button
+          type="button"
+          class="research-controls__toggle"
+          :class="{ 'research-controls__toggle--active': !workflowEnabled }"
+          @click="toggleWorkflowMode(false)"
+        >
+          {{ t('lens.workflow.singleMode') }}
+        </button>
+        <button
+          type="button"
+          class="research-controls__toggle"
+          :class="{ 'research-controls__toggle--active': workflowEnabled }"
+          @click="toggleWorkflowMode(true)"
+        >
+          {{ t('lens.workflow.workflowMode') }}
+        </button>
+      </div>
+
+      <div v-if="!workflowEnabled" class="research-controls__grid">
         <div class="research-controls__field">
           <label>{{ props.coreLabel || t('lens.academicPanel.coreLabel') }}</label>
           <select v-model="selectedCore" class="research-controls__select">
@@ -434,22 +573,102 @@ const selectQuickPlugin = (plugin: any) => {
         </div>
       </div>
 
-      <div class="research-controls__field">
-        <label>{{ props.groupLabel || t('lens.academicPanel.groupLabel') }}</label>
-        <div class="research-controls__group-row">
-          <select v-model="groupFilter" class="research-controls__select research-controls__select--compact">
-            <option v-for="group in groupOptions" :key="group.value" :value="group.value">
-              {{ group.label }}
-            </option>
-          </select>
+      <div v-else class="research-controls__workflow-builder">
+        <div class="research-controls__workflow-head">
+          <span>{{ t('lens.workflow.builderTitle') }}</span>
           <button
+            v-if="workflowSteps.length < 3"
             type="button"
             class="research-controls__advanced"
-            @click="showAdvanced = !showAdvanced"
+            @click="addWorkflowStep"
           >
-            {{ showAdvanced ? t('lens.academicPanel.advancedCollapse') : t('lens.academicPanel.advancedExpand') }}
+            {{ t('lens.workflow.addStep') }}
           </button>
         </div>
+
+        <div v-if="!workflowMemberAvailable" class="research-controls__workflow-locked">
+          <div>{{ t('lens.workflow.memberOnly') }}</div>
+          <button type="button" class="research-controls__advanced" @click="openMemberDialog">
+            {{ t('lens.workflow.upgradeNow') }}
+          </button>
+        </div>
+
+        <div v-for="(step, index) in workflowSteps" :key="`${step.kind}-${index}`" class="research-controls__workflow-card">
+          <div class="research-controls__workflow-row">
+            <div class="research-controls__workflow-index">{{ index + 1 }}</div>
+            <div class="research-controls__workflow-grid">
+              <select
+                :value="step.kind"
+                class="research-controls__select"
+                @change="updateWorkflowStepKind(index, ($event.target as HTMLSelectElement).value as 'core' | 'plugin')"
+              >
+                <option value="core">{{ t('lens.workflow.stepKindCore') }}</option>
+                <option value="plugin">{{ t('lens.workflow.stepKindTool') }}</option>
+              </select>
+              <select
+                :value="step.name"
+                class="research-controls__select"
+                @change="updateWorkflowStepSelection(index, ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">{{ t('lens.workflow.stepSelectPlaceholder') }}</option>
+                <option
+                  v-for="item in workflowSourceOptions(step.kind)"
+                  :key="`${step.kind}-${getAcademicEntitySelectorValue(item)}`"
+                  :value="getAcademicEntitySelectorValue(item)"
+                >
+                  {{
+                    step.kind === 'plugin'
+                      ? getPluginDisplayLabel(item)
+                      : getCoreDisplayLabel(item)
+                  }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <textarea
+            :value="step.args || ''"
+            rows="2"
+            class="research-controls__textarea"
+            :placeholder="t('lens.workflow.stepArgsPlaceholder')"
+            @input="updateWorkflowStepArgs(index, ($event.target as HTMLTextAreaElement).value)"
+          />
+          <div class="research-controls__workflow-actions">
+            <button
+              type="button"
+              class="research-controls__advanced"
+              :disabled="index === 0 || workflowRunning"
+              @click="chatStore.moveAcademicWorkflowStep(index, -1)"
+            >
+              {{ t('lens.workflow.moveUp') }}
+            </button>
+            <button
+              type="button"
+              class="research-controls__advanced"
+              :disabled="index === workflowSteps.length - 1 || workflowRunning"
+              @click="chatStore.moveAcademicWorkflowStep(index, 1)"
+            >
+              {{ t('lens.workflow.moveDown') }}
+            </button>
+            <button
+              type="button"
+              class="research-controls__advanced"
+              :disabled="workflowRunning"
+              @click="chatStore.removeAcademicWorkflowStep(index)"
+            >
+              {{ t('lens.workflow.removeStep') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="!workflowEnabled" class="research-controls__advanced-trigger">
+        <button
+          type="button"
+          class="research-controls__advanced"
+          @click="showAdvanced = !showAdvanced"
+        >
+          {{ showAdvanced ? t('lens.academicPanel.advancedCollapse') : t('lens.academicPanel.advancedExpand') }}
+        </button>
       </div>
 
       <div class="research-controls__presets">
@@ -483,7 +702,15 @@ const selectQuickPlugin = (plugin: any) => {
         </div>
       </div>
 
-      <div v-if="showAdvanced" class="research-controls__advanced-panel">
+      <div v-if="showAdvanced && !workflowEnabled" class="research-controls__advanced-panel">
+        <div class="research-controls__field">
+          <label>{{ props.groupLabel || t('lens.academicPanel.groupLabel') }}</label>
+          <select v-model="groupFilter" class="research-controls__select">
+            <option v-for="group in groupOptions" :key="group.value" :value="group.value">
+              {{ group.label }}
+            </option>
+          </select>
+        </div>
         <label>{{ props.pluginArgsLabel || t('lens.academicPanel.customInstructionLabel') }}</label>
         <textarea
           v-model="pluginArgs"
@@ -511,12 +738,12 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   padding: 0;
   border-radius: 0;
   border: none;
   background: transparent;
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
 }
 
 .research-controls__header,
@@ -532,6 +759,18 @@ const selectQuickPlugin = (plugin: any) => {
   gap: 12px;
 }
 
+.research-controls__mode-switch,
+.research-controls__workflow-head,
+.research-controls__workflow-row,
+.research-controls__workflow-actions {
+  display: flex;
+  align-items: center;
+}
+
+.research-controls__mode-switch {
+  gap: 8px;
+}
+
 .research-controls__header-actions {
   gap: 10px;
   align-self: flex-start;
@@ -542,14 +781,14 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__preset-title {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--ink-faint);
 }
 
 .research-controls__title {
-  margin: 6px 0 0;
-  font-size: 16px;
+  margin: 4px 0 0;
+  font-size: 14px;
   line-height: 1.2;
   color: var(--text-main);
 }
@@ -559,7 +798,7 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__hint,
 .research-controls__idle {
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--text-sub);
 }
@@ -569,7 +808,7 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__advanced,
 .research-controls__chip-btn {
   border: 1px solid transparent;
-  background: #eef2f6;
+  background: var(--surface-muted);
   color: var(--text-main);
   transition:
     transform 0.2s ease,
@@ -607,11 +846,71 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__overview {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 2px 0 0;
+  gap: 6px;
+  padding: 0;
   border-radius: 0;
   border: none;
   background: transparent;
+}
+
+.research-controls__workflow-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.research-controls__workflow-head {
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.research-controls__workflow-locked,
+.research-controls__workflow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--paper-border);
+  border-radius: 18px;
+  background: #fff;
+  padding: 12px;
+}
+
+.research-controls__workflow-locked {
+  color: var(--text-sub);
+}
+
+.research-controls__workflow-row {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.research-controls__workflow-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #080808;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.research-controls__workflow-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.research-controls__workflow-actions {
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .research-controls__overview-row {
@@ -631,7 +930,7 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .research-controls__field {
@@ -641,14 +940,14 @@ const selectQuickPlugin = (plugin: any) => {
 }
 
 .research-controls__field label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-faint);
 }
 
 .research-controls__select,
 .research-controls__textarea {
   width: 100%;
-  border-radius: 14px;
+  border-radius: 999px;
   border: 1px solid rgba(53, 55, 64, 0.08);
   background: var(--surface-card);
   color: var(--text-main);
@@ -657,22 +956,20 @@ const selectQuickPlugin = (plugin: any) => {
   outline: none;
 }
 
+.research-controls__textarea {
+  min-height: 88px;
+  border-radius: 16px;
+  resize: vertical;
+}
+
 .research-controls__select:focus,
 .research-controls__textarea:focus {
   border-color: rgba(53, 55, 64, 0.16);
 }
 
-.research-controls__group-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  align-items: stretch;
-  gap: 10px;
-}
-
-.research-controls__group-row .research-controls__select--compact {
-  width: 100%;
-  max-width: 164px;
-  min-width: 0;
+.research-controls__advanced-trigger {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .research-controls__select {
@@ -691,7 +988,7 @@ const selectQuickPlugin = (plugin: any) => {
 
 .research-controls__presets {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .research-controls__preset-block {
@@ -716,7 +1013,7 @@ const selectQuickPlugin = (plugin: any) => {
 .research-controls__advanced:hover,
 .research-controls__close:hover {
   border-color: transparent;
-  background: #e6ebf1;
+  background: #eceff3;
 }
 
 .research-controls__workflow,
@@ -729,15 +1026,15 @@ const selectQuickPlugin = (plugin: any) => {
 }
 
 .research-controls__workflow-title {
-  margin-top: 8px;
-  font-size: 14px;
+  margin-top: 6px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-main);
 }
 
 @media (max-width: 768px) {
   .research-controls {
-    gap: 14px;
+    gap: 12px;
     padding: 0;
     border-radius: 0;
     box-shadow: none;
@@ -748,7 +1045,6 @@ const selectQuickPlugin = (plugin: any) => {
   }
 
   .research-controls__header-actions,
-  .research-controls__group-row,
   .research-controls__grid {
     width: 100%;
   }
@@ -759,14 +1055,6 @@ const selectQuickPlugin = (plugin: any) => {
 
   .research-controls__grid {
     grid-template-columns: 1fr;
-  }
-
-  .research-controls__group-row {
-    grid-template-columns: 1fr;
-  }
-
-  .research-controls__group-row .research-controls__select--compact {
-    max-width: none;
   }
 
   .research-controls__advanced,

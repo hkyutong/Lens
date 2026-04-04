@@ -261,6 +261,9 @@ export const useChatStore = defineStore('chat-store', {
       if (plugin) {
         this.academicMode = true
         this.mobileAcademicPanelVisible = true
+        this.academicWorkflowEnabled = false
+        this.academicWorkflowRunning = false
+        this.academicWorkflowSteps = []
         this.currentAcademicCore = undefined
         // 切换插件时清空自定义指令，避免将旧插件提示词污染到新插件。
         if (prevName !== nextName) {
@@ -276,9 +279,101 @@ export const useChatStore = defineStore('chat-store', {
       if (coreFn) {
         this.academicMode = true
         this.mobileAcademicPanelVisible = true
+        this.academicWorkflowEnabled = false
+        this.academicWorkflowRunning = false
+        this.academicWorkflowSteps = []
         this.currentAcademicPlugin = undefined
         this.academicPluginArgs = ''
       }
+    },
+
+    setAcademicWorkflowEnabled(enabled: boolean) {
+      this.academicWorkflowEnabled = Boolean(enabled)
+      if (enabled) {
+        this.academicMode = true
+        this.mobileAcademicPanelVisible = true
+      } else {
+        this.academicWorkflowRunning = false
+      }
+      this.recordState()
+    },
+
+    setAcademicWorkflowRunning(running: boolean) {
+      this.academicWorkflowRunning = Boolean(running)
+      this.recordState()
+    },
+
+    setAcademicWorkflowSteps(steps: Chat.AcademicWorkflowStep[]) {
+      this.academicWorkflowSteps = (Array.isArray(steps) ? steps : [])
+        .slice(0, 3)
+        .map(step => ({
+          kind: step?.kind === 'plugin' ? 'plugin' : 'core',
+          name: String(step?.name || '').trim(),
+          displayName: String(step?.displayName || step?.name || '').trim(),
+          args: String(step?.args || '').trim(),
+        }))
+      if (this.academicWorkflowSteps.length) {
+        this.academicWorkflowEnabled = true
+        this.academicMode = true
+        this.mobileAcademicPanelVisible = true
+      }
+      this.recordState()
+    },
+
+    addAcademicWorkflowStep(step?: Partial<Chat.AcademicWorkflowStep>) {
+      const current = Array.isArray(this.academicWorkflowSteps) ? [...this.academicWorkflowSteps] : []
+      if (current.length >= 3) return
+      current.push({
+        kind: step?.kind === 'plugin' ? 'plugin' : 'core',
+        name: String(step?.name || '').trim(),
+        displayName: String(step?.displayName || step?.name || '').trim(),
+        args: String(step?.args || '').trim(),
+      })
+      this.setAcademicWorkflowSteps(current)
+    },
+
+    updateAcademicWorkflowStep(index: number, patch: Partial<Chat.AcademicWorkflowStep>) {
+      if (!Array.isArray(this.academicWorkflowSteps)) return
+      const next = [...this.academicWorkflowSteps]
+      if (!next[index]) return
+      next[index] = {
+        ...next[index],
+        ...patch,
+        kind: patch?.kind === 'plugin' ? 'plugin' : patch?.kind === 'core' ? 'core' : next[index].kind,
+        name: String((patch?.name ?? next[index].name) || '').trim(),
+        displayName: String((patch?.displayName ?? next[index].displayName ?? patch?.name ?? next[index].name) || '').trim(),
+        args: String((patch?.args ?? next[index].args) || '').trim(),
+      }
+      this.setAcademicWorkflowSteps(next)
+    },
+
+    removeAcademicWorkflowStep(index: number) {
+      if (!Array.isArray(this.academicWorkflowSteps)) return
+      const next = [...this.academicWorkflowSteps]
+      next.splice(index, 1)
+      this.academicWorkflowSteps = next
+      if (!next.length) {
+        this.academicWorkflowEnabled = false
+        this.academicWorkflowRunning = false
+      }
+      this.recordState()
+    },
+
+    moveAcademicWorkflowStep(index: number, direction: -1 | 1) {
+      if (!Array.isArray(this.academicWorkflowSteps)) return
+      const targetIndex = index + direction
+      if (targetIndex < 0 || targetIndex >= this.academicWorkflowSteps.length) return
+      const next = [...this.academicWorkflowSteps]
+      ;[next[index], next[targetIndex]] = [next[targetIndex], next[index]]
+      this.academicWorkflowSteps = next
+      this.recordState()
+    },
+
+    clearAcademicWorkflow() {
+      this.academicWorkflowEnabled = false
+      this.academicWorkflowRunning = false
+      this.academicWorkflowSteps = []
+      this.recordState()
     },
 
     setAcademicPluginArgs(args: string) {

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { t } from '@/locales'
-import { useAuthStore, useChatStore } from '@/store'
-import { computed, inject, nextTick } from 'vue'
+import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
+import { DIALOG_TABS } from '@/store/modules/global'
+import { buildAcademicWorkflowTemplates, findAcademicWorkflowSelector } from '@/utils/academicWorkflow'
+import { computed, nextTick } from 'vue'
 
 type StarterTask = {
   id: string
@@ -11,12 +14,15 @@ type StarterTask = {
   selectorGroups: string[][]
 }
 
-const createNewChatGroup = inject('createNewChatGroup', () =>
-  Promise.resolve()
-) as () => Promise<void>
-
-const authStore = useAuthStore()
 const chatStore = useChatStore()
+const authStore = useAuthStore()
+const useGlobalStore = useGlobalStoreWithOut()
+const { isMobile } = useBasicLayout()
+const normalizeText = (value: any) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
 
 const starterTasks = computed<StarterTask[]>(() => [
   {
@@ -26,9 +32,15 @@ const starterTasks = computed<StarterTask[]>(() => [
     mode: 'plugin',
     selectorGroups: [
       ['论文速读'],
-      ['pdf', '深度理解'],
       ['pdf', '批量总结'],
     ],
+  },
+  {
+    id: 'pdf-deep-read',
+    title: t('lens.workspace.starterPdfDeepRead'),
+    prompt: t('lens.workspace.starterPdfDeepReadPrompt'),
+    mode: 'plugin',
+    selectorGroups: [['pdf', '深度理解']],
   },
   {
     id: 'english-polish',
@@ -57,13 +69,18 @@ const starterTasks = computed<StarterTask[]>(() => [
       ['代码解释'],
     ],
   },
+  {
+    id: 'arxiv-summary',
+    title: t('lens.workspace.starterArxivSummary'),
+    prompt: t('lens.workspace.starterArxivSummaryPrompt'),
+    mode: 'plugin',
+    selectorGroups: [
+      ['arxiv', '摘要'],
+      ['arxiv', '英文摘要'],
+    ],
+  },
 ])
 
-const emit = defineEmits<{
-  (e: 'import'): void
-}>()
-
-const hasProjects = computed(() => (chatStore.groupList || []).length > 0)
 const activeWorkflowLabel = computed(() =>
   String(
     chatStore.currentAcademicPlugin?.displayName ||
@@ -74,42 +91,14 @@ const activeWorkflowLabel = computed(() =>
   )
 )
 
-const requireLogin = () => {
-  if (authStore.isLogin) return true
-  authStore.setLoginDialog(true)
-  return false
-}
-
-const handleCreate = async () => {
-  if (!requireLogin()) return
-  await createNewChatGroup()
-}
-
-const handleImport = async () => {
-  if (!requireLogin()) return
-  chatStore.setAcademicMode(true)
-  emit('import')
-}
-
-const normalizeText = (value: any) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '')
-
-const getSelectorText = (item: any) =>
-  `${item?.displayName || ''} ${item?.name || ''} ${item?.originName || ''}`
-
-const findMatchingSelector = (list: any[], selectorGroups: string[][]) => {
-  for (const selectors of selectorGroups) {
-    const matched = list.find(item => {
-      const haystack = normalizeText(getSelectorText(item))
-      return selectors.every(selector => haystack.includes(normalizeText(selector)))
-    })
-    if (matched) return matched
-  }
-  return undefined
-}
+const workflowTemplates = computed(() => buildAcademicWorkflowTemplates())
+const isWorkflowMemberAvailable = computed(() => {
+  const balance: any = authStore.userBalance || {}
+  return (
+    Number(balance.packageId || 0) > 0 ||
+    (balance.expirationTime && new Date(balance.expirationTime) > new Date())
+  )
+})
 
 const ensureAcademicData = async () => {
   if (!chatStore.academicCoreFunctions?.length) {
@@ -130,12 +119,13 @@ const isStarterActive = (task: StarterTask) => {
 
 const applyStarterTask = async (task: StarterTask) => {
   await ensureAcademicData()
+  chatStore.clearAcademicWorkflow()
   chatStore.setAcademicMode(true)
 
   if (task.mode === 'core') {
     chatStore.setAcademicPlugin(undefined)
     chatStore.setAcademicCore(undefined)
-    const matchedCore = findMatchingSelector(
+    const matchedCore = findAcademicWorkflowSelector(
       chatStore.academicCoreFunctions || [],
       task.selectorGroups
     )
@@ -145,7 +135,7 @@ const applyStarterTask = async (task: StarterTask) => {
   } else {
     chatStore.setAcademicCore(undefined)
     chatStore.setAcademicPlugin(undefined)
-    const matchedPlugin = findMatchingSelector(
+    const matchedPlugin = findAcademicWorkflowSelector(
       chatStore.academicPluginList || [],
       task.selectorGroups
     )
@@ -163,27 +153,58 @@ const applyStarterTask = async (task: StarterTask) => {
   })
   composer?.focus()
 }
+
+const openMemberDialog = () => {
+  if (isMobile.value) {
+    useGlobalStore.updateMobileSettingsDialog(true, DIALOG_TABS.MEMBER)
+  } else {
+    useGlobalStore.updateSettingsDialog(true, DIALOG_TABS.MEMBER)
+  }
+}
+
+const applyWorkflowTemplate = async (template: Chat.AcademicWorkflowTemplate) => {
+  if (!isWorkflowMemberAvailable.value) {
+    openMemberDialog()
+    return
+  }
+  await ensureAcademicData()
+  const nextSteps: Chat.AcademicWorkflowStep[] = template.steps
+    .map(step => {
+      const sourceList =
+        step.kind === 'plugin' ? chatStore.academicPluginList || [] : chatStore.academicCoreFunctions || []
+      const matched = findAcademicWorkflowSelector(sourceList, [[step.name]])
+      return {
+        kind: step.kind,
+        name: String(matched?.name || step.name || '').trim(),
+        displayName: String(matched?.displayName || matched?.name || step.displayName || step.name || '').trim(),
+        args: String(step.args || '').trim(),
+      }
+    })
+    .filter(step => Boolean(step.name))
+
+  if (!nextSteps.length) return
+  chatStore.setAcademicCore(undefined)
+  chatStore.setAcademicPlugin(undefined)
+  chatStore.setAcademicWorkflowSteps(nextSteps)
+  chatStore.setAcademicWorkflowEnabled(true)
+  chatStore.setPrompt(template.prompt)
+  await nextTick()
+  const composer = document.getElementById('workspace-composer') as HTMLTextAreaElement | null
+  composer?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  })
+  composer?.focus()
+}
 </script>
 
 <template>
   <section class="workspace-home">
     <div class="workspace-home__shell">
       <div class="workspace-home__intro">
-        <div class="workspace-home__intro-title">
-          {{ hasProjects ? t('lens.workspace.introWithProjects') : t('lens.workspace.introFirstUse') }}
-        </div>
         <div class="workspace-home__intro-desc">
           {{ t('lens.workspace.introDesc') }}
         </div>
-      </div>
-
-      <div v-if="!hasProjects" class="workspace-home__empty-actions">
-        <button type="button" class="btn btn-secondary btn-md rounded-full" @click="handleImport">
-          {{ t('lens.workspace.importData') }}
-        </button>
-        <button type="button" class="btn btn-primary btn-md rounded-full" @click="handleCreate">
-          {{ t('lens.sidebar.newProject') }}
-        </button>
       </div>
 
       <div class="workspace-home__guide">
@@ -201,6 +222,25 @@ const applyStarterTask = async (task: StarterTask) => {
           </button>
         </div>
       </div>
+
+      <div class="workspace-home__guide workspace-home__guide--workflow">
+        <div class="workspace-home__starter-title">
+          {{ t('lens.workflow.templateTitle') }}
+        </div>
+        <div class="workspace-home__starter-grid workspace-home__starter-grid--workflow">
+          <button
+            v-for="item in workflowTemplates"
+            :key="item.id"
+            type="button"
+            class="workspace-home__starter-btn workspace-home__starter-btn--workflow"
+            :class="{ 'workspace-home__starter-btn--locked': !isWorkflowMemberAvailable }"
+            @click="applyWorkflowTemplate(item)"
+          >
+            <span>{{ item.title }}</span>
+            <small v-if="!isWorkflowMemberAvailable">{{ t('lens.workflow.memberOnly') }}</small>
+          </button>
+        </div>
+      </div>
     </div>
   </section>
 </template>
@@ -212,93 +252,35 @@ const applyStarterTask = async (task: StarterTask) => {
 
 .workspace-home__shell {
   min-height: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
-  padding-top: 12px;
+  padding-top: 6px;
 }
 
 .workspace-home__intro {
-  max-width: 640px;
-  padding: 0 0 20px;
-}
-
-.workspace-home__intro-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-main);
+  max-width: 580px;
+  padding: 0 0 16px;
 }
 
 .workspace-home__intro-desc {
-  margin-top: 6px;
+  margin-top: 0;
   font-size: 13px;
   line-height: 1.7;
   color: var(--text-sub);
 }
 
-.workspace-home__empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 0 0 20px;
-}
-
 .workspace-home__guide {
-  padding: 2px 0 22px;
+  padding: 0 0 18px;
 }
 
-.workspace-home__guide-title,
 .workspace-home__starter-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-main);
 }
 
-.workspace-home__guide-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.workspace-home__guide-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--paper-border);
-  background: #f8f9fb;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-main);
-}
-
-.workspace-home__guide-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.workspace-home__starter-title {
-  margin-top: 18px;
-}
-
 .workspace-home__starter-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 12px;
 }
 
@@ -306,9 +288,9 @@ const applyStarterTask = async (task: StarterTask) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 46px;
+  min-height: 42px;
   padding: 0 14px;
-  border-radius: 18px;
+  border-radius: 999px;
   border: 1px solid var(--paper-border);
   background: #ffffff;
   color: var(--text-main);
@@ -322,22 +304,60 @@ const applyStarterTask = async (task: StarterTask) => {
 
 .workspace-home__starter-btn:hover {
   background: var(--surface-muted);
-  border-color: #cdcdcd;
+  border-color: #d7d7d7;
   transform: translateY(-1px);
 }
 
 .workspace-home__starter-btn--active {
-  border-color: #cdcdcd;
+  border-color: #d0d0d0;
   background: var(--surface-muted);
 }
 
+.workspace-home__guide--workflow {
+  padding-top: 2px;
+}
+
+.workspace-home__starter-grid--workflow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workspace-home__starter-btn--workflow {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 56px;
+  padding: 12px 14px;
+  border-style: dashed;
+}
+
+.workspace-home__starter-btn--workflow small {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-sub);
+}
+
+.workspace-home__starter-btn--locked {
+  opacity: 0.92;
+}
+
 @media (max-width: 960px) {
-  .workspace-home__empty-actions {
-    padding-bottom: 16px;
+  .workspace-home__starter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace-home__shell {
+    padding-top: 2px;
   }
 
   .workspace-home__starter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-home__starter-grid--workflow {
+    grid-template-columns: 1fr;
   }
 }
 </style>

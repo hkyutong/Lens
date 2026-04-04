@@ -26,7 +26,7 @@ interface Props {
   customId?: string
   modelAvatar?: string
   action?: string
-  taskData?: string
+  taskData?: any
   pluginParam?: string
   progress?: string
   index: number
@@ -247,6 +247,9 @@ onUnmounted(() => {
       :usingMcpTool="usingMcpTool"
       :reasoningText="reasoningText"
       :isWorkflowMessage="isWorkflowMessage"
+      :taskData="taskData"
+      :stepName="stepName"
+      :workflowProgress="workflowProgress"
       @regenerate="handleRegenerate"
       @copy="handleCopy"
       @delete="handleDetele"

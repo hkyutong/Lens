@@ -1,14 +1,13 @@
 <script setup lang="ts">
 // ============== 组件导入 ==============
 import { fetchChatAPIProcess } from '@/api'
-import { fetchAcademicChatAPIProcess } from '@/api/academic'
+import { fetchAcademicChatAPIProcess, fetchAcademicWorkflowAPIProcess } from '@/api/academic'
 import { fetchQueryOneCatAPI } from '@/api/appStore'
 import { fetchDeleteGroupChatsAfterIdAPI, fetchSyncDisplayContentAPI } from '@/api/chatLog'
 import { openImageViewer } from '@/components/common/ImageViewer/useImageViewer'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
-import { getAcademicEntityDisplayLabel } from '@/utils/academicI18n'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { Close, DropDownList } from '@icon-park/vue-next'
@@ -180,6 +179,8 @@ const academicMode = computed(() => chatStore.academicMode)
 const mobileAcademicPanelVisible = computed(() => chatStore.mobileAcademicPanelVisible)
 const academicPlugin = computed(() => chatStore.currentAcademicPlugin)
 const academicCore = computed(() => chatStore.currentAcademicCore)
+const academicWorkflowEnabled = computed(() => Boolean(chatStore.academicWorkflowEnabled))
+const academicWorkflowSteps = computed(() => chatStore.academicWorkflowSteps || [])
 const academicPluginArgs = computed(() => chatStore.academicPluginArgs)
 const academicPluginKwargs = computed(() => {
   if (!academicPlugin.value?.advancedArgs) return {}
@@ -223,12 +224,9 @@ const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
 const isStreaming = computed(() => Boolean(chatStore.isStreamIn))
 const chatHistoryHasMore = computed(() => Boolean(chatStore.chatHistoryHasMore))
 const chatHistoryLoading = computed(() => Boolean(chatStore.chatHistoryLoading))
-const activeResearchLabel = computed(() => {
-  return getAcademicEntityDisplayLabel(academicPlugin.value || academicCore.value)
-})
 const activeGroupTitle = computed(() => activeGroupInfo.value?.title || '未命名项目')
 const workspaceTitle = computed(() =>
-  dataSources.value.length || activeAppId.value ? activeGroupTitle.value : '研究项目'
+  dataSources.value.length || activeAppId.value ? activeGroupTitle.value : t('lens.header.projects')
 )
 
 // 使用watch监听activeGroupInfo的变化
@@ -1306,6 +1304,8 @@ const onConversation = async ({
     usingNetwork: chatStore.usingNetwork,
     usingDeepThinking: chatStore.usingDeepThinking,
   }
+  const isWorkflowConversation =
+    academicMode.value && academicWorkflowEnabled.value && academicWorkflowSteps.value.length > 0
   // 仅发送当前轮次显式提交的附件，避免把历史附件自动带入新请求。
   const requestFileUrl = String(fileUrl || '')
 
@@ -1333,6 +1333,8 @@ const onConversation = async ({
       loading: true,
       error: false,
       status: 1,
+      taskData: undefined,
+      isWorkflowMessage: isWorkflowConversation,
     })
   }
 
@@ -1452,6 +1454,8 @@ const onConversation = async ({
       pluginParam: usingPlugin.value?.parameters,
       usingNetwork: chatStore.usingNetwork,
       usingDeepThinking: chatStore.usingDeepThinking,
+      taskData: undefined,
+      isWorkflowMessage: isWorkflowConversation,
     })
     assistantIndex = dataSources.value.length - 1
   }
@@ -1473,6 +1477,7 @@ const onConversation = async ({
   let nodeType = ''
   let stepName = ''
   let workflowProgress = 0
+  let taskData: any = undefined
   let assistantLogId = String(effectiveReplyChatId || '')
   let streamRequestId = ''
   let preservedStructuredContent = ''
@@ -1545,6 +1550,8 @@ const onConversation = async ({
       nodeType,
       stepName,
       workflowProgress,
+      taskData,
+      isWorkflowMessage: isWorkflowConversation,
       loading: true,
       error: false,
       status: 1,
@@ -1573,6 +1580,7 @@ const onConversation = async ({
     if (jsonObj?.chatId) assistantLogId = String(jsonObj.chatId)
     if (jsonObj?.finishReason) finishReason = String(jsonObj.finishReason)
     if (jsonObj?.mcpToolUse) mcpToolUse = String(jsonObj.mcpToolUse)
+    if (jsonObj?.taskData) taskData = jsonObj.taskData
     if (jsonObj?.networkSearchResult) networkSearchResult = String(jsonObj.networkSearchResult)
     if (jsonObj?.fileVectorResult) {
       fileVectorResult =
@@ -1661,6 +1669,8 @@ const onConversation = async ({
           nodeType,
           stepName,
           workflowProgress,
+          taskData,
+          isWorkflowMessage: isWorkflowConversation,
           loading: true,
           error: false,
           status: 1,
@@ -1780,7 +1790,34 @@ const onConversation = async ({
 
     const updatedExtraParam = extraParam
 
-    if (academicMode.value) {
+    if (isWorkflowConversation) {
+      chatStore.setAcademicWorkflowRunning(true)
+      await fetchAcademicWorkflowAPIProcess({
+        data: {
+          main_input: messageText,
+          chatId: chatId ? Number(chatId) : undefined,
+          overwriteReply: Boolean(overwriteReply),
+          replyChatId: effectiveReplyChatId || undefined,
+          model: useModel,
+          modelName: useModelName,
+          modelType: useModelType,
+          modelAvatar: useModelAvatar,
+          appId: useAppId || 0,
+          fileUrl: requestFileUrl,
+          options,
+          workflow: {
+            steps: academicWorkflowSteps.value.map(step => ({
+              kind: step.kind,
+              name: step.name,
+              displayName: step.displayName || step.name,
+              args: step.args || '',
+            })),
+          },
+        },
+        signal: controller.value.signal,
+        onDownloadProgress: handleStreamProgress,
+      })
+    } else if (academicMode.value) {
       await fetchAcademicChatAPIProcess({
         data: {
           function: academicFunction,
@@ -1849,6 +1886,11 @@ const onConversation = async ({
       fileVectorResult,
       tool_calls,
       promptReference,
+      nodeType,
+      stepName,
+      workflowProgress,
+      taskData,
+      isWorkflowMessage: isWorkflowConversation,
       error: true,
       loading: false,
       status: 4,
@@ -1856,6 +1898,9 @@ const onConversation = async ({
       modelName: useModelName,
     })
   } finally {
+    if (isWorkflowConversation) {
+      chatStore.setAcademicWorkflowRunning(false)
+    }
     flushNdjsonBuffer()
 
     if (academicMode.value && isAcademicHeartbeatText(displayedText)) {
@@ -1958,6 +2003,11 @@ const onConversation = async ({
       fileVectorResult,
       tool_calls,
       promptReference,
+      nodeType,
+      stepName,
+      workflowProgress,
+      taskData,
+      isWorkflowMessage: isWorkflowConversation,
       loading: false,
       error: isErrorResponse,
       status: isErrorResponse ? 4 : 3,
@@ -2032,6 +2082,36 @@ const handleRegenerate = async (
 
   isRegenerating.value = true
   try {
+    let workflowTask: Chat.AcademicWorkflowTaskData | null = null
+    if (assistant?.taskData) {
+      if (typeof assistant.taskData === 'object' && assistant.taskData?.type === 'academic-workflow') {
+        workflowTask = assistant.taskData as Chat.AcademicWorkflowTaskData
+      } else if (typeof assistant.taskData === 'string') {
+        try {
+          const parsed = JSON.parse(assistant.taskData)
+          if (parsed?.type === 'academic-workflow') {
+            workflowTask = parsed as Chat.AcademicWorkflowTaskData
+          }
+        } catch (_error) {}
+      }
+    }
+
+    if (workflowTask?.steps?.length) {
+      chatStore.setAcademicCore(undefined)
+      chatStore.setAcademicPlugin(undefined)
+      chatStore.setAcademicWorkflowSteps(
+        workflowTask.steps.slice(0, 3).map(step => ({
+          kind: step.kind === 'plugin' ? 'plugin' : 'core',
+          name: String(step.name || '').trim(),
+          displayName: String(step.displayName || step.name || '').trim(),
+          args: String(step.args || '').trim(),
+        }))
+      )
+      chatStore.setAcademicWorkflowEnabled(true)
+    } else {
+      chatStore.clearAcademicWorkflow()
+    }
+
     const currentModelInfo = getCurrentConversationModelInfo()
     await handleEditConversation({
       msg: String(userMsg?.content || ''),
@@ -2232,10 +2312,7 @@ provide('tryParseJson', tryParseJson)
                               </button>
                             </div>
 
-                            <div
-                              v-if="dataSources.length || activeAppId"
-                              class="mb-4 flex flex-col gap-2 pb-1"
-                            >
+                            <div class="mb-4 flex flex-col gap-2 pb-1">
                               <div class="min-w-0">
                                 <div class="text-[33px] font-medium tracking-[-0.03em] text-[var(--text-main)]">
                                   {{ workspaceTitle }}
@@ -2302,6 +2379,9 @@ provide('tryParseJson', tryParseJson)
                                     :ttsUrl="entry.item.ttsUrl"
                                     :taskId="entry.item.taskId"
                                     :taskData="entry.item.taskData"
+                                    :isWorkflowMessage="entry.item.isWorkflowMessage"
+                                    :stepName="entry.item.stepName"
+                                    :workflowProgress="entry.item.workflowProgress"
                                     :videoUrl="entry.item.videoUrl"
                                     :audioUrl="entry.item.audioUrl"
                                     :action="entry.item.action"
@@ -2369,20 +2449,17 @@ provide('tryParseJson', tryParseJson)
             v-if="!isMobile"
             ref="desktopAcademicPanelRef"
             class="desktop-research-rail flex h-full min-h-0 shrink-0 self-stretch flex-col"
-            :class="[isSmallXl ? 'w-[312px]' : 'w-[368px]']"
+            :class="[isSmallXl ? 'w-[288px]' : 'w-[324px]']"
           >
             <div class="flex h-full min-h-0 flex-col overflow-hidden">
-              <div
-                class="flex items-start justify-between gap-4 px-6 pb-2 pt-6"
-              >
+              <div class="flex items-start justify-between gap-4 px-5 pb-2 pt-5">
                 <div class="min-w-0">
-                  <div class="text-[16px] font-medium text-[var(--text-main)]">
-                    {{ activeResearchLabel || t('lens.academicPanel.title') }}
+                  <div class="text-[15px] font-medium text-[var(--text-main)]">
+                    {{ t('lens.academicPanel.title') }}
                   </div>
                 </div>
-                <span class="research-chip research-chip-active">{{ t('lens.academicPanel.pinnedPanel') }}</span>
               </div>
-              <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-5 custom-scrollbar">
+              <div class="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-4 custom-scrollbar">
                     <AcademicPanel
                       :core-label="t('lens.academicPanel.coreLabel')"
                       :plugin-label="t('lens.academicPanel.pluginLabel')"

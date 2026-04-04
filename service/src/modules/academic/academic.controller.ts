@@ -17,6 +17,14 @@ export class AcademicController {
     return this.academicService.academicChatProcess(body, req, res);
   }
 
+  @Post('workflow-process')
+  @ApiOperation({ summary: 'Academic workflow process' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  academicWorkflowProcess(@Body() body: any, @Req() req: Request, @Res() res: Response) {
+    return this.academicService.academicWorkflowProcess(body, req, res);
+  }
+
   @Post('core-function-list')
   @ApiOperation({ summary: 'Academic core function list' })
   @UseGuards(JwtAuthGuard)

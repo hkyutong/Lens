@@ -2,6 +2,7 @@
 import { fetchQueryAppsAPI, fetchQueryOneCatAPI } from '@/api/appStore'
 import type { ResData } from '@/api/types'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { t } from '@/locales'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import {
   AddPicture,
@@ -19,6 +20,7 @@ import PinyinMatch from 'pinyin-match'
 // import { getDocument } from 'pdfjs-dist';
 import { uploadFile } from '@/api/upload'
 import { getAcademicEntityDisplayLabel } from '@/utils/academicI18n'
+import { getAcademicWorkflowChainLabel } from '@/utils/academicWorkflow'
 import { message } from '@/utils/message'
 import {
   computed,
@@ -349,6 +351,9 @@ const activeModelAvatar = computed(() => {
 })
 
 const selectedAcademicLabel = computed(() => {
+  if (chatStore.academicWorkflowEnabled && (chatStore.academicWorkflowSteps || []).length) {
+    return getAcademicWorkflowChainLabel(chatStore.academicWorkflowSteps || [])
+  }
   return getAcademicEntityDisplayLabel(
     chatStore.currentAcademicPlugin || chatStore.currentAcademicCore
   )
@@ -950,33 +955,33 @@ const containerResizeObserver = ref<ResizeObserver | null>(null)
 // 计算输入框占位符文本，根据不同工具状态显示不同提示
 const placeholderText = computed(() => {
   if (!isLogin.value) {
-    return '登录后即可上传资料、开始研究并保存项目'
+    return t('lens.footer.placeholderLoggedOut')
   }
 
   if (isDragging.value) {
-    return '松开鼠标导入论文、LaTeX 或研究资料'
+    return t('lens.footer.placeholderDragging')
   }
 
   if (selectedApp.value?.name) {
-    return `继续 ${selectedApp.value.name}，补充目标、数据或写作要求`
+    return t('lens.footer.placeholderContinueApp', { name: selectedApp.value.name })
   }
 
   if (academicMode.value && selectedAcademicLabel.value) {
-    return `围绕 ${selectedAcademicLabel.value} 添加问题、论文段落或处理要求`
+    return t('lens.footer.placeholderWithAbility', { name: selectedAcademicLabel.value })
   }
 
   if (academicMode.value) {
-    return '添加研究问题、论文段落、引用需求或学术文件'
+    return t('lens.footer.placeholderAcademicDefault')
   }
 
   const activeFeatures = []
-  if (usingDeepThinking.value) activeFeatures.push('推理')
-  if (usingNetwork.value) activeFeatures.push('联网搜索')
+  if (usingDeepThinking.value) activeFeatures.push(t('lens.footer.featureReasoning'))
+  if (usingNetwork.value) activeFeatures.push(t('chat.networkMode'))
   if (activeFeatures.length > 0) {
-    return `当前已启用${activeFeatures.join(' + ')}，继续描述要处理的内容`
+    return t('lens.footer.placeholderWithFeatures', { features: activeFeatures.join(' + ') })
   }
 
-  return '添加研究问题、写作需求、方法设计想法或下一步工作'
+  return t('lens.footer.placeholderDefault')
 })
 
 const shouldShowNetworkSearch = computed(() => {
@@ -1365,6 +1370,13 @@ defineExpose({
                 <div class="flex min-w-0 flex-1 items-center gap-2">
                   <ModelSelector />
 
+                  <span
+                    v-if="selectedAcademicLabel"
+                    class="btn-pill btn-sm pointer-events-none max-w-[8rem] shrink-0 truncate"
+                  >
+                    {{ selectedAcademicLabel }}
+                  </span>
+
                   <div
                     v-if="showUploadButton && !isUploading"
                     class="group relative shrink-0"
@@ -1418,7 +1430,7 @@ defineExpose({
                     aria-label="发送消息"
                   >
                     <SendOne size="15" />
-                    <span class="ml-1.5 whitespace-nowrap">提交研究任务</span>
+                    <span class="ml-1.5 whitespace-nowrap">提交任务</span>
                   </button>
 
                   <button
@@ -1471,6 +1483,13 @@ defineExpose({
             <template v-else>
               <div class="flex flex-wrap items-center gap-2">
                 <ModelSelector />
+
+                <span
+                  v-if="selectedAcademicLabel"
+                  class="btn-pill btn-sm pointer-events-none max-w-[9rem] shrink-0 truncate"
+                >
+                  {{ selectedAcademicLabel }}
+                </span>
 
                 <div
                   v-if="showUploadButton && !isUploading"
@@ -1560,7 +1579,7 @@ defineExpose({
                     aria-label="发送消息"
                   >
                     <SendOne size="15" />
-                    <span class="ml-2">提交研究任务</span>
+                    <span class="ml-2">提交任务</span>
                   </button>
                   <div v-if="!isMobile" class="tooltip tooltip-top">发送</div>
                 </div>

@@ -85,8 +85,6 @@ interface PlanPreset {
   planKey: 'plus' | 'pro' | 'max'
   displayName: string
   monthlyUsd: number
-  monthlyCny: number
-  annualDiscountRate: number
 }
 
 const OFFICIAL_PLAN_ALIASES: Record<PlanPreset['planKey'], string[]> = {
@@ -151,8 +149,6 @@ function getPlusPreset(): PlanPreset {
     planKey: 'plus',
     displayName: t('lens.member.plus'),
     monthlyUsd: 6,
-    monthlyCny: 80,
-    annualDiscountRate: 17,
   }
 }
 
@@ -161,8 +157,6 @@ function getProfessionalPreset(): PlanPreset {
     planKey: 'pro',
     displayName: t('lens.member.pro'),
     monthlyUsd: 20,
-    monthlyCny: 145,
-    annualDiscountRate: 38,
   }
 }
 
@@ -171,8 +165,6 @@ function getMaxPreset(): PlanPreset {
     planKey: 'max',
     displayName: t('lens.member.max'),
     monthlyUsd: 30,
-    monthlyCny: 220,
-    annualDiscountRate: 17,
   }
 }
 
@@ -220,35 +212,7 @@ function getBillingOption(pkg: Pkg) {
 }
 
 function getDisplayBilling(pkg: Pkg) {
-  const rawBilling = getBillingOption(pkg)
-  const preset = getPlanPreset(pkg)
-  if (!preset) return rawBilling
-
-  if (billingCycle.value === 'annual') {
-    const originalTotal = roundDisplayPrice(preset.monthlyCny * 12)
-    const price = roundDisplayPrice(originalTotal * (1 - preset.annualDiscountRate / 100))
-    return {
-      ...rawBilling,
-      price,
-      total: price,
-      originalTotal,
-      discountRate: preset.annualDiscountRate,
-      saveAmount: roundDisplayPrice(originalTotal - price),
-      monthlyEquivalentPrice: roundDisplayPrice(price / 12),
-      days: rawBilling.days > 0 ? 365 : rawBilling.days,
-    }
-  }
-
-  return {
-    ...rawBilling,
-    price: preset.monthlyCny,
-    total: preset.monthlyCny,
-    originalTotal: preset.monthlyCny,
-    discountRate: 0,
-    saveAmount: 0,
-    monthlyEquivalentPrice: preset.monthlyCny,
-    days: rawBilling.days,
-  }
+  return getBillingOption(pkg)
 }
 
 function buildOrderInfo(pkg: Pkg) {
@@ -302,7 +266,10 @@ function getDisplayPriceValue(pkg: Pkg) {
   if (!preset) return formatCurrency(getDisplayBilling(pkg).price)
 
   if (billingCycle.value === 'annual') {
-    return formatCurrency(roundDisplayPrice(preset.monthlyUsd * 12 * (1 - preset.annualDiscountRate / 100)))
+    const annualDiscountRate = Number(getDisplayBilling(pkg).discountRate || 0)
+    return formatCurrency(
+      roundDisplayPrice(preset.monthlyUsd * 12 * (1 - annualDiscountRate / 100))
+    )
   }
 
   return formatCurrency(preset.monthlyUsd)

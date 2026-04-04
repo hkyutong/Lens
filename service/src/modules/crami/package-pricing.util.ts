@@ -19,17 +19,17 @@ export interface PackageBillingOffer {
 
 const ANNUAL_DISCOUNT_RATE = 20;
 const ANNUAL_MONTHS = 12;
-const ANNUAL_PRICE_OVERRIDES_BY_NAME: Record<string, number> = {
-  plus: 796.8,
-  pro: 1078.8,
-  max: 2191.2,
-  team: 2450,
+const ANNUAL_DISCOUNT_OVERRIDES_BY_NAME: Record<string, number> = {
+  plus: 17,
+  pro: 38,
+  max: 17,
+  team: 17,
 };
-const ANNUAL_PRICE_OVERRIDES_BY_WEIGHT: Record<number, number> = {
-  10: 796.8,
-  20: 1078.8,
-  30: 2191.2,
-  40: 2450,
+const ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT: Record<number, number> = {
+  10: 17,
+  20: 38,
+  30: 17,
+  40: 17,
 };
 
 function roundPrice(value: number) {
@@ -51,18 +51,18 @@ function resolveAnnualDays(days: number) {
   return 365;
 }
 
-function resolveAnnualOverride(pkg: any) {
+function resolveAnnualDiscountRate(pkg: any) {
   const nameKey = String(pkg?.name || '')
     .trim()
     .toLowerCase();
-  if (ANNUAL_PRICE_OVERRIDES_BY_NAME[nameKey] !== undefined) {
-    return ANNUAL_PRICE_OVERRIDES_BY_NAME[nameKey];
+  if (ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey] !== undefined) {
+    return ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey];
   }
   const weight = toNumber(pkg?.weight);
-  if (ANNUAL_PRICE_OVERRIDES_BY_WEIGHT[weight] !== undefined) {
-    return ANNUAL_PRICE_OVERRIDES_BY_WEIGHT[weight];
+  if (ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight] !== undefined) {
+    return ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight];
   }
-  return null;
+  return ANNUAL_DISCOUNT_RATE;
 }
 
 export function normalizeBillingCycle(value?: string): BillingCycle {
@@ -74,10 +74,10 @@ export function getPackageBillingOffer(pkg: any, billingCycle?: string): Package
   const billingMonths = cycle === 'annual' ? ANNUAL_MONTHS : 1;
   const basePrice = roundPrice(toNumber(pkg?.price));
   const originalTotal = roundPrice(basePrice * billingMonths);
-  const annualOverride = resolveAnnualOverride(pkg);
+  const annualDiscountRate = resolveAnnualDiscountRate(pkg);
   const price =
     cycle === 'annual'
-      ? roundPrice(annualOverride ?? originalTotal * (1 - ANNUAL_DISCOUNT_RATE / 100))
+      ? roundPrice(originalTotal * (1 - annualDiscountRate / 100))
       : basePrice;
   const discountRate =
     cycle === 'annual' && originalTotal > 0

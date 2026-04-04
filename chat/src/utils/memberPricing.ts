@@ -14,17 +14,17 @@ type PackageLike = {
 }
 
 const DEFAULT_ANNUAL_DISCOUNT_RATE = 20
-const ANNUAL_PRICE_OVERRIDES_BY_NAME: Record<string, number> = {
-  plus: 370,
-  pro: 950,
-  max: 1900,
-  team: 2450,
+const ANNUAL_DISCOUNT_OVERRIDES_BY_NAME: Record<string, number> = {
+  plus: 17,
+  pro: 38,
+  max: 17,
+  team: 17,
 }
-const ANNUAL_PRICE_OVERRIDES_BY_WEIGHT: Record<number, number> = {
-  10: 370,
-  20: 950,
-  30: 1900,
-  40: 2450,
+const ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT: Record<number, number> = {
+  10: 17,
+  20: 38,
+  30: 17,
+  40: 17,
 }
 
 function toNumber(value: unknown) {
@@ -46,32 +46,33 @@ function resolveAnnualDays(days: number) {
   return 365
 }
 
-function resolveAnnualOverride(pkg: PackageLike) {
+function resolveAnnualDiscountRate(pkg: PackageLike) {
   const nameKey = String(pkg.name || '')
     .trim()
     .toLowerCase()
-  if (ANNUAL_PRICE_OVERRIDES_BY_NAME[nameKey] !== undefined) {
-    return ANNUAL_PRICE_OVERRIDES_BY_NAME[nameKey]
+  if (ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey] !== undefined) {
+    return ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey]
   }
   const weight = toNumber(pkg.weight)
-  if (ANNUAL_PRICE_OVERRIDES_BY_WEIGHT[weight] !== undefined) {
-    return ANNUAL_PRICE_OVERRIDES_BY_WEIGHT[weight]
+  if (ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight] !== undefined) {
+    return ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight]
   }
-  return null
+  return DEFAULT_ANNUAL_DISCOUNT_RATE
 }
 
 export function createBillingOption(
   pkg: PackageLike,
   billingCycle: BillingCycle,
-  annualDiscountRate = DEFAULT_ANNUAL_DISCOUNT_RATE
+  defaultAnnualDiscountRate = DEFAULT_ANNUAL_DISCOUNT_RATE
 ): BillingOption {
   const billingMonths = billingCycle === 'annual' ? 12 : 1
   const basePrice = roundPrice(toNumber(pkg.price))
   const originalTotal = roundPrice(basePrice * billingMonths)
-  const annualOverride = resolveAnnualOverride(pkg)
+  const annualDiscountRate =
+    toNumber(pkg.annualDiscountRate) || resolveAnnualDiscountRate(pkg) || defaultAnnualDiscountRate
   const price =
     billingCycle === 'annual'
-      ? roundPrice(annualOverride ?? originalTotal * (1 - annualDiscountRate / 100))
+      ? roundPrice(originalTotal * (1 - annualDiscountRate / 100))
       : basePrice
   const discountRate =
     billingCycle === 'annual' && originalTotal > 0

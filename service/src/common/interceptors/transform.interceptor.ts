@@ -15,7 +15,11 @@ export class TransformInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const path = request?.path || '';
     // Streaming endpoints manage their own response lifecycle; skip wrapping/catchError.
-    if (path.includes('/api/academic/chat-process') || path.includes('/api/chatgpt/chat-process')) {
+    if (
+      path.includes('/api/academic/chat-process') ||
+      path.includes('/api/academic/workflow-process') ||
+      path.includes('/api/chatgpt/chat-process')
+    ) {
       return next.handle();
     }
     return next.handle().pipe(

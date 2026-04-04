@@ -95,6 +95,10 @@ declare namespace Chat {
     academicPluginArgs: string
     currentAcademicPlugin?: any
     currentAcademicCore?: any
+    academicWorkflowEnabled?: boolean
+    academicWorkflowRunning?: boolean
+    academicWorkflowSteps?: AcademicWorkflowStep[]
+    academicWorkflowTemplates?: AcademicWorkflowTemplate[]
     preferredModel?: any
     chatHistoryHasMore?: boolean
     chatHistoryLoading?: boolean
@@ -122,6 +126,44 @@ declare namespace Chat {
     model?: number
     modelType?: number
     groupId?: number
+  }
+
+  interface AcademicWorkflowStep {
+    kind: 'core' | 'plugin'
+    name: string
+    displayName?: string
+    args?: string
+  }
+
+  interface AcademicWorkflowTemplate {
+    id: string
+    title: string
+    prompt: string
+    steps: AcademicWorkflowStep[]
+  }
+
+  interface AcademicWorkflowStageMeta {
+    index: number
+    kind: 'core' | 'plugin'
+    name: string
+    displayName: string
+    args?: string
+    status: 'pending' | 'running' | 'done' | 'error'
+    contentPreview?: string
+    error?: string
+    startedAt?: string
+    completedAt?: string
+  }
+
+  interface AcademicWorkflowTaskData {
+    type: 'academic-workflow'
+    enabled: true
+    status: 'pending' | 'running' | 'done' | 'error'
+    currentStage: number
+    totalStages: number
+    modelName?: string
+    steps: AcademicWorkflowStageMeta[]
+    lastUpdatedAt: string
   }
 
   interface ConversationParams {
