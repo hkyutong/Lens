@@ -14,6 +14,13 @@ type StarterTask = {
   selectorGroups: string[][]
 }
 
+type StarterLane = {
+  id: string
+  title: string
+  desc: string
+  taskIds: string[]
+}
+
 interface Emit {
   (ev: 'import'): void
 }
@@ -96,7 +103,29 @@ const activeWorkflowLabel = computed(() =>
   )
 )
 
-const featuredStarterTasks = computed(() => starterTasks.value.slice(0, 4))
+const starterTaskMap = computed(() => new Map(starterTasks.value.map(task => [task.id, task])))
+const starterLanes = computed<StarterLane[]>(() => [
+  {
+    id: 'reading',
+    title: t('lens.workspace.readingTitle'),
+    desc: t('lens.workspace.readingDesc'),
+    taskIds: ['paper-summary', 'pdf-deep-read'],
+  },
+  {
+    id: 'writing',
+    title: t('lens.workspace.writingTitle'),
+    desc: t('lens.workspace.writingDesc'),
+    taskIds: ['english-polish', 'latex-translation'],
+  },
+])
+const resolvedStarterLanes = computed(() =>
+  starterLanes.value.map(lane => ({
+    ...lane,
+    tasks: lane.taskIds
+      .map(taskId => starterTaskMap.value.get(taskId))
+      .filter((task): task is StarterTask => Boolean(task)),
+  }))
+)
 const workflowTemplates = computed(() => buildAcademicWorkflowTemplates())
 const featuredWorkflowTemplates = computed(() => workflowTemplates.value.slice(0, 2))
 const getWorkflowTemplateStepLabel = (step: Chat.AcademicWorkflowStep) =>
@@ -250,89 +279,113 @@ const startCustomWorkflow = async () => {
         </div>
       </div>
 
-      <div class="workspace-home__section">
-        <div class="workspace-home__section-head">
-          <div class="workspace-home__section-title">{{ t('lens.workspace.starterTitle') }}</div>
-        </div>
-        <div class="workspace-home__starter-list">
-          <button
-            v-for="item in featuredStarterTasks"
-            :key="item.id"
-            type="button"
-            class="workspace-home__starter-row"
-            :class="{ 'workspace-home__starter-row--active': isStarterActive(item) }"
-            @click="applyStarterTask(item)"
-          >
-            <span class="workspace-home__starter-copy">
-              <strong class="workspace-home__starter-name">{{ item.title }}</strong>
-              <span class="workspace-home__starter-meta">
-                {{ item.mode === 'plugin' ? t('lens.academicPanel.pluginLabel') : t('lens.academicPanel.coreLabel') }}
-              </span>
-            </span>
-            <span class="workspace-home__starter-arrow">{{ t('lens.workspace.starterAction') }}</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="workspace-home__section workspace-home__section--workflow">
-        <div class="workspace-home__section-head">
-          <div class="workspace-home__section-title">{{ t('lens.workflow.templateTitle') }}</div>
-        </div>
-        <button
-          type="button"
-          class="workspace-home__workflow-row workspace-home__workflow-row--builder"
-          :class="{ 'workspace-home__workflow-row--locked': !isWorkflowMemberAvailable }"
-          @click="startCustomWorkflow"
-        >
-          <span class="workspace-home__workflow-row-index">+</span>
-          <span class="workspace-home__workflow-row-copy">
-            <strong class="workspace-home__workflow-row-title">{{ t('lens.workflow.customBuilderTitle') }}</strong>
-            <span class="workspace-home__workflow-row-track">
-              <span class="workspace-home__workflow-row-step">{{ t('lens.workflow.customBuilderDesc') }}</span>
-            </span>
-          </span>
-          <span class="workspace-home__workflow-row-side">
-            <small v-if="!isWorkflowMemberAvailable">{{ t('lens.workflow.memberOnly') }}</small>
-            <span v-else class="workspace-home__workflow-row-action">
-              {{ t('lens.workflow.customBuilderAction') }}
-            </span>
-          </span>
-        </button>
-        <div class="workspace-home__workflow-list">
-          <button
-            v-for="(item, index) in featuredWorkflowTemplates"
-            :key="item.id"
-            type="button"
-            class="workspace-home__workflow-row"
-            :class="{ 'workspace-home__workflow-row--locked': !isWorkflowMemberAvailable }"
-            @click="applyWorkflowTemplate(item)"
-          >
-            <span class="workspace-home__workflow-row-index">{{ `0${index + 1}` }}</span>
-            <span class="workspace-home__workflow-row-copy">
-              <strong class="workspace-home__workflow-row-title">{{ item.title }}</strong>
-              <span class="workspace-home__workflow-row-track">
-                <template v-for="(step, stepIndex) in item.steps" :key="`${item.id}-${stepIndex}`">
-                  <span class="workspace-home__workflow-row-step">
-                    {{ getWorkflowTemplateStepLabel(step) }}
-                  </span>
-                  <span
-                    v-if="stepIndex < item.steps.length - 1"
-                    class="workspace-home__workflow-row-separator"
+      <div class="workspace-home__board">
+        <div class="workspace-home__main-column">
+          <div class="workspace-home__section">
+            <div class="workspace-home__section-head workspace-home__section-head--stacked">
+              <div class="workspace-home__section-title">{{ t('lens.workspace.starterTitle') }}</div>
+              <div class="workspace-home__section-note">{{ t('lens.workspace.starterDesc') }}</div>
+            </div>
+            <div class="workspace-home__lane-list">
+              <section
+                v-for="lane in resolvedStarterLanes"
+                :key="lane.id"
+                class="workspace-home__lane"
+              >
+                <div class="workspace-home__lane-head">
+                  <strong class="workspace-home__lane-title">{{ lane.title }}</strong>
+                  <span class="workspace-home__lane-desc">{{ lane.desc }}</span>
+                </div>
+                <div class="workspace-home__starter-list">
+                  <button
+                    v-for="item in lane.tasks"
+                    :key="item.id"
+                    type="button"
+                    class="workspace-home__starter-row"
+                    :class="{ 'workspace-home__starter-row--active': isStarterActive(item) }"
+                    @click="applyStarterTask(item)"
                   >
-                    →
-                  </span>
-                </template>
-              </span>
-            </span>
-            <span class="workspace-home__workflow-row-side">
-              <small>{{ item.steps.length }}{{ t('lens.workflow.stepsShort') }}</small>
-              <small v-if="!isWorkflowMemberAvailable">{{ t('lens.workflow.memberOnly') }}</small>
-              <span v-else class="workspace-home__workflow-row-action">
-                {{ t('lens.workspace.workflowTemplateAction') }}
-              </span>
-            </span>
-          </button>
+                    <span class="workspace-home__starter-copy">
+                      <strong class="workspace-home__starter-name">{{ item.title }}</strong>
+                      <span class="workspace-home__starter-meta">
+                        {{
+                          item.mode === 'plugin'
+                            ? t('lens.academicPanel.pluginLabel')
+                            : t('lens.academicPanel.coreLabel')
+                        }}
+                      </span>
+                    </span>
+                    <span class="workspace-home__starter-arrow">{{ t('lens.workspace.starterAction') }}</span>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
+
+        <aside class="workspace-home__side-column">
+          <div class="workspace-home__section workspace-home__section--workflow">
+            <div class="workspace-home__section-head workspace-home__section-head--stacked">
+              <div class="workspace-home__section-title">{{ t('lens.workflow.templateTitle') }}</div>
+              <div class="workspace-home__section-note">{{ t('lens.workspace.workflowSectionDesc') }}</div>
+            </div>
+            <button
+              type="button"
+              class="workspace-home__workflow-row workspace-home__workflow-row--builder"
+              :class="{ 'workspace-home__workflow-row--locked': !isWorkflowMemberAvailable }"
+              @click="startCustomWorkflow"
+            >
+              <span class="workspace-home__workflow-row-index">+</span>
+              <span class="workspace-home__workflow-row-copy">
+                <strong class="workspace-home__workflow-row-title">{{ t('lens.workflow.customBuilderTitle') }}</strong>
+                <span class="workspace-home__workflow-row-track">
+                  <span class="workspace-home__workflow-row-step">{{ t('lens.workflow.customBuilderDesc') }}</span>
+                </span>
+              </span>
+              <span class="workspace-home__workflow-row-side">
+                <small v-if="!isWorkflowMemberAvailable">{{ t('lens.workflow.memberOnly') }}</small>
+                <span v-else class="workspace-home__workflow-row-action">
+                  {{ t('lens.workflow.customBuilderAction') }}
+                </span>
+              </span>
+            </button>
+            <div class="workspace-home__workflow-list">
+              <button
+                v-for="(item, index) in featuredWorkflowTemplates"
+                :key="item.id"
+                type="button"
+                class="workspace-home__workflow-row"
+                :class="{ 'workspace-home__workflow-row--locked': !isWorkflowMemberAvailable }"
+                @click="applyWorkflowTemplate(item)"
+              >
+                <span class="workspace-home__workflow-row-index">{{ `0${index + 1}` }}</span>
+                <span class="workspace-home__workflow-row-copy">
+                  <strong class="workspace-home__workflow-row-title">{{ item.title }}</strong>
+                  <span class="workspace-home__workflow-row-track">
+                    <template v-for="(step, stepIndex) in item.steps" :key="`${item.id}-${stepIndex}`">
+                      <span class="workspace-home__workflow-row-step">
+                        {{ getWorkflowTemplateStepLabel(step) }}
+                      </span>
+                      <span
+                        v-if="stepIndex < item.steps.length - 1"
+                        class="workspace-home__workflow-row-separator"
+                      >
+                        →
+                      </span>
+                    </template>
+                  </span>
+                </span>
+                <span class="workspace-home__workflow-row-side">
+                  <small>{{ item.steps.length }}{{ t('lens.workflow.stepsShort') }}</small>
+                  <small v-if="!isWorkflowMemberAvailable">{{ t('lens.workflow.memberOnly') }}</small>
+                  <span v-else class="workspace-home__workflow-row-action">
+                    {{ t('lens.workspace.workflowTemplateAction') }}
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   </section>
@@ -347,14 +400,14 @@ const startCustomWorkflow = async () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding-top: 4px;
+  gap: 20px;
+  padding-top: 6px;
   animation: workspace-home-enter 320ms ease;
 }
 
 .workspace-home__hero {
   display: flex;
-  padding: 2px 0 12px;
+  padding: 2px 0 10px;
   border-bottom: 1px solid var(--grid-line);
 }
 
@@ -362,36 +415,37 @@ const startCustomWorkflow = async () => {
   display: flex;
   width: 100%;
   min-width: 0;
-  flex-direction: column;
-  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .workspace-home__headline {
-  max-width: 8ch;
+  max-width: 12ch;
   margin: 0;
-  font-size: clamp(28px, 4vw, 44px);
-  line-height: 1;
-  letter-spacing: -0.07em;
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
   color: var(--text-main);
 }
 
 .workspace-home__hero-actions {
   display: flex;
+  flex-shrink: 0;
   flex-wrap: wrap;
-  gap: 12px;
-  padding-top: 4px;
+  gap: 18px;
 }
 
 .workspace-home__hero-action {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
+  min-height: 32px;
   padding: 0;
   border: none;
   border-bottom: 1px solid transparent;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   transition:
     color 0.18s ease,
@@ -417,15 +471,33 @@ const startCustomWorkflow = async () => {
   border-color: var(--paper-border);
 }
 
+.workspace-home__board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.95fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.workspace-home__main-column,
+.workspace-home__side-column {
+  min-width: 0;
+}
+
 .workspace-home__section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .workspace-home__section-head {
   display: flex;
   align-items: center;
+}
+
+.workspace-home__section-head--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .workspace-home__section-title {
@@ -437,10 +509,45 @@ const startCustomWorkflow = async () => {
   color: var(--ink-faint);
 }
 
+.workspace-home__section-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-sub);
+}
+
+.workspace-home__lane-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.workspace-home__lane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workspace-home__lane-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.workspace-home__lane-title {
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--text-main);
+}
+
+.workspace-home__lane-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-sub);
+}
+
 .workspace-home__starter-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 18px;
+  display: flex;
+  flex-direction: column;
 }
 
 .workspace-home__workflow-list {
@@ -473,6 +580,10 @@ const startCustomWorkflow = async () => {
 }
 
 .workspace-home__starter-row--active {
+  color: var(--text-main);
+}
+
+.workspace-home__starter-row--active .workspace-home__starter-name {
   color: var(--text-main);
 }
 
@@ -555,17 +666,29 @@ const startCustomWorkflow = async () => {
     padding-top: 2px;
   }
 
+  .workspace-home__board {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .workspace-home__side-column {
+    border-top: 1px solid var(--grid-line);
+    padding-top: 20px;
+  }
+
   .workspace-home__headline {
     max-width: none;
     font-size: 30px;
   }
 
-  .workspace-home__hero-actions {
-    gap: 10px 14px;
+  .workspace-home__hero-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 
-  .workspace-home__starter-list {
-    grid-template-columns: 1fr;
+  .workspace-home__hero-actions {
+    gap: 10px 14px;
   }
 
   .workspace-home__starter-row,
