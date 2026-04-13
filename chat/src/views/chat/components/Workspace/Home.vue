@@ -231,9 +231,6 @@ const startCustomWorkflow = async () => {
       <div class="workspace-home__hero">
         <div class="workspace-home__hero-main">
           <h2 class="workspace-home__headline">{{ t('lens.workspace.heroTitle') }}</h2>
-          <div class="workspace-home__intro-desc">
-            {{ t('lens.workspace.introDesc') }}
-          </div>
           <div class="workspace-home__hero-actions">
             <button
               type="button"
@@ -376,14 +373,6 @@ const startCustomWorkflow = async () => {
   line-height: 1;
   letter-spacing: -0.07em;
   color: var(--text-main);
-}
-
-.workspace-home__intro-desc {
-  max-width: 30ch;
-  margin-top: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-sub);
 }
 
 .workspace-home__hero-actions {

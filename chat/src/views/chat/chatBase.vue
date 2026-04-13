@@ -226,10 +226,6 @@ const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
 const isStreaming = computed(() => Boolean(chatStore.isStreamIn))
 const chatHistoryHasMore = computed(() => Boolean(chatStore.chatHistoryHasMore))
 const chatHistoryLoading = computed(() => Boolean(chatStore.chatHistoryLoading))
-const activeGroupTitle = computed(() => activeGroupInfo.value?.title || '未命名项目')
-const workspaceTitle = computed(() =>
-  dataSources.value.length || activeAppId.value ? activeGroupTitle.value : t('lens.header.projects')
-)
 
 // 使用watch监听activeGroupInfo的变化
 const configObj = computed(() => {
@@ -2475,14 +2471,6 @@ provide('tryParseJson', tryParseJson)
                               <button class="btn-pill btn-sm" @click="clearLastError">
                                 知道了
                               </button>
-                            </div>
-
-                            <div class="mb-4 flex flex-col gap-2 pb-1">
-                              <div class="min-w-0">
-                                <div class="text-[33px] font-medium tracking-[-0.03em] text-[var(--text-main)]">
-                                  {{ workspaceTitle }}
-                                </div>
-                              </div>
                             </div>
 
                             <template v-if="!renderDataSources.length && !activeAppId">

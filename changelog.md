@@ -1,5 +1,15 @@
 # 更新日志
 
+## 0.0.47 (2026-04-14)
+- 继续收掉空主页文案噪音：`chat/src/views/chat/chatBase.vue` 已移除空主页内容区的大字“你的项目”，`chat/src/views/chat/components/Workspace/Home.vue` 已移除说明句“直接提问，或先导入资料。”，首页进一步只保留真正可操作的标题与入口。
+- 补充同步纪律：后续默认按“完成改动后立即同步”的方式执行，至少包含本地校验、更新 `memory.md / sop.md / changelog.md`、推送 GitHub，以及按影响范围同步服务器；前端展示层改动默认热同步 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。
+- 本地验证：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`。影响范围：仅聊天空主页与首页 Hero 展示，以及后续交付流程约束。回滚方式：恢复 `chatBase.vue`、`Workspace/Home.vue` 与记录文件到本次改动前版本即可。
+
+## 0.0.46 (2026-04-14)
+- 继续收掉空主页冗余标题：`chat/src/views/chat/chatBase.vue` 已移除空主页内容区里那行大字“你的项目”，保留顶部菜单标题，不再让空主页出现重复层级标题。
+- 继续压缩首页 Hero：`chat/src/views/chat/components/Workspace/Home.vue` 已移除说明句“直接提问，或先导入资料。”，首屏只保留主标题和两个直接动作，减少无效解释。
+- 本地验证：已重新执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`。影响范围：仅聊天空主页与首页 Hero 展示。回滚方式：恢复 `chatBase.vue` 与 `Workspace/Home.vue` 到本次改动前版本即可。
+
 ## 0.0.45 (2026-04-14)
 - 已完成一次头部标题修正同步：`chat/src/views/chat/components/Header/index.vue` 已恢复顶部菜单区的“你的项目”标题，并再次同步到 GitHub 与线上静态资源，确保顶部菜单标题存在、聊天主区大字不回退。
 - 本次发布仍采用前端静态零停机方式：仅更新 `chat/dist` 到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，保持“静态资源先传、`index.html` 最后覆盖、不删除旧哈希文件”的切换策略，不动学术服务目录。
