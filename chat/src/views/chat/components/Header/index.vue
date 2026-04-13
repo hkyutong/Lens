@@ -93,7 +93,15 @@ function closeAppList() {
               </span>
             </div>
           </div>
-          <div v-else class="flex flex-1 items-center"></div>
+          <div v-else class="flex h-full flex-1 items-center ele-drag">
+            <div class="min-w-0">
+              <div
+                class="truncate text-[14px] font-medium tracking-[-0.01em] text-[var(--text-main)]"
+              >
+                {{ t('lens.header.projects') }}
+              </div>
+            </div>
+          </div>
 
           <div class="flex items-center gap-2">
             <template v-if="showWorkspaceActions">

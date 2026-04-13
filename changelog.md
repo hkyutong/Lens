@@ -1,5 +1,15 @@
 # 更新日志
 
+## 0.0.45 (2026-04-14)
+- 已完成一次头部标题修正同步：`chat/src/views/chat/components/Header/index.vue` 已恢复顶部菜单区的“你的项目”标题，并再次同步到 GitHub 与线上静态资源，确保顶部菜单标题存在、聊天主区大字不回退。
+- 本次发布仍采用前端静态零停机方式：仅更新 `chat/dist` 到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，保持“静态资源先传、`index.html` 最后覆盖、不删除旧哈希文件”的切换策略，不动学术服务目录。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过。影响范围：仅聊天工作区顶部头部与对应前端构建产物。回滚方式：恢复 `Header/index.vue` 与 `public/chat` 到上一版构建产物即可。
+
+## 0.0.44 (2026-04-14)
+- 修正工作区标题误删：`chat/src/views/chat/components/Header/index.vue` 已恢复顶部菜单区的“你的项目”标题，继续保留可拖拽头部区域和右侧操作按钮，不再把顶部菜单标题和聊天主区的大标题混为一处。
+- 保持聊天主区收口不回退：本次没有恢复 `chat/src/views/chat/chatBase.vue` 里的大字展示调整，只修正了头部菜单被误删的问题，避免聊天界面重新出现重复的大标题。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 通过。影响范围：仅工作区顶部头部展示。回滚方式：恢复 `Header/index.vue` 到本次改动前版本即可。
+
 ## 0.0.43 (2026-04-14)
 - 已完成一次代码与现网同步：当前工作树已提交为 `48afaab feat: refine workspace experience and service runtime` 并推送到 `origin/main`，GitHub 主线与本地当前代码状态已对齐。
 - 已完成一次整套服务器同步：本地 `service/dist/`、`admin/dist/`、`chat/dist/` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`，其中前端仍采用“静态资源先传、`index.html` 最后覆盖”的方式；同时把 `academic-4.0/shared_utils/fastapi_stream_server.py` 同步到 `/www/wwwroot/Lens/academic-4.0/shared_utils/`。
