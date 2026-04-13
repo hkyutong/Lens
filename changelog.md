@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.43 (2026-04-14)
+- 已完成一次代码与现网同步：当前工作树已提交为 `48afaab feat: refine workspace experience and service runtime` 并推送到 `origin/main`，GitHub 主线与本地当前代码状态已对齐。
+- 已完成一次整套服务器同步：本地 `service/dist/`、`admin/dist/`、`chat/dist/` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`，其中前端仍采用“静态资源先传、`index.html` 最后覆盖”的方式；同时把 `academic-4.0/shared_utils/fastapi_stream_server.py` 同步到 `/www/wwwroot/Lens/academic-4.0/shared_utils/`。
+- 已完成必要重载与回查：远端 `lens-academic` 已通过 PM2 重启为新进程 `4048524`，`9520` 主服务已重载为新进程 `4048630`；`https://lens.yutoai.net/` 当前返回 `HTTP 200`，`Last-Modified` 为 `2026-04-13 22:55:10 GMT`。影响范围：`AIWebQuickDeploy` 运行时代码、前后台静态资源与学术服务共享流式模块。回滚方式：回退 GitHub 到上一提交并把服务器 `AIWebQuickDeploy/dist`、`AIWebQuickDeploy/public` 与 `academic-4.0/shared_utils/fastapi_stream_server.py` 恢复到上一版产物后，再按相同方式重载服务。
+
 ## 0.0.42 (2026-04-14)
 - 继续压缩首页首屏高度：`chat/src/views/chat/components/Header/index.vue` 已移除顶部重复显示的“你的项目”标题；`chat/src/views/chat/components/Workspace/Home.vue` 已把首页收紧为 4 个高频能力入口和 2 个精选案例，并同步缩小 Hero 标题、分区标题与列表留白，尽量避免用户进入首页后还要下滑才能看完主要入口。
 - 保持目录式布局不回退：高频能力区继续保持无卡片的两列清单，编排区保持“能力编排”标题、一个“自己编排”入口和 2 个精选案例，仍然不回到卡片矩阵或多层容器。
