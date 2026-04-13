@@ -1,21 +1,16 @@
 import { fetchLoginByCodeAPI, fetchWxLoginRedirectAPI } from '@/api/user'
 import { useAuthStore } from '@/store'
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-
-// 全局作用域不使用useRouter()
-const authStore = useAuthStore()
-const isLogin = computed(() => authStore.isLogin)
 
 // 微信登录逻辑
 export async function loginByWechat() {
-  if (isLogin.value) {
+  const authStore = useAuthStore()
+  if (authStore.isLogin) {
     return
   }
 
   // 在函数内部使用useRouter
   const router = useRouter()
-  const authStore = useAuthStore()
 
   const urlParams = new URLSearchParams(window.location.search)
   // alert(urlParams);

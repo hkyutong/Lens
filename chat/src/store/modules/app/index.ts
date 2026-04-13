@@ -1,4 +1,4 @@
-import { store } from '@/store'
+import { store } from '@/store/pinia'
 import { defineStore } from 'pinia'
 import type { AppState, Language, Theme } from './helper'
 import { getLocalSetting, setLocalSetting } from './helper'
@@ -12,14 +12,20 @@ export const useAppStore = defineStore('app-store', {
     },
 
     setTheme(theme: Theme) {
-      const normalizedTheme: Theme = 'light'
+      const normalizedTheme: Theme = theme === 'dark' || theme === 'auto' ? theme : 'light'
+      const resolvedTheme =
+        normalizedTheme === 'auto'
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light'
+          : normalizedTheme
       localStorage.theme = normalizedTheme
       this.theme = normalizedTheme
-      window.theme = normalizedTheme
+      window.theme = resolvedTheme
       this.recordState()
-      document.documentElement.dataset.theme = normalizedTheme
-      document.documentElement.classList.remove('dark')
-      document.documentElement.style.colorScheme = normalizedTheme
+      document.documentElement.dataset.theme = resolvedTheme
+      document.documentElement.classList.toggle('dark', resolvedTheme === 'dark')
+      document.documentElement.style.colorScheme = resolvedTheme
     },
 
     setLanguage(language: Language) {

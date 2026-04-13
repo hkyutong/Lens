@@ -180,6 +180,9 @@ def setup_initial_com(initial_msg: UserInterfaceMsg):
     if initial_msg.llm_kwargs.get('temperature', None): com["llm_kwargs"]['temperature'] = initial_msg.llm_kwargs.get('temperature')
     if initial_msg.llm_kwargs.get('user_name', None):   com["llm_kwargs"]['user_name'] = initial_msg.llm_kwargs.get('user_name')
     if initial_msg.llm_kwargs.get('embed_model', None): com["llm_kwargs"]['embed_model'] = initial_msg.llm_kwargs.get('embed_model')
+    if 'api_key_passthrough' in initial_msg.llm_kwargs: com["llm_kwargs"]['api_key_passthrough'] = initial_msg.llm_kwargs.get('api_key_passthrough')
+    if initial_msg.llm_kwargs.get('api_endpoint', None): com["llm_kwargs"]['api_endpoint'] = initial_msg.llm_kwargs.get('api_endpoint')
+    if initial_msg.llm_kwargs.get('max_token', None):   com["llm_kwargs"]['max_token'] = initial_msg.llm_kwargs.get('max_token')
 
     initial_msg.chatbot_cookies.update({
         'api_key':      com["llm_kwargs"]['api_key'],
@@ -188,6 +191,9 @@ def setup_initial_com(initial_msg: UserInterfaceMsg):
         'embed_model':  com["llm_kwargs"]['embed_model'],
         'temperature':  com["llm_kwargs"]['temperature'],
         'user_name':    com["llm_kwargs"]['user_name'],
+        'api_key_passthrough': com["llm_kwargs"].get('api_key_passthrough'),
+        'api_endpoint': com["llm_kwargs"].get('api_endpoint'),
+        'max_token': com["llm_kwargs"].get('max_token'),
         'customize_fn_overwrite': {},
     })
     chatbot_with_cookies = ChatBotWithCookies(initial_msg.chatbot_cookies)
@@ -220,6 +226,8 @@ def _build_stream_context(req: AcademicStreamRequest):
     com = get_plugin_default_kwargs()
     llm_kwargs = com["llm_kwargs"]
     llm_kwargs.update(req.llm_kwargs or {})
+    if llm_kwargs.get("api_key") and llm_kwargs.get("api_endpoint"):
+        llm_kwargs["api_key_passthrough"] = True
     if not llm_kwargs.get("embed_model"):
         llm_kwargs["embed_model"] = get_conf("EMBEDDING_MODEL")
     user_name = req.user_name or llm_kwargs.get("user_name") or default_user_name
@@ -231,6 +239,9 @@ def _build_stream_context(req: AcademicStreamRequest):
         "embed_model": llm_kwargs.get("embed_model"),
         "temperature": llm_kwargs.get("temperature", 1.0),
         "user_name": user_name,
+        "api_key_passthrough": llm_kwargs.get("api_key_passthrough"),
+        "api_endpoint": llm_kwargs.get("api_endpoint"),
+        "max_token": llm_kwargs.get("max_token"),
         "customize_fn_overwrite": {},
     }
     chatbot = ChatBotWithCookies(cookies)
@@ -989,6 +1000,21 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
                     try:
                         from request_llms.bridge_all import predict
                         from crazy_functional import get_crazy_functions
+                        logger.info(
+                            json.dumps(
+                                {
+                                    "event": "academic_chat_process_payload",
+                                    "function": payload.function,
+                                    "chat_id": payload.chat_id,
+                                    "llm_model": str(payload.llm_kwargs.get("llm_model") or "").strip(),
+                                    "has_api_key": bool(str(payload.llm_kwargs.get("api_key") or "").strip()),
+                                    "api_key_passthrough": bool(payload.llm_kwargs.get("api_key_passthrough")),
+                                    "has_api_endpoint": bool(str(payload.llm_kwargs.get("api_endpoint") or "").strip()),
+                                    "has_max_token": payload.llm_kwargs.get("max_token") is not None,
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
                         ctx = _build_stream_context(payload)
                         main_input = ctx["main_input"]
                         llm_kwargs = ctx["llm_kwargs"]

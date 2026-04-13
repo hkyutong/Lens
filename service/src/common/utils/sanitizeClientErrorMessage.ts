@@ -7,6 +7,7 @@ const TIMEOUT_PATTERNS = [
 ];
 
 const INTERNAL_DETAIL_PATTERNS = [
+  /network error/i,
   /http(?:s)?connectionpool/i,
   /max retries exceeded/i,
   /proxy(?:error| settings?)?/i,
@@ -42,12 +43,13 @@ const fallbackByStatus = (statusCode: number, fallback: string) => {
 const containsSensitiveDetail = (message: string) =>
   INTERNAL_DETAIL_PATTERNS.some(pattern => pattern.test(message));
 
-const isTimeoutMessage = (message: string) => TIMEOUT_PATTERNS.some(pattern => pattern.test(message));
+const isTimeoutMessage = (message: string) =>
+  TIMEOUT_PATTERNS.some(pattern => pattern.test(message));
 
 export function sanitizeClientErrorMessage(
   rawMessage: string,
   statusCode = 0,
-  fallback = '请求失败，请稍后重试'
+  fallback = '请求失败，请稍后重试',
 ) {
   const message = String(rawMessage || '').trim();
   if (!message) return fallbackByStatus(statusCode, fallback);

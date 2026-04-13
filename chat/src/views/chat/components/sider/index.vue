@@ -159,7 +159,6 @@ function openSettings(tab?: number) {
                   {{ t('lens.sidebar.loginDesc') }}
                 </div>
               </div>
-              <div class="text-[var(--ink-faint)]">&gt;</div>
             </button>
           </div>
         </main>

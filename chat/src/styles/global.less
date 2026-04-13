@@ -9,6 +9,7 @@
   --surface-card: #ffffff;
   --surface-muted: #f6f6f6;
   --surface-panel: #fbfbfb;
+  --surface-elevated: rgba(255, 255, 255, 0.96);
   --paper-bg: #ffffff;
   --paper-border: #ececec;
   --text-main: #080808;
@@ -22,6 +23,9 @@
   --shadow-glow: none;
   --shadow-soft: none;
   --shadow-panel: none;
+  --modal-overlay: rgba(8, 8, 8, 0.22);
+  --dialog-bg: rgba(255, 255, 255, 0.96);
+  --dialog-shadow: 0 16px 48px rgba(8, 8, 8, 0.08);
 }
 
 html {
@@ -32,16 +36,19 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: #ffffff;
+  background: var(--bg-body);
   color: var(--text-main);
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease;
   // padding-bottom: constant(safe-area-inset-bottom);
   // padding-bottom: env(safe-area-inset-bottom);
   @apply text-gray-700 dark:text-gray-100 !important;
 }
 
-:root.dark body {
-  background: #0a0d12;
+html.dark body {
+  background: var(--bg-body);
 }
 
 #app {
@@ -71,7 +78,7 @@ html.dark .side-panel {
 }
 
 html.dark .side-panel .side-surface {
-  background: rgba(13, 16, 20, 0.98);
+  background: var(--bg-sidebar);
   border-right: none !important;
   box-shadow: none !important;
 }
@@ -221,42 +228,6 @@ html:not(.dark) .text-gray-500 {
 }
 
 .prism-shell {
-  --bg-body: #ffffff;
-  --bg-sidebar: #f2f2f2;
-  --surface-card: #ffffff;
-  --surface-muted: #f6f6f6;
-  --surface-panel: #fbfbfb;
-  --paper-bg: #ffffff;
-  --paper-border: #ececec;
-  --text-main: #080808;
-  --text-sub: #676767;
-  --ink-soft: #424242;
-  --ink-faint: #9b9b9b;
-  --border-color: #ececec;
-  --accent: #080808;
-  --accent-strong: #080808;
-  --accent-soft: rgba(8, 8, 8, 0.06);
-  --shadow-glow: none;
-  --shadow-soft: none;
-  --shadow-panel: none;
-  --btn-bg-primary: #080808;
-  --btn-bg-primary-hover: #2f2f2f;
-  --btn-bg-primary-active: #2f2f2f;
-  --btn-text-primary: #ffffff;
-  --btn-bg-secondary: #ffffff;
-  --btn-bg-secondary-hover: #f2f2f2;
-  --btn-bg-secondary-active: #ececec;
-  --btn-text-secondary: #080808;
-  --btn-border-primary: transparent;
-  --btn-border-primary-hover: transparent;
-  --btn-border-primary-active: transparent;
-  --btn-border-secondary: #ececec;
-  --btn-border-secondary-hover: #ececec;
-  --btn-border-secondary-active: #ececec;
-  --input-bg: #ffffff;
-  --input-border: #ececec;
-  --input-border-hover: #cdcdcd;
-  --input-border-focus: rgba(8, 8, 8, 0.12);
   background: var(--bg-body);
   color: var(--text-main);
 }
@@ -289,9 +260,9 @@ html:not(.dark) .text-gray-500 {
 }
 
 .prism-shell .chat-input-card {
-  background: #ffffff !important;
+  background: var(--surface-card) !important;
   border-color: var(--paper-border) !important;
-  box-shadow: 0 4px 16px rgba(8, 8, 8, 0.03) !important;
+  box-shadow: var(--shadow-soft) !important;
 }
 
 .prism-shell .btn {
@@ -321,12 +292,12 @@ html:not(.dark) .text-gray-500 {
 
 .prism-shell .desktop-research-rail {
   border-left: 1px solid var(--border-color);
-  background: #fcfcfc;
+  background: var(--surface-panel);
 }
 
 .prism-shell .desktop-research-rail > div {
   border-color: transparent !important;
-  background: #fcfcfc !important;
+  background: var(--surface-panel) !important;
   box-shadow: none !important;
 }
 

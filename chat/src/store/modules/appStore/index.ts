@@ -1,5 +1,5 @@
 import { fetchQueryMineAppsAPI } from '@/api/appStore'
-import { store } from '@/store'
+import { store } from '@/store/pinia'
 import { defineStore } from 'pinia'
 import type { AppStoreState } from './helper'
 

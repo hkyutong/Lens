@@ -143,10 +143,10 @@ export class UserBalanceService {
       type === 1
         ? 'memberModel3Count'
         : type === 2
-          ? 'memberModel4Count'
-          : type === 3
-            ? 'memberDrawMjCount'
-            : null;
+        ? 'memberModel4Count'
+        : type === 3
+        ? 'memberDrawMjCount'
+        : null;
     /* 非会员扣费key */
     const baseKey =
       type === 1 ? 'model3Count' : type === 2 ? 'model4Count' : type === 3 ? 'drawMjCount' : null;

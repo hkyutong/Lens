@@ -5,6 +5,7 @@ import { useAppStore, useGlobalStoreWithOut } from '@/store'
 import { Close, ExpandLeft } from '@icon-park/vue-next'
 import { computed, inject } from 'vue'
 import LanguageSelector from '../LanguageSelector.vue'
+import ThemeToggle from '../ThemeToggle.vue'
 
 interface ExternalLink {
   icon?: string
@@ -92,17 +93,13 @@ function closeAppList() {
               </span>
             </div>
           </div>
-          <div v-else class="flex flex-1 items-center">
-            <div
-              v-if="showWorkspaceActions"
-              class="text-[14px] font-medium text-[var(--text-main)]"
-            >
-              {{ t('lens.header.projects') }}
-            </div>
-          </div>
+          <div v-else class="flex flex-1 items-center"></div>
 
           <div class="flex items-center gap-2">
-            <LanguageSelector v-if="showWorkspaceActions" />
+            <template v-if="showWorkspaceActions">
+              <ThemeToggle />
+              <LanguageSelector />
+            </template>
             <template v-if="showResearchControlsButton">
               <button
                 type="button"

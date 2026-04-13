@@ -2,9 +2,9 @@
   <transition name="modal-fade">
     <div
       v-if="props.visible"
-      class="fixed inset-0 z-[9000] flex items-center justify-center bg-[rgba(8,8,8,0.22)] backdrop-blur-[2px]"
+      class="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--modal-overlay)] backdrop-blur-[10px]"
     >
-      <div class="w-full h-full bg-[var(--surface-card)] flex flex-col overflow-hidden">
+      <div class="w-full h-full bg-[var(--dialog-bg)] flex flex-col overflow-hidden">
         <!-- 标题部分 -->
         <div class="flex justify-between items-center mb-2 flex-shrink-0 px-4 pt-4 pb-2">
           <div class="flex items-center">

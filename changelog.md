@@ -1,5 +1,72 @@
 # 更新日志
 
+## 0.0.42 (2026-04-14)
+- 继续压缩首页首屏高度：`chat/src/views/chat/components/Header/index.vue` 已移除顶部重复显示的“你的项目”标题；`chat/src/views/chat/components/Workspace/Home.vue` 已把首页收紧为 4 个高频能力入口和 2 个精选案例，并同步缩小 Hero 标题、分区标题与列表留白，尽量避免用户进入首页后还要下滑才能看完主要入口。
+- 保持目录式布局不回退：高频能力区继续保持无卡片的两列清单，编排区保持“能力编排”标题、一个“自己编排”入口和 2 个精选案例，仍然不回到卡片矩阵或多层容器。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过。影响范围：仅首页与工作区头部前端展示，不涉及服务端和现网进程。回滚方式：恢复 `Header/index.vue` 与 `Workspace/Home.vue` 到本次改动前版本即可。
+
+## 0.0.41 (2026-04-14)
+- 继续收口首页目录结构：`chat/src/views/chat/components/Workspace/Home.vue` 已把编排区标题从“科研流水线”改成更准确的“能力编排”，避免与第一条“自己编排”入口形成重复语义；主页当前保留“自己编排”入口和 3 个精选案例，不再扩成整组模板展示。
+- 同步补齐列表式入口文案：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 已补充 `starterAction` 并把编排区标题统一调整为“能力编排 / Capability Flows / 機能編成 / 能力編排 / 기능 조합”。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过；并用 Playwright 打开本地 `vite preview` 进行真实页面核对，确认首页当前是目录式而非卡片式布局。影响范围：仅首页前端结构与多语言文案，不涉及服务端和现网进程。回滚方式：恢复 `Workspace/Home.vue` 与上述 locale 文件到本次改动前版本即可。
+
+## 0.0.40 (2026-04-13)
+- 继续收口首页视觉语言：`chat/src/views/chat/components/Workspace/Home.vue` 已把高频能力区和编排区从圆角小容器/小卡片改成分隔线式线性清单，Hero 也去掉了容器感，首屏整体改成更接近研究目录页的结构。
+- 编排区只保留一个“自己编排”入口和三个案例：主页不再同时铺一整组模板项，避免信息拥挤；对应 `chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 新增 `starterAction` 文案键，用于新的列表式高频能力入口。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过。影响范围：仅首页前端结构与多语言文案，不涉及服务端和现网进程。回滚方式：恢复 `Workspace/Home.vue` 与上述 locale 文件到本次改动前版本即可。
+
+## 0.0.39 (2026-04-13)
+- 已完成主页简化版本的二次线上同步：把本地最新 `chat/dist` 再次同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，继续采用“先同步除 `index.html` 外的静态资源、最后覆盖 `index.html`、不删除旧哈希文件”的零停机方式发布，不影响已打开页面和缓存中的旧哈希资源。
+- 同步后线上核查通过：`https://lens.yutoai.net/` 继续返回 `HTTP 200`，响应头 `Last-Modified` 已更新为 `2026-04-12 20:36:09 GMT`（对应服务器东八区 `2026-04-13 04:36:09`），说明这轮首页简化版前端资源已经切到线上。
+- 现网进程未受影响：服务器 `9520` 仍由原有进程 `2081187` 持续监听，`38000` 仍由原有进程 `81539` 持续监听，本轮未重启 Node 服务或学术服务。影响范围仅限 `AIWebQuickDeploy/public/chat` 下的前端静态资源。回滚方式：把 `public/chat` 恢复到上一版构建产物即可，因旧哈希文件仍保留，短期回滚风险较低。
+
+## 0.0.38 (2026-04-13)
+- 继续简化首页介绍密度：`chat/src/views/chat/components/Workspace/Home.vue` 已移除 Hero 右侧状态/步骤说明区，并把首页保留为“主标题 + 极短说明 + 两个主动作 + 高频能力 + 科研流水线”的单层结构，避免首屏出现多段解释让用户抓不住重点。
+- 同步压缩首页文案：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 已把 Hero 标题、简介、高频能力标题和科研流水线编排文案压短，只保留动作导向表达，不再做流程教学式描述。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过。影响范围：仅首页前端展示与多语言文案，不涉及服务端、数据库和现网进程。回滚方式：恢复 `Workspace/Home.vue` 与上述 locale 文件到本次改动前版本即可。
+
+## 0.0.37 (2026-04-13)
+- 继续收口首页首屏：`chat/src/views/chat/components/Workspace/Home.vue` 已移除 Hero 顶部的 `Lens Research Desk` 眉标，避免首屏在品牌层之外再出现一层多余标题。
+- 重做“能力编排”模板区展示：原先两列小卡片已改为单列流水线清单，每条模板现在按“编号 + 标题 + 步骤链路 + 侧边动作/状态”展示，更接近研究操作列表而不是卡片拼贴；对应多语言文案 `chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 新增了“使用这条链路”动作文案，并移除了不再使用的 `heroEyebrow` 文案。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过；并用现有 Playwright + 共享 Chromium 对首页进行了截图验收，确认首屏不再显示 `Lens Research Desk`，且科研流水线模板区已经从小卡片改为列表式展示。影响范围：仅 `Workspace/Home.vue` 与对应 locale 文案，不涉及服务端和现网进程。回滚方式：恢复 `Workspace/Home.vue` 与上述 locale 文件到本次改动前版本即可。
+
+## 0.0.36 (2026-04-13)
+- 已完成一次线上零停机静态同步：把本地 `chat/dist` 同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，采用“先同步除 `index.html` 外的全部静态资源、最后覆盖 `index.html`、不删除旧哈希文件”的方式上线本轮前端改动，避免现有用户会话因旧资源丢失而中断。
+- 同步前已做只读核查：`https://lens.yutoai.net/` 同步前返回 `HTTP 200`；服务器 `9520` 当前由原有 `node dist/main.js`（PID `2081187`）提供服务，`38000` 仍为原有 `lens-academic` Python 进程（PID `81539`）。本轮未重启任何现网进程，也未触碰学术服务目录。
+- 同步后线上校验通过：`https://lens.yutoai.net/` 继续返回 `HTTP 200`，响应头 `Last-Modified` 已更新到本次前端构建时间；影响范围仅限 `AIWebQuickDeploy/public/chat` 下的前端静态资源。回滚方式：如需回退，可把服务器 `public/chat` 恢复为上一次前端构建产物；由于本轮未删除旧哈希文件，短期回滚与缓存兼容风险较低。
+
+## 0.0.35 (2026-04-13)
+- 继续收敛右侧学术控制面板空态与深色模式：`chat/src/views/chat/components/Footer/components/AcademicPanel.vue` 现在在概览区补上动态引导句，把“单能力 / 能力编排”切换做成更均衡的双列按钮，并为“常用能力 / 常用工具”在无候选项时提供显式空态说明，避免深色模式下出现大片留白让人误判为面板异常。
+- 同步补齐多语言空态文案：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 新增控制面板空态说明与“可直接开始 / 再展开更多设置”的引导文案，保持五种语言下的状态表达一致。
+- 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过；并使用 `/Users/hkyutong/.codex/skills/playwright/scripts/playwright_cli.sh` 配合共享 Chromium 完成深色模式真实截图验收，确认右侧控制面板空态不再留白。影响范围：仅聊天前端右侧学术控制面板及多语言文案，不涉及服务端和部署。回滚方式：恢复 `AcademicPanel.vue` 与上述 locale 文件到本次改动前版本即可。
+
+## 0.0.34 (2026-04-13)
+- 补强浏览器运行时禁令：`sop.md`、`memory.md`、`changelog.md` 已再次明确 `/Users/hkyutong/Library/Caches/ms-playwright/chromium-1217/...` 属于全局共享 Playwright Chromium 运行时，严禁清理、删除、移动或替换，也不能当作普通缓存处理。
+- 继续收敛科研流水线反馈：`chat/src/views/chat/components/Message/Text/index.vue` 现在在折叠态增加进度条、已完成步数和当前/失败状态 chip，并补上步骤卡片的完成态/运行态/失败态样式，深色模式下也保持更稳定的对比度与状态辨识度；`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 同步新增对应文案。
+- 本地验证通过：直接使用项目现有二进制执行 `./chat/node_modules/.bin/vue-tsc --noEmit && echo TYPECHECK_OK` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过；期间未下载、安装或升级任何新依赖。影响范围：仅聊天消息区的科研流水线展示与多语言文案，不涉及服务端和部署链路。回滚方式：恢复 `Message/Text/index.vue` 与上述 locale 文件到本次改动前版本即可。
+
+## 0.0.33 (2026-04-13)
+- 收敛空状态首页首屏焦点：`chat/src/views/chat/components/Workspace/Home.vue` 从“说明 + 平铺按钮”重构为“主动作 Hero + 高频能力区 + 科研流水线区”的三段结构，补上真正可点击的“直接开始”和“导入资料”入口，并加入当前能力状态卡与三步引导，减少首屏入口堆叠导致的焦点分散。
+- 同步补齐首页文案多语言：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 新增首屏 Hero、三步引导和科研流水线说明文案，保持多语言界面完整。
+- 本地验证通过：直接使用项目现有二进制执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过；期间未下载、安装或升级任何新依赖。
+- 浏览器验收未完成但已受控停止：尝试用现有 Playwright 包装脚本做本地可视化验收时，包装层报“shared Playwright Chromium is missing”，但共享 Chromium 目录仍在本机缓存中；本轮仅做只读确认，没有下载新浏览器，也没有继续展开排障。影响范围：仅前端空状态首页和对应文案，不涉及接口、服务端或部署链路。风险：主要是尚未完成浏览器级目测验收。回滚方式：恢复 `Workspace/Home.vue` 与上述多语言文件到本次改动前版本即可。
+
+## 0.0.32 (2026-04-13)
+- 仅更新项目记录文件，不改业务代码：`sop.md`、`memory.md`、`changelog.md` 已同步补充长期工程约束，明确后续代码必须保持结构清楚、分层明确、命名准确、抽象克制、职责单一、可读可测可维护可扩展，禁止为了图快堆砌屎山代码或主动留下隐性技术债。
+- 安全规则进一步收紧：补充“敏感信息、隐私文件和内部资产默认只在本地安全环境处理，遵循最小暴露、最小权限、最小留痕；未经用户明确批准，禁止上传到服务器、GitHub、公开站点或第三方平台”的长期约束，并继续保留 `服务器.txt` 仅限本地使用的禁令。
+- 文档维护规则改为强制执行：以后每次任务完成后都要同步更新 `memory.md`、`sop.md`、`changelog.md`，其中 `memory.md` 负责当前状态快照，`changelog.md` 负责已发生事实，`sop.md` 负责稳定流程与长期规范。
+- 工具与清理规则补齐：确认可直接使用已安装的插件、skill、Playwright 与现有共享 Chromium；测试结束后主动关闭 Chromium；同时把“清理本地垃圾前必须先评估是否影响业务、调试、审计、回滚和维护”写入长期规则。影响范围仅限记录与流程约束，无运行时行为变化；风险较低。回滚方式：若未来确认这些规则描述需要调整，仅回退本次对 `sop.md`、`memory.md`、`changelog.md` 的文档修改即可。
+
+## 0.0.31 (2026-04-12)
+- 完成长会话抗卡死与上线验证收尾：`service/src/modules/chatLog/chatLog.service.ts` 正式固定 `/chatlog/chatList` 为分页接口，`chat/src/store/modules/chat/index.ts`、`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Message/index.vue`、`chat/src/views/chat/components/Message/Text/index.vue` 同步完成历史记录分页加载、顶部加载旧消息、可视区窗口化渲染与正文缓存，配合 `service/scripts/prod_gate_suite.mjs`、`service/scripts/full_smoke_test.mjs` 与 `service/playwright/long_chat_pressure.spec.cjs` 完成 500/1000 条长会话压测与发布闸门验证。
+- 完成学术上传架构收口：`service/src/modules/academic/academic.service.ts`、`academic-4.0/shared_utils/lens_storage.py`、`academic-4.0/shared_utils/fastapi_stream_server.py`、`academic-4.0/shared_utils/path_safety.py` 与 `academic-4.0/toolbox.py` 将当前“双存原件”改为“共享唯一原件 + academic 按需临时副本”，唯一原件继续保留在 `service/public/file/userFiles`；`private_upload` 只承载远程文件、压缩包和必须改写的学术工作目录，并新增 `24h` 临时副本、`6h` 解压目录、`7d` Lens 专用结果目录清理策略。
+- 完成科研流水线 v1：`service/src/modules/academic/academic.service.ts` 新增 `/academic/workflow-process`，支持最多 `1-3` 步的基础能力/研究工具串联执行；`chat/src/views/chat/components/Workspace/Home.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/components/Footer/components/AcademicPanel.vue`、`chat/src/views/chat/components/Message/Text/index.vue` 同步增加模板入口、自定义编排、步骤进度和最终结果展示，保持“单条用户消息 + 单条助手结果”的对话结构。
+- 前端交互继续从“工作台”收敛到“研究工具”：`chat/src/views/chat/components/Workspace/Home.vue`、`chat/src/views/chat/components/Message/Text/index.vue`、`chat/src/views/chat/components/Footer/index.vue` 与 `chat/src/views/chat/components/Footer/components/AcademicPanel.vue` 进一步简化首页引导、前置高频能力、弱化右侧辅助面板、压缩用户附件为短标签，并补齐多语言与深色模式细节，目标是保持 Lens 品牌视觉的同时恢复学术 GPT 式的高效交互。
+- 完成一次完整发布链路：代码已推送到 `origin/main`（提交 `32420b0 feat: add academic workflows and shared file runtime`），并同步部署到 `/www/wwwroot/Lens/AIWebQuickDeploy` 与 `/www/wwwroot/Lens/academic-4.0`；上线后完成登录、上传、学术调用、支付、科研流水线主链路 smoke，线上 `9520` 与 `38000` 核心接口返回正常。
+- 补齐服务器学术运行依赖：服务器 `academic-4.0/venv` 已补装 `openpyxl`、`scipy`、`rarfile`、`py7zr`、`python-pptx`、`pdfminer.six`、`markdownify`，解决 Excel、音频、压缩包、PPT、部分 PDF 与 Markdown 转换类功能的缺包风险。
+- 浏览器验收策略更新：Playwright 默认浏览器实测入口改为 `/Users/hkyutong/.codex/skills/playwright/scripts/playwright_cli.sh` 配合 `/Users/hkyutong/.codex/skills/playwright/.playwright/cli.config.json`，默认使用 Playwright 缓存中的 Chromium/Google Chrome for Testing，不再默认依赖本机 `Google Chrome.app`。
+- 已知风险：学术服务仍受第三方模型源稳定性影响，单个模型端点超时可能导致个别能力偶发失败；前端深色模式与科研流水线观感仍在持续打磨中。回滚方式：恢复 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat` 与 `/www/wwwroot/Lens/AIWebQuickDeploy/dist` 到上一版发布包、恢复 `/www/wwwroot/Lens/academic-4.0` 到上一版同步内容，并重启 `Lens` 与 `lens-academic`。
+
 ## 0.0.30 (2026-03-19)
 - 将 `chat` 前端从“通用聊天页 + 学术按钮”重构为“学术工作台”：`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Workspace/Home.vue`、`chat/src/views/chat/components/Footer/index.vue`、`chat/src/views/chat/components/Footer/components/AcademicPanel.vue`、`chat/src/views/chat/components/sider/index.vue`、`chat/src/views/chat/components/sider/List.vue` 与 `chat/src/views/chat/components/sider/ListItem.vue` 现在改为左侧研究导航、中间研究会话区、右侧常驻研究控制栏的布局；空状态首页改成 Research Desk，输入区改成更偏论文/研究工作流的 composer，学术模式在 UI 上提升为“研究模式”主流程。
 - 统一学术工作台视觉系统：`chat/src/styles/global.less`、`chat/src/styles/themes/light.css` 与 `chat/src/styles/themes/dark.css` 新增 paper/surface/accent 等设计 token，整体改成更偏专业学术产品的浅色主视觉，同时保留暗色模式兼容。

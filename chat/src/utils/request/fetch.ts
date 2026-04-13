@@ -157,26 +157,34 @@ export const fetchStream = async (
   // 用于解码二进制数据
   const decoder = new TextDecoder()
 
-  // 循环读取数据
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    // 循环读取数据
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    // 解码二进制数据
-    const chunk = decoder.decode(value, { stream: true })
+      // 解码二进制数据
+      const chunk = decoder.decode(value, { stream: true })
 
-    // 追加到完整响应文本
-    responseText += chunk
+      // 追加到完整响应文本
+      responseText += chunk
 
-    // 调用进度回调
-    if (onProgress) {
-      try {
-        onProgress(chunk)
-      } catch (err) {
-        // 进度回调异常不应中断网络流，否则会导致后端流被意外中止。
-        console.error('[fetchStream] onProgress error:', err)
+      // 调用进度回调
+      if (onProgress) {
+        try {
+          onProgress(chunk)
+        } catch (err) {
+          // 进度回调异常不应中断网络流，否则会导致后端流被意外中止。
+          console.error('[fetchStream] onProgress error:', err)
+        }
       }
     }
+  } catch (error: any) {
+    throw new FetchError(
+      sanitizeUserFacingErrorMessage(error?.message || '', 0, '网络异常，请稍后重试'),
+      0,
+      'Network Error'
+    )
   }
 
   return responseText

@@ -2,10 +2,10 @@
   <transition name="modal-fade">
     <div
       v-if="props.visible"
-      class="fixed inset-0 z-[9000] flex items-center justify-center bg-[rgba(8,8,8,0.22)] backdrop-blur-[2px]"
+      class="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--modal-overlay)] backdrop-blur-[10px]"
     >
       <div
-        class="bg-[rgba(255,255,255,0.96)] rounded-2xl border border-[var(--border-color)] flex flex-col backdrop-blur shadow-[0_16px_48px_rgba(8,8,8,0.08)]"
+        class="bg-[var(--dialog-bg)] rounded-2xl border border-[var(--border-color)] flex flex-col backdrop-blur shadow-[var(--dialog-shadow)]"
         :class="isMobile ? 'w-full h-full rounded-none' : 'h-[82vh] w-full max-w-5xl p-5 mx-2'"
       >
         <!-- 标题部分 -->

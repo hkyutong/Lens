@@ -17,10 +17,9 @@ import {
 import { fetchModelBaseConfigAPI } from '@/api/models'
 import { fetchQueryPluginsAPI } from '@/api/plugin'
 import { fetchAcademicCoreFunctionList, fetchAcademicPluginList } from '@/api/academic'
-import { useGlobalStoreWithOut } from '@/store'
 import { getToken } from '../auth/helper'
+import { useGlobalStoreWithOut } from '../global'
 
-const useGlobalStore = useGlobalStoreWithOut()
 const CHAT_HISTORY_PAGE_SIZE = 80
 const CHAT_RENDER_WINDOW_LIMIT = 1200
 
@@ -543,7 +542,7 @@ export const useChatStore = defineStore('chat-store', {
     /* 变更对话组 */
     // 设置当前激活的对话组
     async setActiveGroup(uuid: number) {
-      useGlobalStore.updateShowAppListComponent(false)
+      useGlobalStoreWithOut().updateShowAppListComponent(false)
       // useGlobalStore.updateImagePreviewer(false)
       // this.chatList = [];
       this.active = uuid

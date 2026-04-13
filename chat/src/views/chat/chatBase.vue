@@ -3,7 +3,11 @@
 import { fetchChatAPIProcess } from '@/api'
 import { fetchAcademicChatAPIProcess, fetchAcademicWorkflowAPIProcess } from '@/api/academic'
 import { fetchQueryOneCatAPI } from '@/api/appStore'
-import { fetchDeleteGroupChatsAfterIdAPI, fetchSyncDisplayContentAPI } from '@/api/chatLog'
+import {
+  fetchDeleteGroupChatsAfterIdAPI,
+  fetchQuerySingleChatLogAPI,
+  fetchSyncDisplayContentAPI,
+} from '@/api/chatLog'
 import { openImageViewer } from '@/components/common/ImageViewer/useImageViewer'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
@@ -13,6 +17,10 @@ import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMes
 import { Close, DropDownList } from '@icon-park/vue-next'
 import DownSmall from '@icon-park/vue-next/es/icons/DownSmall'
 import type { AxiosProgressEvent } from 'axios'
+import AcademicPanel from './components/Footer/components/AcademicPanel.vue'
+import FooterComponent from './components/Footer/index.vue'
+import HeaderComponent from './components/Header/index.vue'
+import WorkspaceHome from './components/Workspace/Home.vue'
 // 导入DropdownMenu组件用于弹窗
 import { DropdownMenu } from '@/components/common/DropdownMenu'
 // 移除不再直接使用的异步组件导入
@@ -35,20 +43,14 @@ import { DIALOG_TABS } from '@/store/modules/global'
 import { useRoute } from 'vue-router'
 import { useChat } from './hooks/useChat'
 import { useScroll } from './hooks/useScroll'
+import Sider from './components/sider/index.vue'
 
-const Sider = defineAsyncComponent(() => import('./components/sider/index.vue'))
 const ExternalLinkComponent = defineAsyncComponent(
   () => import('./components/ExternalLink/index.vue')
 )
 const AppList = defineAsyncComponent(() => import('./components/AppList/index.vue'))
 const AppTips = defineAsyncComponent(() => import('./components/AppTips/index.vue'))
-const FooterComponent = defineAsyncComponent(() => import('./components/Footer/index.vue'))
-const HeaderComponent = defineAsyncComponent(() => import('./components/Header/index.vue'))
 const Message = defineAsyncComponent(() => import('./components/Message/index.vue'))
-const WorkspaceHome = defineAsyncComponent(() => import('./components/Workspace/Home.vue'))
-const AcademicPanel = defineAsyncComponent(
-  () => import('./components/Footer/components/AcademicPanel.vue')
-)
 
 // ============== 接口定义 ==============
 // Type for the form schema field
@@ -330,8 +332,50 @@ const pruneMessageHeightCache = (rows: Chat.Chat[]) => {
   )
 }
 
-const virtualMessageState = computed(() => {
+const isDisposableAssistantPlaceholder = (item: Chat.Chat | undefined) => {
+  if (!item || item.role !== 'assistant') return false
+  const hasVisiblePayload = Boolean(
+    String(item.content || '').trim() ||
+      String(item.reasoningText || '').trim() ||
+      String(item.fileVectorResult || '').trim() ||
+      String(item.networkSearchResult || '').trim()
+  )
+  if (hasVisiblePayload) return false
+  const isWorkflowShadow = Boolean(item.isWorkflowMessage || item.taskData)
+  if (!item.loading && !isWorkflowShadow) return false
+  return true
+}
+
+const hasRenderableAssistantState = (item: Chat.Chat | undefined) => {
+  if (!item || item.role !== 'assistant') return false
+  return (
+    Boolean(String(item.content || '').trim()) ||
+    Boolean(String(item.reasoningText || '').trim()) ||
+    Boolean(String(item.fileVectorResult || '').trim()) ||
+    Boolean(String(item.networkSearchResult || '').trim()) ||
+    Boolean(item.taskData) ||
+    Boolean(item.isWorkflowMessage) ||
+    Number(item.chatId || 0) > 0
+  )
+}
+
+const renderDataSources = computed(() => {
   const rows = dataSources.value || []
+  if (rows.length < 2) return rows
+  return rows.filter((item, index) => {
+    if (!isDisposableAssistantPlaceholder(item)) return true
+    for (let cursor = index + 1; cursor < rows.length; cursor += 1) {
+      const nextItem = rows[cursor]
+      if (!nextItem) break
+      if (nextItem.role === 'user') break
+      if (hasRenderableAssistantState(nextItem)) return false
+    }
+    return true
+  })
+})
+
+const virtualMessageState = computed(() => {
+  const rows = renderDataSources.value || []
   if (!rows.length) {
     return {
       visibleItems: [] as Array<{ item: Chat.Chat; index: number; key: string }>,
@@ -432,7 +476,7 @@ const scrollWorkspaceHomeToTop = async () => {
 watch(
   [() => dataSources.value.length, () => activeAppId.value],
   async ([messageCount, appId]) => {
-    pruneMessageHeightCache(dataSources.value)
+    pruneMessageHeightCache(renderDataSources.value)
     if (messageCount || appId) return
     await scrollWorkspaceHomeToTop()
   },
@@ -463,7 +507,7 @@ const backgroundStyle = computed(() => {
 watch(
   dataSources,
   val => {
-    pruneMessageHeightCache(val)
+    pruneMessageHeightCache(renderDataSources.value)
     syncMessageViewportMetrics()
     if (val.length === 0) return
     if (firstScroll.value) {
@@ -1485,6 +1529,8 @@ const onConversation = async ({
   let freezePolishTable = false
   let academicPluginRequestName = ''
   let academicCoreRequestName = ''
+  let recoveredAssistantStatus = 0
+  let workflowRecoveredFromServer = false
 
   const isPolishAcademicTask = () =>
     academicMode.value &&
@@ -1560,6 +1606,91 @@ const onConversation = async ({
     })
 
     scrollToBottomIfAtBottom()
+  }
+
+  const parseWorkflowProgress = (value: any) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.min(100, Math.round(value)))
+    }
+    const matched = String(value || '')
+      .trim()
+      .match(/^(\d{1,3})%$/)
+    if (!matched) return 0
+    const parsed = Number(matched[1])
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0
+  }
+
+  const recoverWorkflowAssistantFromServer = async () => {
+    const chatId = Number(assistantLogId || 0)
+    if (!chatId) return false
+    const retryDelays = [0, 450, 1200]
+    for (const delay of retryDelays) {
+      if (delay > 0) {
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+      try {
+        const latest = await fetchQuerySingleChatLogAPI<any>({ chatId })
+        if (!latest || typeof latest !== 'object') continue
+
+        const latestTaskData = latest.taskData ?? taskData
+        const latestContent = normalizeIncomingText(String(latest.content || ''), { trim: true })
+        const latestReasoning = normalizeIncomingText(String(latest.reasoningText || ''), {
+          trim: true,
+        })
+        const latestStatus = Number(latest.status || 0)
+        const latestWorkflowProgress =
+          parseWorkflowProgress(latest.progress) || workflowProgress || 0
+        const hasRenderablePayload = Boolean(
+          latestContent ||
+            latestReasoning ||
+            String(latest.fileVectorResult || '').trim() ||
+            String(latest.networkSearchResult || '').trim() ||
+            latestTaskData ||
+            latestStatus
+        )
+
+        if (!hasRenderablePayload) continue
+
+        workflowRecoveredFromServer = true
+        recoveredAssistantStatus = latestStatus
+        taskData = latestTaskData
+        workflowProgress = latestWorkflowProgress
+        displayedText = latestContent || displayedText
+        fullText = latestContent || fullText
+        displayedReasoningText = latestReasoning || displayedReasoningText
+        fullReasoningText = latestReasoning || fullReasoningText
+        networkSearchResult = String(latest.networkSearchResult || networkSearchResult || '')
+        fileVectorResult = String(latest.fileVectorResult || fileVectorResult || '')
+        tool_calls = String(latest.tool_calls || tool_calls || '')
+        promptReference = String(latest.promptReference || promptReference || '')
+        if (!lastError.value || latestStatus !== 4) {
+          lastError.value = ''
+        }
+
+        patchCurrentAssistant({
+          chatId,
+          content: displayedText,
+          reasoningText: displayedReasoningText,
+          networkSearchResult,
+          fileVectorResult,
+          tool_calls,
+          promptReference,
+          workflowProgress,
+          taskData,
+          isWorkflowMessage: true,
+          loading: false,
+          error: latestStatus === 4,
+          status: latestStatus || 3,
+          modelType: Number(latest.modelType || useModelType || 0),
+          modelName: String(latest.modelName || useModelName || ''),
+        })
+
+        return true
+      } catch (recoverError) {
+        console.error('[workflow] recover latest assistant failed:', recoverError)
+      }
+    }
+    return false
   }
 
   let ndjsonBuffer = ''
@@ -1865,38 +1996,44 @@ const onConversation = async ({
       errData?.message || errData?.error || error?.message || '请求失败，请稍后重试'
     const requestId = errData?.requestId || streamRequestId || ''
     const statusCode = Number(errData?.code || errData?.status || error?.response?.status || 0)
-    const errorMessage = toUserFacingRequestError(rawErrorMessage, statusCode)
-    lastError.value = errorMessage
-    lastErrorRequestId.value = enableDetailedErrorUi ? requestId : ''
-    const suffix = enableDetailedErrorUi && requestId ? `（请求ID: ${requestId}）` : ''
     console.error('[chat request failed]', {
       statusCode,
       rawErrorMessage,
       requestId,
       error,
     })
-    ms.error(`${errorMessage}${suffix}`)
-    triggerUpgradeIfNeeded(rawErrorMessage)
-    patchCurrentAssistant({
-      chatId: assistantLogId ? Number(assistantLogId) : undefined,
-      content: normalizeIncomingText(errorMessage, { trim: true }),
-      reasoningText: displayedReasoningText,
-      mcpToolUse,
-      networkSearchResult,
-      fileVectorResult,
-      tool_calls,
-      promptReference,
-      nodeType,
-      stepName,
-      workflowProgress,
-      taskData,
-      isWorkflowMessage: isWorkflowConversation,
-      error: true,
-      loading: false,
-      status: 4,
-      modelType: useModelType,
-      modelName: useModelName,
-    })
+    if (isWorkflowConversation && (await recoverWorkflowAssistantFromServer())) {
+      if (recoveredAssistantStatus === 4 && displayedText) {
+        lastError.value = displayedText
+      }
+    } else {
+      const errorMessage = toUserFacingRequestError(rawErrorMessage, statusCode)
+      lastError.value = errorMessage
+      lastErrorRequestId.value = enableDetailedErrorUi ? requestId : ''
+      const suffix = enableDetailedErrorUi && requestId ? `（请求ID: ${requestId}）` : ''
+      ms.error(`${errorMessage}${suffix}`)
+      triggerUpgradeIfNeeded(rawErrorMessage)
+      patchCurrentAssistant({
+        chatId: assistantLogId ? Number(assistantLogId) : undefined,
+        content: normalizeIncomingText(errorMessage, { trim: true }),
+        reasoningText: displayedReasoningText,
+        mcpToolUse,
+        networkSearchResult,
+        fileVectorResult,
+        tool_calls,
+        promptReference,
+        nodeType,
+        stepName,
+        workflowProgress,
+        taskData,
+        isWorkflowMessage: isWorkflowConversation,
+        error: true,
+        loading: false,
+        status: 4,
+        modelType: useModelType,
+        modelName: useModelName,
+      })
+    }
   } finally {
     if (isWorkflowConversation) {
       chatStore.setAcademicWorkflowRunning(false)
@@ -1961,12 +2098,16 @@ const onConversation = async ({
       }
     )
     const isErrorResponse =
-      Boolean(lastError.value) || (finishReason === 'error' && !visibleContent)
+      recoveredAssistantStatus === 4 ||
+      Boolean(lastError.value) ||
+      (finishReason === 'error' && !visibleContent)
     if (!visibleContent) {
       if (preservedVisible) {
         displayedText = preservedVisible
       } else if (fileVectorResult) {
         displayedText = '文件已生成，可在下方下载。'
+      } else if (workflowRecoveredFromServer && taskData?.type === 'academic-workflow') {
+        displayedText = ''
       } else if (isErrorResponse && lastError.value) {
         displayedText = normalizeIncomingText(lastError.value, { trim: true })
       } else if (academicMode.value) {
@@ -1976,6 +2117,30 @@ const onConversation = async ({
       }
     } else {
       displayedText = visibleContent
+    }
+
+    const workflowCompletedSuccessfully =
+      taskData?.type === 'academic-workflow' &&
+      String(taskData?.status || '').trim().toLowerCase() === 'done' &&
+      hasVisibleText(displayedText)
+    if (workflowCompletedSuccessfully) {
+      lastError.value = ''
+      recoveredAssistantStatus = 3
+    }
+
+    const shouldSanitizeAssistantFailure =
+      !workflowCompletedSuccessfully &&
+      (Boolean(lastError.value) ||
+        finishReason === 'error' ||
+        /api[_ -]?key|authorization|bearer\s+|network error|request timeout|read timed out|connect timeout|http(?:s)?connectionpool|max retries exceeded|socket hang up|connection aborted|econn(?:refused|reset)|enotfound|getaddrinfo/i.test(
+          String(displayedText || '')
+        ))
+    if (shouldSanitizeAssistantFailure) {
+      displayedText = sanitizeUserFacingErrorMessage(
+        displayedText,
+        finishReason === 'error' ? 502 : 0,
+        '学术能力暂时不可用，请稍后重试'
+      )
     }
 
     if (visibleReasoning) {
@@ -2010,7 +2175,7 @@ const onConversation = async ({
       isWorkflowMessage: isWorkflowConversation,
       loading: false,
       error: isErrorResponse,
-      status: isErrorResponse ? 4 : 3,
+      status: recoveredAssistantStatus || (isErrorResponse ? 4 : 3),
       modelType: useModelType,
       modelName: useModelName,
     })
@@ -2320,12 +2485,12 @@ provide('tryParseJson', tryParseJson)
                               </div>
                             </div>
 
-                            <template v-if="!dataSources.length && !activeAppId">
+                            <template v-if="!renderDataSources.length && !activeAppId">
                               <div class="workspace-surface">
                                 <WorkspaceHome @import="handleImportFiles" />
                               </div>
                             </template>
-                            <template v-if="!dataSources.length && activeAppId">
+                            <template v-if="!renderDataSources.length && activeAppId">
                               <div
                                 class="workspace-document flex items-center justify-center p-5"
                                 :class="[isMobile ? 'h-full' : 'min-h-[480px]']"
@@ -2333,7 +2498,7 @@ provide('tryParseJson', tryParseJson)
                                 <AppTips :appId="activeAppId" />
                               </div>
                             </template>
-                            <template v-if="dataSources.length">
+                            <template v-if="renderDataSources.length">
                               <div
                                 class="workspace-document mx-auto w-full max-w-[1048px] overflow-visible"
                               >
@@ -2394,7 +2559,7 @@ provide('tryParseJson', tryParseJson)
                                     :progress="entry.item.progress"
                                     :networkSearchResult="entry.item.networkSearchResult"
                                     :fileVectorResult="entry.item.fileVectorResult"
-                                    :isLast="entry.index === dataSources.length - 1"
+                                    :isLast="entry.index === renderDataSources.length - 1"
                                     :usingNetwork="entry.item.usingNetwork"
                                     :usingDeepThinking="false"
                                     :useFileSearch="entry.item.useFileSearch"
@@ -2436,7 +2601,7 @@ provide('tryParseJson', tryParseJson)
                         ref="footerRef"
                         :class="['z-20 relative', isMobile ? 'pb-safe' : '']"
                         @pause-request="pauseRequest"
-                        :dataSourcesLength="dataSources.length"
+                        :dataSourcesLength="renderDataSources.length"
                       >
                       </FooterComponent>
                     </div>
@@ -2479,13 +2644,13 @@ provide('tryParseJson', tryParseJson)
           <transition name="fade">
             <div
               v-if="isMobile && mobileAcademicPanelVisible"
-              class="fixed inset-0 z-[100] flex items-end bg-black/18 backdrop-blur-[1px]"
+              class="fixed inset-0 z-[100] flex items-end bg-[var(--modal-overlay)] backdrop-blur-[8px]"
               @click.self="closeMobileAcademicPanel"
             >
               <div
-                class="w-full rounded-t-[22px] bg-[var(--surface-panel)] px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 shadow-[0_-12px_40px_rgba(17,17,17,0.12)]"
+                class="w-full rounded-t-[22px] bg-[var(--surface-panel)] px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 shadow-[var(--shadow-panel)]"
               >
-                <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-black/10"></div>
+                <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[var(--accent-soft)]"></div>
                 <div class="max-h-[78vh] overflow-y-auto custom-scrollbar">
                   <AcademicPanel
                     :core-label="t('lens.academicPanel.coreLabel')"
@@ -2512,12 +2677,12 @@ provide('tryParseJson', tryParseJson)
       <!-- Backdrop and Centering Container -->
       <div
         v-if="showFormModal && selectedAppForModal"
-        class="fixed inset-0 z-[9000] flex items-center justify-center bg-gray-900 bg-opacity-50"
+        class="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--modal-overlay)] backdrop-blur-[10px]"
         @click.self="handleModalClose"
       >
         <!-- Modal Content Container -->
         <div
-          class="relative overflow-hidden bg-white dark:bg-gray-750 rounded-lg shadow-lg flex flex-col w-full max-w-3xl max-h-[85vh] m-4"
+          class="relative m-4 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-[var(--paper-border)] bg-[var(--dialog-bg)] shadow-[var(--dialog-shadow)]"
         >
           <!-- Background Image Layer -->
           <div
@@ -2528,14 +2693,14 @@ provide('tryParseJson', tryParseJson)
 
           <!-- Header -->
           <div
-            class="relative z-10 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-600 flex-shrink-0 bg-white/80 dark:bg-gray-750/80 backdrop-blur-sm"
+            class="relative z-10 flex flex-shrink-0 items-center justify-between border-b border-[var(--paper-border)] bg-[var(--surface-elevated)] p-4 backdrop-blur-sm"
           >
-            <span class="text-xl font-bold dark:text-white"
+            <span class="text-xl font-bold text-[var(--text-main)]"
               >预设配置: {{ selectedAppForModal?.name || '' }}</span
             >
             <button
               @click="handleModalClose"
-              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              class="p-1 text-[var(--ink-faint)] transition hover:text-[var(--text-main)]"
             >
               <Close size="18" />
             </button>
@@ -2543,7 +2708,7 @@ provide('tryParseJson', tryParseJson)
 
           <!-- Scrollable Content Area with native scroll -->
           <div
-            class="relative z-10 flex-grow overflow-y-auto p-4 bg-white/80 dark:bg-gray-750/80 backdrop-blur-sm"
+            class="relative z-10 flex-grow overflow-y-auto bg-[var(--surface-elevated)] p-4 backdrop-blur-sm"
           >
             <!-- Form Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -2551,7 +2716,7 @@ provide('tryParseJson', tryParseJson)
               <div v-for="(field, index) in currentFormSchema" :key="index">
                 <!-- Label -->
                 <label
-                  class="block text-sm font-medium leading-6 text-gray-900 dark:text-gray-300 mb-1"
+                  class="mb-1 block text-sm font-medium leading-6 text-[var(--text-main)]"
                 >
                   {{ field.title }}
                 </label>
@@ -2617,7 +2782,7 @@ provide('tryParseJson', tryParseJson)
 
           <!-- Footer with native buttons -->
           <div
-            class="relative z-10 flex justify-end p-4 border-t border-gray-200 dark:border-gray-600 flex-shrink-0 space-x-2 bg-white/80 dark:bg-gray-750/80 backdrop-blur-sm"
+            class="relative z-10 flex flex-shrink-0 justify-end space-x-2 border-t border-[var(--paper-border)] bg-[var(--surface-elevated)] p-4 backdrop-blur-sm"
           >
             <button
               type="button"

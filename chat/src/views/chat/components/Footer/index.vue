@@ -359,6 +359,18 @@ const selectedAcademicLabel = computed(() => {
   )
 })
 
+const selectedAcademicCompactLabel = computed(() => {
+  if (chatStore.academicWorkflowEnabled && (chatStore.academicWorkflowSteps || []).length) {
+    const labels = (chatStore.academicWorkflowSteps || [])
+      .map(step => getAcademicEntityDisplayLabel(step as any) || step?.displayName || step?.name || '')
+      .filter(Boolean)
+    if (!labels.length) return ''
+    if (labels.length === 1) return labels[0]
+    return `${labels[0]} · ${labels.length}${t('lens.workflow.stepsShort')}`
+  }
+  return selectedAcademicLabel.value
+})
+
 const createNewChatGroup = inject('createNewChatGroup', () =>
   Promise.resolve()
 ) as () => Promise<void>
@@ -1256,7 +1268,7 @@ defineExpose({
               v-for="app in searchResults"
               :key="app.id"
               @click="selectApp(app)"
-              class="flex w-full cursor-pointer items-center rounded-[18px] bg-white px-2 py-3 duration-150 ease-in-out hover:bg-[var(--surface-muted)] dark:bg-[var(--surface-panel)] dark:hover:bg-white/10"
+              class="flex w-full cursor-pointer items-center rounded-[18px] bg-[var(--surface-card)] px-2 py-3 duration-150 ease-in-out hover:bg-[var(--surface-muted)]"
             >
               <div
                 class="w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center overflow-hidden shadow-sm border border-gray-300 mr-3"
@@ -1269,16 +1281,16 @@ defineExpose({
                 />
                 <span
                   v-else
-                  class="w-8 h-8 text-base font-medium text-gray-700 dark:text-gray-400 rounded-full flex items-center justify-center dark:bg-gray-700"
+                  class="w-8 h-8 rounded-full flex items-center justify-center text-base font-medium text-[var(--text-sub)] bg-[var(--surface-muted)]"
                 >
                   {{ app.name.charAt(0) }}
                 </span>
               </div>
 
-              <h3 class="text-md font-bold text-[#080808] dark:text-white mr-3 flex-shrink-0">
+              <h3 class="text-md mr-3 flex-shrink-0 font-semibold text-[var(--text-main)]">
                 {{ app.name }}
               </h3>
-              <p class="text-base text-gray-400 dark:text-gray-400 flex-grow truncate">
+              <p class="flex-grow truncate text-base text-[var(--ink-faint)]">
                 {{ app.des }}
               </p>
             </div>
@@ -1322,15 +1334,15 @@ defineExpose({
                   class="mb-2"
                   :class="
                     isDragging
-                      ? 'text-[#080808] dark:text-white'
-                      : 'text-gray-500 dark:text-gray-400'
+                      ? 'text-[var(--text-main)]'
+                      : 'text-[var(--ink-faint)]'
                   "
                 />
                 <p
                   class="text-center text-sm"
                   :class="
                     isDragging
-                      ? 'text-[var(--text-main)] font-medium dark:text-white'
+                      ? 'text-[var(--text-main)] font-medium'
                       : 'text-[var(--ink-faint)]'
                   "
                 >
@@ -1346,7 +1358,7 @@ defineExpose({
               ref="inputRef"
               v-model="prompt"
               :placeholder="placeholderText"
-              class="custom-scrollbar flex w-full flex-grow items-center justify-center bg-transparent px-0 py-1.5 text-[14px] text-[var(--text-main)] placeholder:text-[var(--ink-faint)] resize-none transition-all duration-300 ease-in-out dark:text-white"
+              class="custom-scrollbar flex w-full flex-grow items-center justify-center bg-transparent px-0 py-1.5 text-[14px] text-[var(--text-main)] placeholder:text-[var(--ink-faint)] resize-none transition-all duration-300 ease-in-out"
               :disabled="!isLogin || isStreamIn"
               @input="autoResize"
               @keypress="handleEnter"
@@ -1371,10 +1383,11 @@ defineExpose({
                   <ModelSelector />
 
                   <span
-                    v-if="selectedAcademicLabel"
-                    class="btn-pill btn-sm pointer-events-none max-w-[8rem] shrink-0 truncate"
+                    v-if="selectedAcademicCompactLabel"
+                    class="btn-pill btn-sm pointer-events-none min-w-0 max-w-[10rem] shrink truncate text-[12px]"
+                    :title="selectedAcademicLabel"
                   >
-                    {{ selectedAcademicLabel }}
+                    {{ selectedAcademicCompactLabel }}
                   </span>
 
                   <div
@@ -1423,8 +1436,8 @@ defineExpose({
                   <button
                     v-if="!isStreamIn"
                     type="button"
-                    class="inline-flex items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f]"
-                    :class="{ 'cursor-not-allowed bg-[#424242] text-white/90 hover:bg-[#424242]': buttonDisabled }"
+                    class="inline-flex items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
+                    :class="{ 'cursor-not-allowed opacity-60 hover:bg-[var(--btn-bg-primary)]': buttonDisabled }"
                     :disabled="buttonDisabled"
                     @click="handleSubmit()"
                     aria-label="发送消息"
@@ -1436,7 +1449,7 @@ defineExpose({
                   <button
                     v-else
                     type="button"
-                    class="inline-flex items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f]"
+                    class="inline-flex items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
                     @click="handleStop()"
                     aria-label="停止生成"
                   >
@@ -1485,10 +1498,11 @@ defineExpose({
                 <ModelSelector />
 
                 <span
-                  v-if="selectedAcademicLabel"
-                  class="btn-pill btn-sm pointer-events-none max-w-[9rem] shrink-0 truncate"
+                  v-if="selectedAcademicCompactLabel"
+                  class="btn-pill btn-sm pointer-events-none min-w-0 max-w-[13rem] shrink truncate text-[12px]"
+                  :title="selectedAcademicLabel"
                 >
-                  {{ selectedAcademicLabel }}
+                  {{ selectedAcademicCompactLabel }}
                 </span>
 
                 <div
@@ -1572,8 +1586,8 @@ defineExpose({
                 <div v-if="!isStreamIn" class="group relative">
                   <button
                     type="button"
-                    class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 py-1.5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f]"
-                    :class="{ 'cursor-not-allowed bg-[#424242] text-white/90 hover:bg-[#424242]': buttonDisabled }"
+                    class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 py-1.5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
+                    :class="{ 'cursor-not-allowed opacity-60 hover:bg-[var(--btn-bg-primary)]': buttonDisabled }"
                     :disabled="buttonDisabled"
                     @click="handleSubmit()"
                     aria-label="发送消息"
@@ -1587,7 +1601,7 @@ defineExpose({
                 <div v-if="isStreamIn" class="group relative">
                   <button
                     type="button"
-                    class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 py-1.5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[#2f2f2f] dark:bg-white dark:text-[var(--bg-body)]"
+                    class="inline-flex min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 py-1.5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
                     @click="handleStop()"
                     aria-label="停止生成"
                   >

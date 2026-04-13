@@ -102,6 +102,7 @@ interface Props {
   chatId?: number | string
   index: number
   isUserMessage?: boolean
+  isWorkflowMessage?: boolean
   modelName?: string
   content?: string
   modelType?: number
@@ -2282,8 +2283,44 @@ const parsedWorkflowTask = computed<Chat.AcademicWorkflowTaskData | null>(() => 
   return null
 })
 
-const workflowStageList = computed(() => parsedWorkflowTask.value?.steps || [])
+const sanitizeWorkflowPreview = (value: string) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) return ''
+  const sanitized = sanitizeUserFacingErrorMessage(normalized, 0, '')
+  return sanitized === normalized ? normalized : ''
+}
+
+const normalizeWorkflowStageStatus = (status: string) => {
+  const normalized = String(status || '').trim().toLowerCase()
+  if (normalized === 'done') return 'done'
+  if (normalized === 'running') return 'running'
+  if (normalized === 'error') return 'error'
+  return 'pending'
+}
+
+const workflowStageList = computed(() =>
+  (parsedWorkflowTask.value?.steps || []).map((step, index) => {
+    const normalizedStatus = normalizeWorkflowStageStatus(String(step?.status || 'pending'))
+    const rawError = String(step?.error || '').trim()
+    const error =
+      parsedWorkflowTask.value?.status !== 'done' && normalizedStatus === 'error' && rawError
+        ? sanitizeUserFacingErrorMessage(rawError, 0, '步骤执行失败，请稍后重试')
+        : ''
+
+    return {
+      ...step,
+      index: Number(step?.index || index + 1),
+      displayName: String(step?.displayName || step?.name || '').trim() || `Step ${index + 1}`,
+      status: normalizedStatus,
+      contentPreview: sanitizeWorkflowPreview(String(step?.contentPreview || '')),
+      error,
+    }
+  })
+)
 const hasWorkflowStageList = computed(() => !props.isUserMessage && workflowStageList.value.length > 0)
+const showWorkflowCard = computed(
+  () => !props.isUserMessage && Boolean(props.isWorkflowMessage || hasWorkflowStageList.value)
+)
 const workflowCurrentStageLabel = computed(() => {
   const stageName = String(props.stepName || '').trim()
   if (stageName) return stageName
@@ -2312,8 +2349,36 @@ const workflowProgressValue = computed(() => {
   }
   const total = workflowStageList.value.length
   if (!total) return 0
+  const runningStage = workflowStageList.value.find(stage => stage.status === 'running')
+  if (runningStage) {
+    const stageBase = Math.round(((Math.max(runningStage.index, 1) - 1) / total) * 100)
+    return Math.min(99, stageBase + 5)
+  }
   const doneCount = workflowStageList.value.filter(stage => stage.status === 'done').length
   return Math.round((doneCount / total) * 100)
+})
+
+const workflowStageStats = computed(() => {
+  const total = workflowStageList.value.length
+  const done = workflowStageList.value.filter(stage => stage.status === 'done').length
+  const running = workflowStageList.value.find(stage => stage.status === 'running') || null
+  const error = workflowStageList.value.find(stage => stage.status === 'error') || null
+  const pending = Math.max(0, total - done - (running ? 1 : 0) - (error ? 1 : 0))
+  return { total, done, pending, running, error }
+})
+
+const workflowMetricChips = computed(() => {
+  const { total, done, pending, running, error } = workflowStageStats.value
+  if (!total) return [] as string[]
+  const chips = [t('lens.message.workflowMetricDone', { done, total })]
+  if (running?.displayName) {
+    chips.push(t('lens.message.workflowMetricCurrent', { name: running.displayName }))
+  } else if (error?.displayName) {
+    chips.push(t('lens.message.workflowMetricError', { name: error.displayName }))
+  } else if (pending > 0) {
+    chips.push(t('lens.message.workflowMetricPending', { count: pending }))
+  }
+  return chips
 })
 
 const workflowStatusText = (status: string) => {
@@ -2322,6 +2387,13 @@ const workflowStatusText = (status: string) => {
   if (status === 'error') return t('lens.message.workflowStatusError')
   return t('lens.message.workflowStatusPending')
 }
+
+const workflowStateClass = (status: string) => ({
+  'workspace-record__workflow-state--done': status === 'done',
+  'workspace-record__workflow-state--running': status === 'running',
+  'workspace-record__workflow-state--error': status === 'error',
+  'workspace-record__workflow-state--pending': status === 'pending',
+})
 const recordStatusClass = computed(() => ({
   'workspace-record__status--active': props.loading,
   'workspace-record__status--user': props.isUserMessage,
@@ -2707,7 +2779,7 @@ function openSingleImagePreview(src: string) {
       'workspace-record--loading': loading,
     }"
   >
-    <header v-if="!isUserMessage" class="workspace-record__header">
+    <header v-if="!isUserMessage && !showWorkflowCard" class="workspace-record__header">
       <div class="workspace-record__header-main">
         <div class="workspace-record__eyebrow">{{ recordEyebrow }}</div>
         <div v-if="recordTitle || recordStatus" class="workspace-record__title-row">
@@ -2725,11 +2797,11 @@ function openSingleImagePreview(src: string) {
       </div>
     </header>
 
-    <div v-if="hasWorkflowStageList" class="workspace-record__section workspace-record__workflow">
+    <div v-if="showWorkflowCard" class="workspace-record__section workspace-record__workflow">
       <button
         type="button"
         class="workspace-record__toggle"
-        @click="showWorkflowDetails = !showWorkflowDetails"
+        @click="hasWorkflowStageList && (showWorkflowDetails = !showWorkflowDetails)"
       >
         <div class="workspace-record__toggle-copy">
           <ArrowRight theme="outline" size="18" class="flex" />
@@ -2738,10 +2810,28 @@ function openSingleImagePreview(src: string) {
         </div>
         <div class="workspace-record__toggle-icons">
           <span class="workspace-record__workflow-progress">{{ workflowProgressValue }}%</span>
-          <Down v-if="!showWorkflowDetails" size="18" class="flex" />
-          <Up v-else size="18" class="flex" />
+          <Down v-if="hasWorkflowStageList && !showWorkflowDetails" size="18" class="flex" />
+          <Up v-else-if="hasWorkflowStageList" size="18" class="flex" />
         </div>
       </button>
+
+      <div v-if="hasWorkflowStageList" class="workspace-record__workflow-overview">
+        <div class="workspace-record__workflow-meter" aria-hidden="true">
+          <div
+            class="workspace-record__workflow-meter-fill"
+            :style="{ width: `${workflowProgressValue}%` }"
+          />
+        </div>
+        <div class="workspace-record__workflow-metrics">
+          <span
+            v-for="chip in workflowMetricChips"
+            :key="chip"
+            class="workspace-record__workflow-metric-chip"
+          >
+            {{ chip }}
+          </span>
+        </div>
+      </div>
 
       <transition name="fold">
         <div v-if="showWorkflowDetails" class="workspace-record__workflow-list">
@@ -2750,6 +2840,7 @@ function openSingleImagePreview(src: string) {
             :key="stage.index"
             class="workspace-record__workflow-item"
             :class="{
+              'workspace-record__workflow-item--done': stage.status === 'done',
               'workspace-record__workflow-item--active': stage.status === 'running',
               'workspace-record__workflow-item--error': stage.status === 'error',
             }"
@@ -2758,7 +2849,7 @@ function openSingleImagePreview(src: string) {
               <span class="workspace-record__workflow-index">{{ stage.index }}</span>
               <div class="workspace-record__workflow-copy">
                 <div class="workspace-record__workflow-name">{{ stage.displayName }}</div>
-                <div class="workspace-record__workflow-state">
+                <div class="workspace-record__workflow-state" :class="workflowStateClass(stage.status)">
                   {{ workflowStatusText(stage.status) }}
                 </div>
               </div>
@@ -2769,7 +2860,10 @@ function openSingleImagePreview(src: string) {
             <div v-if="stage.contentPreview" class="workspace-record__workflow-preview">
               {{ stage.contentPreview }}
             </div>
-            <div v-if="stage.error" class="workspace-record__workflow-error">
+            <div
+              v-if="stage.status === 'error' && stage.error"
+              class="workspace-record__workflow-error"
+            >
               {{ stage.error }}
             </div>
           </div>
@@ -2777,7 +2871,7 @@ function openSingleImagePreview(src: string) {
       </transition>
     </div>
 
-    <div v-else class="workspace-record__request-head">
+    <div v-if="isUserMessage" class="workspace-record__request-head">
       <div class="workspace-record__eyebrow">{{ recordEyebrow }}</div>
       <div v-if="recordMeta.length" class="workspace-record__meta">
         <span v-for="item in recordMeta" :key="item" class="workspace-record__meta-chip">
@@ -3291,7 +3385,7 @@ pre.fold-leave-to {
   padding: 0.34rem 0.72rem;
   border-radius: 999px;
   border: 1px solid transparent;
-  background: #f2f2ee;
+  background: var(--surface-muted);
   color: var(--ink-soft);
   font-size: 0.72rem;
   line-height: 1;
@@ -3312,11 +3406,30 @@ pre.fold-leave-to {
   justify-content: space-between;
   gap: 0.8rem;
   padding: 0.72rem 0.9rem;
-  border: none;
+  border: 1px solid var(--paper-border);
   border-radius: 12px;
-  background: #f7f7f4;
+  background: var(--surface-card);
   color: var(--text-main);
   text-align: left;
+}
+
+.dark .workspace-record__toggle {
+  background: rgba(18, 24, 34, 0.92);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+html.dark .workspace-record__toggle {
+  background: rgba(18, 24, 34, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-main) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015) !important;
+}
+
+html.dark .workspace-record__toggle-copy,
+html.dark .workspace-record__toggle-icons,
+html.dark .workspace-record__toggle span {
+  color: var(--text-main);
 }
 
 .workspace-record__toggle-copy,
@@ -3339,8 +3452,8 @@ pre.fold-leave-to {
   align-items: flex-start;
   padding: 0.76rem 0.9rem;
   border-radius: 12px;
-  border: none;
-  background: #f7f7f4;
+  border: 1px solid var(--paper-border);
+  background: var(--surface-card);
   color: var(--ink-soft);
   text-decoration: none;
 }
@@ -3348,8 +3461,8 @@ pre.fold-leave-to {
 .workspace-record__source-item:hover,
 .workspace-record__download-chip:hover,
 .workspace-record__followup-btn:hover {
-  border-color: transparent;
-  background: #edede8;
+  border-color: var(--paper-border);
+  background: var(--surface-muted);
 }
 
 .workspace-record__source-index {
@@ -3491,13 +3604,29 @@ pre.fold-leave-to {
   padding: 0.52rem 0.72rem;
   border-radius: 999px;
   border: 1px solid var(--paper-border);
-  background: #ffffff;
+  background: var(--surface-card);
   box-shadow: none;
   text-align: left;
 }
 
+.dark .workspace-record__file-tag {
+  background: rgba(18, 24, 34, 0.96);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+html.dark .workspace-record__file-tag {
+  background: rgba(18, 24, 34, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015) !important;
+}
+
 .workspace-record__file-tag:hover {
   background: var(--surface-muted);
+}
+
+.dark .workspace-record__file-tag:hover,
+html.dark .workspace-record__file-tag:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 .workspace-record__file-badge {
@@ -3512,6 +3641,20 @@ pre.fold-leave-to {
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-main);
+}
+
+.dark .workspace-record__file-badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+html.dark .workspace-record__file-name,
+html.dark .workspace-record__file-badge {
+  color: var(--text-main) !important;
+}
+
+html.dark .workspace-record__file-badge {
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 .workspace-record__file-name {
@@ -3645,19 +3788,30 @@ pre.fold-leave-to {
   max-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  border: 1px solid #d6d9e0;
+  border: 1px solid var(--paper-border);
   border-radius: 12px;
   overflow: hidden;
   font-size: 0.97rem;
-  background: #ffffff;
+  background: var(--surface-card);
+}
+
+.dark .markdown-body table {
+  background: rgba(18, 24, 34, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .markdown-body table {
+  background: rgba(18, 24, 34, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .markdown-body th,
 .markdown-body td {
-  border-right: 1px solid #e6e8ee;
-  border-bottom: 1px solid #e6e8ee;
+  border-right: 1px solid var(--paper-border);
+  border-bottom: 1px solid var(--paper-border);
   padding: 10px 12px;
   vertical-align: top;
+  color: var(--text-main);
 }
 
 .markdown-body th:last-child,
@@ -3670,23 +3824,22 @@ pre.fold-leave-to {
 }
 
 .markdown-body thead th {
-  background: #f5f7fb;
+  background: var(--surface-muted);
   font-weight: 700;
 }
 
-.dark .markdown-body table {
-  border-color: #374151;
-  background: #111827;
-}
-
-.dark .markdown-body th,
-.dark .markdown-body td {
-  border-right-color: #374151;
-  border-bottom-color: #374151;
-}
-
 .dark .markdown-body thead th {
-  background: #1f2937;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+html.dark .markdown-body th,
+html.dark .markdown-body td {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-main) !important;
+}
+
+html.dark .markdown-body thead th {
+  background: rgba(255, 255, 255, 0.05) !important;
 }
 
 .markdown-body table {
@@ -3721,10 +3874,10 @@ pre.fold-leave-to {
   position: absolute;
   top: 0.15rem;
   right: 0.15rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--paper-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.95);
-  color: #111827;
+  background: color-mix(in srgb, var(--surface-card) 92%, transparent);
+  color: var(--text-main);
   font-size: 0.75rem;
   line-height: 1.1;
   padding: 0.28rem 0.6rem;
@@ -3745,36 +3898,53 @@ pre.fold-leave-to {
 }
 
 .markdown-body .mermaid-download-btn:hover {
-  background: #f9fafb;
+  background: var(--surface-muted);
 }
 
 .markdown-body .mermaid-download-btn:focus-visible {
-  outline: 2px solid #111827;
+  outline: 2px solid var(--text-main);
   outline-offset: 1px;
-}
-
-.dark .markdown-body .mermaid-download-btn {
-  border-color: #4b5563;
-  background: rgba(17, 24, 39, 0.95);
-  color: #f3f4f6;
-}
-
-.dark .markdown-body .mermaid-download-btn:hover {
-  background: #1f2937;
 }
 
 .markdown-body .mermaid-fallback {
   margin: 0;
   border-radius: 0.75rem;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border: 1px solid var(--paper-border);
+  background: var(--surface-card);
   padding: 0.75rem;
   white-space: pre-wrap;
+  color: var(--text-main);
 }
 
-.dark .markdown-body .mermaid-fallback {
-  border-color: #374151;
-  background: #111827;
+html.dark .markdown-body pre,
+html.dark .markdown-body code,
+html.dark .markdown-body .code-block-wrapper,
+html.dark .markdown-body .mermaid-fallback,
+html.dark .markdown-body blockquote,
+html.dark .workspace-record__markdown,
+html.dark .workspace-record__assistant {
+  background: rgba(18, 24, 34, 0.96) !important;
+  color: var(--text-main) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark .markdown-body,
+html.dark .markdown-body p,
+html.dark .markdown-body li,
+html.dark .markdown-body span,
+html.dark .markdown-body strong,
+html.dark .markdown-body em {
+  color: var(--text-main) !important;
+}
+
+html.dark .markdown-body a {
+  color: #bcd0ff !important;
+}
+
+html.dark .markdown-body .mermaid-download-btn {
+  background: rgba(18, 24, 34, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-main) !important;
 }
 
 /* 深色模式滚动条 */
@@ -3818,22 +3988,15 @@ pre.fold-leave-to {
   max-width: min(620px, 80vw);
   overflow: hidden;
   border-radius: 999px;
-  border: 1px solid #f2f2f2;
-  background: #ffffff;
+  border: 1px solid var(--paper-border);
+  background: var(--surface-card);
   box-shadow: 0 8px 18px rgba(8, 8, 8, 0.06);
-  color: #080808;
-}
-
-.dark .reasoning-pill {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: #080808;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
-  color: #ffffff;
+  color: var(--text-main);
 }
 
 .reasoning-pill--active {
-  border-color: #080808;
-  background: #ffffff;
+  border-color: var(--input-border-focus);
+  background: var(--surface-card);
   animation: reasoningPulse 1.9s ease-in-out infinite;
 }
 
@@ -3846,11 +4009,6 @@ pre.fold-leave-to {
   animation: reasoningSweep 3.2s linear infinite;
   opacity: 0.6;
   pointer-events: none;
-}
-
-.dark .reasoning-pill--active {
-  border-color: #ffffff;
-  background: #080808;
 }
 
 .dark .reasoning-pill--active::after {
@@ -3885,6 +4043,10 @@ pre.fold-leave-to {
   padding: 0;
 }
 
+html.dark .workspace-record__workflow {
+  color: var(--text-main);
+}
+
 .workspace-record__workflow-summary {
   color: var(--text-sub);
 }
@@ -3893,6 +4055,79 @@ pre.fold-leave-to {
   margin-right: 4px;
   font-size: 12px;
   color: var(--text-sub);
+}
+
+.dark .workspace-record__workflow-summary,
+.dark .workspace-record__workflow-progress {
+  color: rgba(238, 242, 248, 0.72);
+}
+
+html.dark .workspace-record__workflow-summary,
+html.dark .workspace-record__workflow-progress {
+  color: rgba(238, 242, 248, 0.78) !important;
+}
+
+.workspace-record__workflow-overview {
+  margin-top: 10px;
+  padding: 12px 12px 0;
+  border: 1px solid var(--paper-border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(8, 8, 8, 0.02) 0%, transparent 100%);
+}
+
+html.dark .workspace-record__workflow-overview {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%) !important;
+}
+
+.workspace-record__workflow-meter {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(8, 8, 8, 0.08);
+}
+
+html.dark .workspace-record__workflow-meter {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.workspace-record__workflow-meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #080808 0%, #5a7dff 100%);
+  transition: width 0.24s ease;
+}
+
+html.dark .workspace-record__workflow-meter-fill {
+  background: linear-gradient(90deg, #f3f6fb 0%, #7ea5ff 100%) !important;
+}
+
+.workspace-record__workflow-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.workspace-record__workflow-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(8, 8, 8, 0.08);
+  background: rgba(8, 8, 8, 0.04);
+  color: var(--text-sub);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+html.dark .workspace-record__workflow-metric-chip {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(238, 242, 248, 0.84) !important;
 }
 
 .workspace-record__workflow-list {
@@ -3905,18 +4140,54 @@ pre.fold-leave-to {
 .workspace-record__workflow-item {
   border: 1px solid var(--paper-border);
   border-radius: 16px;
-  background: #fff;
+  background: var(--surface-card);
   padding: 12px 14px;
 }
 
+.dark .workspace-record__workflow-item {
+  background: rgba(18, 24, 34, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .workspace-record__workflow-item {
+  background: rgba(18, 24, 34, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015) !important;
+}
+
+.workspace-record__workflow-item--done {
+  border-color: rgba(16, 185, 129, 0.16);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+html.dark .workspace-record__workflow-item--done {
+  border-color: rgba(52, 211, 153, 0.18) !important;
+  background: rgba(7, 56, 42, 0.4) !important;
+}
+
 .workspace-record__workflow-item--active {
-  border-color: rgba(8, 8, 8, 0.18);
+  border-color: var(--input-border-focus);
   background: var(--surface-muted);
 }
 
+.dark .workspace-record__workflow-item--active {
+  background: rgba(33, 43, 61, 0.94);
+  border-color: rgba(127, 180, 255, 0.3);
+}
+
+html.dark .workspace-record__workflow-item--active {
+  background: rgba(33, 43, 61, 0.94) !important;
+  border-color: rgba(127, 180, 255, 0.3) !important;
+}
+
 .workspace-record__workflow-item--error {
-  border-color: rgba(220, 38, 38, 0.18);
-  background: rgba(254, 242, 242, 0.9);
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+html.dark .workspace-record__workflow-item--error {
+  border-color: rgba(248, 113, 113, 0.28) !important;
+  background: rgba(120, 22, 28, 0.32) !important;
 }
 
 .workspace-record__workflow-step {
@@ -3932,8 +4203,8 @@ pre.fold-leave-to {
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  background: #080808;
-  color: #fff;
+  background: var(--accent);
+  color: var(--bg-body);
   font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
@@ -3960,7 +4231,65 @@ pre.fold-leave-to {
   line-height: 1.6;
 }
 
-.workspace-record__workflow-state,
+.workspace-record__workflow-state {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+
+.workspace-record__workflow-state--done {
+  border-color: rgba(16, 185, 129, 0.16);
+  background: rgba(16, 185, 129, 0.08);
+  color: #047857;
+}
+
+.workspace-record__workflow-state--running {
+  border-color: rgba(90, 125, 255, 0.18);
+  background: rgba(90, 125, 255, 0.08);
+  color: #335cff;
+}
+
+.workspace-record__workflow-state--pending {
+  border-color: rgba(8, 8, 8, 0.08);
+  background: rgba(8, 8, 8, 0.04);
+  color: var(--text-sub);
+}
+
+.workspace-record__workflow-state--error {
+  border-color: rgba(248, 113, 113, 0.18);
+  background: rgba(248, 113, 113, 0.08);
+  color: #dc2626;
+}
+
+html.dark .workspace-record__workflow-state--done {
+  border-color: rgba(52, 211, 153, 0.18) !important;
+  background: rgba(16, 185, 129, 0.14) !important;
+  color: #86efac !important;
+}
+
+html.dark .workspace-record__workflow-state--running {
+  border-color: rgba(127, 180, 255, 0.24) !important;
+  background: rgba(90, 125, 255, 0.18) !important;
+  color: #dbe7ff !important;
+}
+
+html.dark .workspace-record__workflow-state--pending {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(238, 242, 248, 0.72) !important;
+}
+
+html.dark .workspace-record__workflow-state--error {
+  border-color: rgba(248, 113, 113, 0.22) !important;
+  background: rgba(248, 113, 113, 0.12) !important;
+  color: #fecdd3 !important;
+}
+
 .workspace-record__workflow-extra,
 .workspace-record__workflow-preview {
   color: var(--text-sub);
@@ -3976,8 +4305,27 @@ pre.fold-leave-to {
   white-space: pre-wrap;
 }
 
+.dark .workspace-record__download-chip,
+.dark .workspace-record__followup-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+html.dark .workspace-record__download-chip,
+html.dark .workspace-record__followup-btn {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-main) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015) !important;
+}
+
 .workspace-record__workflow-error {
-  color: #dc2626;
+  color: #f87171;
+}
+
+html.dark .workspace-record__workflow-error {
+  color: #fda4af !important;
 }
 
 @keyframes reasoningPulse {

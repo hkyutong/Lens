@@ -1,7 +1,6 @@
-import { store } from '@/store'
+import { store } from '@/store/pinia'
 import { ss } from '@/utils/storage'
 import { defineStore } from 'pinia'
-import { useChatStore } from '../chat'
 import type { GlobalState } from './helper'
 
 // 定义对话框的索引常量，方便后续使用
@@ -150,8 +149,9 @@ export const useGlobalStore = defineStore('global-store', {
         this.initialImageIndex = initialIndex
         this.mjImageData = mjData || {}
         // 当图片预览器启用时，自动清空正在使用的插件
-        const chatStore = useChatStore()
-        chatStore.setUsingPlugin(null)
+        void import('../chat').then(({ useChatStore }) => {
+          useChatStore().setUsingPlugin(null)
+        })
       }
     },
 

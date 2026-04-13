@@ -26,8 +26,8 @@ export class AllExceptionsFilter<_T> implements ExceptionFilter {
       const rawMessage = Array.isArray(exceptionResponse?.message)
         ? exceptionResponse.message[0]
         : typeof exceptionResponse?.message === 'string'
-          ? exceptionResponse.message
-          : exception.message;
+        ? exceptionResponse.message
+        : exception.message;
       const safeMessage = sanitizeClientErrorMessage(rawMessage, status);
       const payload = {
         event: 'http_exception',

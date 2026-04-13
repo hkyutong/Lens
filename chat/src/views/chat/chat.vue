@@ -3,6 +3,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, provide, watch } from 'vue'
+import ChatBase from './chatBase.vue'
 
 const Login = defineAsyncComponent(() => import('@/components/Login/Login.vue'))
 const BadWordsDialog = defineAsyncComponent(() => import('@/components/Dialogs/BadWordsDialog.vue'))
@@ -10,7 +11,6 @@ const SettingsDialog = defineAsyncComponent(() => import('@/components/SettingsD
 const MobileSettingsDialog = defineAsyncComponent(
   () => import('@/components/MobileSettingsDialog.vue')
 )
-const ChatBase = defineAsyncComponent(() => import('./chatBase.vue'))
 
 const ms = message()
 const appStore = useAppStore()

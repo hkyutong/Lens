@@ -5,7 +5,7 @@ import { fetchGetInfo } from '@/api'
 import { fetchGetBalanceQueryAPI } from '@/api/balance'
 import { fetchQueryConfigAPI } from '@/api/config'
 import type { ResData } from '@/api/types'
-import { store } from '@/store'
+import { store } from '@/store/pinia'
 import type { AuthState, GlobalConfig, UserBalance, UserInfo } from './helper'
 import { defaultUserBalance, defaultUserInfo, getToken, removeToken, setToken } from './helper'
 

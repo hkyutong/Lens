@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import ChatView from '@/views/chat/chat.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
     name: 'Chat',
-    component: () => import('@/views/chat/chat.vue'),
+    component: ChatView,
   },
   {
     path: '/:catchAll(.*)',

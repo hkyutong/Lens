@@ -86,7 +86,7 @@ function changeLanguage(language: Language) {
 }
 
 .research-chip-button:hover {
-  border-color: #cdcdcd;
+  border-color: var(--input-border-hover);
   background: var(--surface-panel);
 }
 

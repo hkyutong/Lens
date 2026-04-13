@@ -380,8 +380,41 @@ const selectedKind = computed(() => {
   return t('lens.academicPanel.selectedKindPending')
 })
 
+const workflowOverviewChips = computed(() => {
+  const chips: string[] = []
+  chips.push(workflowEnabled.value ? t('lens.workflow.workflowMode') : t('lens.workflow.singleMode'))
+
+  if (workflowEnabled.value) {
+    chips.push(`${workflowSteps.value.length}/3 ${t('lens.workflow.stepsShort')}`)
+    if (workflowRunning.value) {
+      chips.push(t('lens.message.workflowStatusRunning'))
+    } else if (workflowSteps.value.length) {
+      chips.push(t('lens.message.workflowStatusPending'))
+    } else {
+      chips.push(t('lens.workflow.empty'))
+    }
+  } else if (activePlugin.value || activeCore.value) {
+    chips.push(t('lens.message.workflowStatusDone'))
+  } else {
+    chips.push(t('lens.message.workflowStatusPending'))
+  }
+
+  return chips
+})
+
 const quickPluginCandidates = computed(() => pluginList.value.slice(0, 4))
 const quickCoreCandidates = computed(() => coreFunctions.value.slice(0, 4))
+const panelGuidance = computed(() => {
+  if (workflowEnabled.value) {
+    if (!workflowMemberAvailable.value) return t('lens.workflow.memberOnly')
+    if (workflowSteps.value.length) return t('lens.workflow.currentChainDesc')
+    return t('lens.workflow.empty')
+  }
+  if (activePlugin.value || activeCore.value) {
+    return t('lens.academicPanel.selectedReadyHint')
+  }
+  return t('lens.academicPanel.workflowFallbackDesc')
+})
 
 const isPluginArgsEnabled = computed(() => Boolean(activePlugin.value))
 const pluginArgsPlaceholder = computed(() => {
@@ -521,6 +554,12 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
           <span>{{ t('lens.academicPanel.advancedInstruction') }}</span>
           <strong>{{ pluginArgs ? t('lens.academicPanel.filled') : t('lens.academicPanel.empty') }}</strong>
         </div>
+        <div class="research-controls__overview-chips">
+          <span v-for="chip in workflowOverviewChips" :key="chip" class="research-controls__overview-chip">
+            {{ chip }}
+          </span>
+        </div>
+        <p class="research-controls__overview-note">{{ panelGuidance }}</p>
       </div>
 
       <div class="research-controls__mode-switch">
@@ -575,7 +614,10 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 
       <div v-else class="research-controls__workflow-builder">
         <div class="research-controls__workflow-head">
-          <span>{{ t('lens.workflow.builderTitle') }}</span>
+          <div class="research-controls__workflow-head-copy">
+            <span>{{ t('lens.workflow.builderTitle') }}</span>
+            <small>{{ workflowSteps.length }}/3 {{ t('lens.workflow.stepsShort') }}</small>
+          </div>
           <button
             v-if="workflowSteps.length < 3"
             type="button"
@@ -625,6 +667,9 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
               </select>
             </div>
           </div>
+          <div v-if="step.displayName || step.name" class="research-controls__workflow-selection">
+            {{ step.displayName || step.name }}
+          </div>
           <textarea
             :value="step.args || ''"
             rows="2"
@@ -671,10 +716,10 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
         </button>
       </div>
 
-      <div class="research-controls__presets">
+      <div v-if="!workflowEnabled" class="research-controls__presets">
         <div class="research-controls__preset-block">
           <div class="research-controls__preset-title">{{ t('lens.academicPanel.quickCoreTitle') }}</div>
-          <div class="research-controls__chips">
+          <div v-if="quickCoreCandidates.length" class="research-controls__chips">
             <button
               v-for="core in quickCoreCandidates"
               :key="core.name"
@@ -685,10 +730,13 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
               {{ getCoreDisplayLabel(core) }}
             </button>
           </div>
+          <div v-else class="research-controls__preset-empty">
+            {{ t('lens.academicPanel.quickCoreEmpty') }}
+          </div>
         </div>
         <div class="research-controls__preset-block">
           <div class="research-controls__preset-title">{{ t('lens.academicPanel.quickToolTitle') }}</div>
-          <div class="research-controls__chips">
+          <div v-if="quickPluginCandidates.length" class="research-controls__chips">
             <button
               v-for="plugin in quickPluginCandidates"
               :key="plugin.name"
@@ -698,6 +746,9 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
             >
               {{ getPluginDisplayLabel(plugin) }}
             </button>
+          </div>
+          <div v-else class="research-controls__preset-empty">
+            {{ t('lens.academicPanel.quickToolEmpty') }}
           </div>
         </div>
       </div>
@@ -769,6 +820,8 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 
 .research-controls__mode-switch {
   gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .research-controls__header-actions {
@@ -818,6 +871,9 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 
 .research-controls__toggle,
 .research-controls__advanced {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 9999px;
   min-height: 42px;
   padding: 0 14px;
@@ -847,10 +903,37 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 0;
-  border-radius: 0;
-  border: none;
-  background: transparent;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--paper-border);
+  background: linear-gradient(180deg, var(--surface-card) 0%, var(--surface-panel) 100%);
+}
+
+.research-controls__overview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.research-controls__overview-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--paper-border);
+  background: var(--surface-muted);
+  color: var(--text-sub);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.research-controls__overview-note {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-sub);
 }
 
 .research-controls__workflow-builder {
@@ -867,6 +950,18 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   color: var(--text-main);
 }
 
+.research-controls__workflow-head-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.research-controls__workflow-head-copy small {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
 .research-controls__workflow-locked,
 .research-controls__workflow-card {
   display: flex;
@@ -874,7 +969,7 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   gap: 10px;
   border: 1px solid var(--paper-border);
   border-radius: 18px;
-  background: #fff;
+  background: linear-gradient(180deg, var(--surface-card) 0%, var(--surface-panel) 100%);
   padding: 12px;
 }
 
@@ -894,8 +989,8 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  background: #080808;
-  color: #fff;
+  background: var(--btn-bg-primary);
+  color: var(--btn-text-primary);
   font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
@@ -911,6 +1006,13 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 .research-controls__workflow-actions {
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.research-controls__workflow-selection {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .research-controls__overview-row {
@@ -978,12 +1080,12 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%23353740' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%23676767' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 14px;
   padding-right: 36px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
 }
 
 .research-controls__presets {
@@ -1002,6 +1104,16 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   margin-bottom: 10px;
 }
 
+.research-controls__preset-empty {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px dashed var(--paper-border);
+  background: var(--surface-muted);
+  color: var(--text-sub);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .research-controls__chip-btn {
   border-radius: 9999px;
   padding: 7px 10px;
@@ -1013,16 +1125,16 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 .research-controls__advanced:hover,
 .research-controls__close:hover {
   border-color: transparent;
-  background: #eceff3;
+  background: var(--surface-muted);
 }
 
 .research-controls__workflow,
 .research-controls__advanced-panel,
 .research-controls__idle {
-  padding: 4px 0 0;
-  border-radius: 0;
-  border: none;
-  background: transparent;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--paper-border);
+  background: linear-gradient(180deg, var(--surface-card) 0%, var(--surface-panel) 100%);
 }
 
 .research-controls__workflow-title {
@@ -1030,6 +1142,46 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   font-size: 13px;
   font-weight: 600;
   color: var(--text-main);
+}
+
+html.dark .research-controls__select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%2399A4B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  box-shadow: none;
+}
+
+html.dark .research-controls__overview,
+html.dark .research-controls__workflow-locked,
+html.dark .research-controls__workflow-card,
+html.dark .research-controls__workflow,
+html.dark .research-controls__advanced-panel,
+html.dark .research-controls__idle {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: linear-gradient(180deg, rgba(18, 24, 34, 0.94) 0%, rgba(14, 19, 28, 0.98) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015) !important;
+}
+
+html.dark .research-controls__overview-chip {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(238, 242, 248, 0.82) !important;
+}
+
+html.dark .research-controls__overview-note,
+html.dark .research-controls__preset-empty {
+  color: rgba(223, 229, 240, 0.74) !important;
+}
+
+html.dark .research-controls__preset-empty {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+html.dark .research-controls__toggle--active {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark .research-controls__workflow-selection {
+  color: rgba(238, 242, 248, 0.92) !important;
 }
 
 @media (max-width: 768px) {

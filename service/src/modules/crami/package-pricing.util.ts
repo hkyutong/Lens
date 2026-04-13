@@ -76,9 +76,7 @@ export function getPackageBillingOffer(pkg: any, billingCycle?: string): Package
   const originalTotal = roundPrice(basePrice * billingMonths);
   const annualDiscountRate = resolveAnnualDiscountRate(pkg);
   const price =
-    cycle === 'annual'
-      ? roundPrice(originalTotal * (1 - annualDiscountRate / 100))
-      : basePrice;
+    cycle === 'annual' ? roundPrice(originalTotal * (1 - annualDiscountRate / 100)) : basePrice;
   const discountRate =
     cycle === 'annual' && originalTotal > 0
       ? roundPrice(((originalTotal - price) / originalTotal) * 100)

@@ -41,3 +41,9 @@ gpt_log/
 public/file/
 test-zip/
 
+# Local-only ops / notes
+服务器.txt
+memory.md
+sop.md
+sop/
+output/

@@ -6,6 +6,7 @@
   --surface-card: #ffffff;
   --surface-muted: #f6f6f6;
   --surface-panel: #fbfbfb;
+  --surface-elevated: rgba(255, 255, 255, 0.96);
   --paper-bg: #ffffff;
   --paper-border: #ececec;
   --user-avatar-bg: #4a6cf7;
@@ -21,6 +22,9 @@
   --shadow-glow: 0 8px 20px rgba(15, 23, 42, 0.04);
   --shadow-soft: 0 2px 8px rgba(15, 23, 42, 0.03);
   --shadow-panel: 0 6px 16px rgba(15, 23, 42, 0.04);
+  --modal-overlay: rgba(8, 8, 8, 0.22);
+  --dialog-bg: rgba(255, 255, 255, 0.96);
+  --dialog-shadow: 0 16px 48px rgba(8, 8, 8, 0.08);
 
   /* Button Color */
   --btn-bg-primary: #080808;

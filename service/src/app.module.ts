@@ -61,12 +61,22 @@ import { VerificationModule } from './modules/verification/verification.module';
           index: false,
           fallthrough: true,
           redirect: false,
+          cacheControl: false,
           extensions: ['html', 'htm'],
           setHeaders: (_res, _path, _stat) => {
             if (_path.endsWith('.js')) {
               _res.set('Content-Type', 'application/javascript');
             } else if (_path.endsWith('.css')) {
               _res.set('Content-Type', 'text/css');
+            }
+            const normalizedPath = String(_path || '');
+            const isHashedAsset = /-[a-f0-9]{8,}\.(js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf)$/i.test(
+              normalizedPath,
+            );
+            if (isHashedAsset) {
+              _res.set('Cache-Control', 'public, max-age=31536000, immutable');
+            } else if (!normalizedPath.endsWith('.html')) {
+              _res.set('Cache-Control', 'public, max-age=14400');
             }
           },
         },

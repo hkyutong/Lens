@@ -307,63 +307,69 @@ onBeforeUnmount(() => {
 <template>
   <div class="overflow-y-auto custom-scrollbar p-2" :class="{ 'max-h-[70vh]': !isMobile }">
     <div
-      class="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4"
+      class="mb-4 rounded-[24px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-soft)]"
     >
       <!-- 卡片标题 -->
-      <div class="flex items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+      <div class="mb-4 flex items-center border-b border-[var(--paper-border)] pb-2">
         <button @click="backToMainView" class="btn-icon btn-md mr-2">
           <ArrowLeft size="18" />
         </button>
-        <div class="text-base font-semibold text-gray-900 dark:text-gray-100">
+        <div class="text-base font-semibold text-[var(--text-main)]">
           {{ t('pay.productPayment') }}
         </div>
       </div>
 
       <div class="p-2">
         <div
-          class="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 dark:border-gray-700 dark:bg-gray-900/40"
+          class="rounded-[22px] border border-[var(--paper-border)] bg-[var(--surface-panel)] p-4"
         >
           <div class="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <div class="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <div class="text-sm font-medium text-[var(--text-sub)]">
                 {{ t('pay.amountDue') }}
               </div>
               <div class="mt-1 flex items-baseline gap-2">
-                <span class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+                <span class="text-3xl font-semibold tracking-tight text-[var(--text-main)]">
                   ￥{{ formatCurrency(billingInfo?.price || 0) }}
                 </span>
-                <span class="text-sm text-gray-500 dark:text-gray-400">
+                <span class="text-sm text-[var(--text-sub)]">
                   {{ orderInfo.billingCycle === 'annual' ? '/年' : '/月' }}
                 </span>
               </div>
             </div>
             <div
-              class="rounded-full border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+              class="rounded-full border border-[var(--paper-border)] bg-[var(--surface-card)] px-3 py-1 text-sm font-medium text-[var(--text-main)]"
             >
               {{ orderInfo.billingCycle === 'annual' ? '按年支付' : '按月支付' }}
             </div>
           </div>
 
-          <div class="mt-4 grid gap-2 text-sm text-gray-600 dark:text-gray-300">
+          <div class="mt-4 grid gap-2 text-sm text-[var(--text-sub)]">
             <div class="flex justify-between gap-4">
               <span class="font-medium">套餐</span>
-              <span>{{ orderInfo.pkgInfo?.name }}</span>
+              <span class="text-[var(--text-main)]">{{ orderInfo.pkgInfo?.name }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <span class="font-medium">计费</span>
-              <span>{{ orderInfo.billingCycle === 'annual' ? '一年' : '一个月' }}</span>
+              <span class="text-[var(--text-main)]">{{
+                orderInfo.billingCycle === 'annual' ? '一年' : '一个月'
+              }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <span class="font-medium">有效期</span>
-              <span>{{ billingInfo?.days > 0 ? `${billingInfo.days} 天` : '长期权益' }}</span>
+              <span class="text-[var(--text-main)]">{{
+                billingInfo?.days > 0 ? `${billingInfo.days} 天` : '长期权益'
+              }}</span>
             </div>
             <div class="flex justify-between gap-4">
               <span class="font-medium">折合每月</span>
-              <span>￥{{ formatCurrency(billingInfo?.monthlyEquivalentPrice || 0) }}/月</span>
+              <span class="text-[var(--text-main)]"
+                >￥{{ formatCurrency(billingInfo?.monthlyEquivalentPrice || 0) }}/月</span
+              >
             </div>
             <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
               <span class="font-medium">按月购买</span>
-              <span class="text-gray-400 line-through dark:text-gray-500">
+              <span class="line-through text-[var(--ink-faint)]">
                 ￥{{ formatCurrency(billingInfo?.originalTotal || 0) }}/年
               </span>
             </div>
@@ -414,12 +420,12 @@ onBeforeUnmount(() => {
               <img
                 v-if="payType === 'wxpay' && !qrCodeloading && !isRedirectPay"
                 :src="wxpay"
-                class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-10 bg-[#fff]"
+                class="absolute left-1/2 top-1/2 w-10 -translate-x-1/2 -translate-y-1/2 bg-[var(--surface-card)]"
               />
               <img
                 v-if="payType === 'alipay' && !qrCodeloading && !isRedirectPay"
                 :src="alipay"
-                class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-10 bg-[#fff]"
+                class="absolute left-1/2 top-1/2 w-10 -translate-x-1/2 -translate-y-1/2 bg-[var(--surface-card)]"
               />
 
               <!-- wechat -->
@@ -434,13 +440,15 @@ onBeforeUnmount(() => {
                 class="flex flex-col"
                 :class="[isRedirectPay && isMobile ? 'ml-0' : 'ml-20']"
               >
-                <span class="mb-10 mt-5 text-base">{{ t('pay.siteAdminEnabledRedirect') }}</span>
+                <span class="mb-10 mt-5 text-base text-[var(--text-main)]">{{
+                  t('pay.siteAdminEnabledRedirect')
+                }}</span>
 
                 <!-- mapy 跳转支付 -->
                 <button
                   v-if="isRedirectPay"
                   type="button"
-                  class="inline-flex h-12 items-center justify-center rounded-[999px] bg-[#080808] px-8 text-[15px] font-medium text-white shadow-[0_8px_20px_rgba(8,8,8,0.12)] transition hover:bg-[#1b1b1b] disabled:cursor-not-allowed disabled:opacity-60"
+                  class="inline-flex h-12 items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-8 text-[15px] font-medium text-[var(--btn-text-primary)] shadow-[var(--shadow-soft)] transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="redirectloading"
                   @click="handleRedPay"
                 >
@@ -495,7 +503,7 @@ onBeforeUnmount(() => {
                 class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
               >
                 <img class="mr-2 inline-block h-4 object-contain" :src="payTypes[0].icon" alt="" />
-                <span class="block text-sm font-medium leading-6 text-gray-900 dark:text-gray-300">
+                <span class="block text-sm font-medium leading-6 text-[var(--text-main)]">
                   {{ payTypes[0].label }}
                 </span>
               </div>
@@ -506,11 +514,11 @@ onBeforeUnmount(() => {
                   name="payment-method"
                   :value="pay.value"
                   v-model="payType"
-                  class="h-4 w-4 border-gray-300 text-[#080808] focus:ring-black/20"
+                  class="h-4 w-4 border-[var(--paper-border)] text-[var(--text-main)] focus:ring-black/20"
                 />
                 <label
                   :for="pay.value"
-                  class="ml-3 block text-sm font-medium leading-6 text-gray-900 dark:text-gray-300"
+                  class="ml-3 block text-sm font-medium leading-6 text-[var(--text-main)]"
                 >
                   <img class="mr-2 inline-block h-4 object-contain" :src="pay.icon" alt="" />
                   {{ pay.label }}

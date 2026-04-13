@@ -113,6 +113,10 @@ ${routes
     }
 
     // 返回SPA入口文件
-    return res.sendFile(this.indexPath);
+    return res.sendFile(this.indexPath, {
+      headers: {
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+      },
+    });
   }
 }

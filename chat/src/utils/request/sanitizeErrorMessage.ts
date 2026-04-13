@@ -7,6 +7,7 @@ const TIMEOUT_PATTERNS = [
 ];
 
 const INTERNAL_DETAIL_PATTERNS = [
+  /network error/i,
   /http(?:s)?connectionpool/i,
   /max retries exceeded/i,
   /proxy(?:error| settings?)?/i,

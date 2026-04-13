@@ -82,9 +82,7 @@ export class ChatLogService {
   }
 
   private isMarkdownTableSeparator(line: string) {
-    return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(
-      String(line || ''),
-    );
+    return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*(?:\s*:?-{3,}:?\s*)?\|?\s*$/.test(String(line || ''));
   }
 
   private normalizeMarkdownTableRow(cells: string[], expectedColumns = 3) {
@@ -107,7 +105,9 @@ export class ChatLogService {
   }
 
   private getStablePolishRowKey(before: string, after: string) {
-    return `${this.normalizeLeakedPolishControlText(before)}\u0000${this.normalizeLeakedPolishControlText(after)}`;
+    return `${this.normalizeLeakedPolishControlText(
+      before,
+    )}\u0000${this.normalizeLeakedPolishControlText(after)}`;
   }
 
   private readonly stablePolishReasonCuePattern =
@@ -406,11 +406,18 @@ export class ChatLogService {
   private stripLeadingStablePolishOverflowBlock(text: string) {
     const lines = String(text || '').split('\n');
     let firstMeaningfulIndex = 0;
-    while (firstMeaningfulIndex < lines.length && !String(lines[firstMeaningfulIndex] || '').trim()) {
+    while (
+      firstMeaningfulIndex < lines.length &&
+      !String(lines[firstMeaningfulIndex] || '').trim()
+    ) {
       firstMeaningfulIndex += 1;
     }
     if (firstMeaningfulIndex >= lines.length) return '';
-    if (!String(lines[firstMeaningfulIndex] || '').trim().startsWith('|')) {
+    if (
+      !String(lines[firstMeaningfulIndex] || '')
+        .trim()
+        .startsWith('|')
+    ) {
       return String(text || '').trimStart();
     }
     let cursor = firstMeaningfulIndex;
@@ -443,7 +450,9 @@ export class ChatLogService {
     if (headerIndex < 0) return source;
 
     const maybeTitle = String(lines[headerIndex - 1] || '').trim();
-    const start = /^修改对照表[:：]?$/.test(maybeTitle) ? Math.max(0, headerIndex - 1) : headerIndex;
+    const start = /^修改对照表[:：]?$/.test(maybeTitle)
+      ? Math.max(0, headerIndex - 1)
+      : headerIndex;
     let end = headerIndex + 1;
     let separatorSeen = false;
     for (let idx = headerIndex + 1; idx < lines.length; idx += 1) {
@@ -526,9 +535,7 @@ export class ChatLogService {
       }
       if (
         /Markdown\s*表格/i.test(trimmed) &&
-        /(修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)/.test(
-          trimmed,
-        )
+        /(修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)/.test(trimmed)
       ) {
         continue;
       }
@@ -632,11 +639,15 @@ export class ChatLogService {
     if (!chatLog) return '未找到该消息';
     if (chatLog.role !== 'assistant') return '仅支持同步助手消息';
 
-    const content = String(body?.content || '').replace(/\r\n/g, '\n').trim();
+    const content = String(body?.content || '')
+      .replace(/\r\n/g, '\n')
+      .trim();
     const reasoningText =
       body?.reasoningText === undefined || body?.reasoningText === null
         ? undefined
-        : String(body.reasoningText || '').replace(/\r\n/g, '\n').trim();
+        : String(body.reasoningText || '')
+            .replace(/\r\n/g, '\n')
+            .trim();
     if (!content) return '展示内容不能为空';
 
     const nextContent = this.sanitizeDisplayText(content) || content;
@@ -1119,8 +1130,12 @@ export class ChatLogService {
       const rawReasoning = chatLog.reasoning_content || '';
       const sanitizedContent = this.sanitizeDisplayText(rawContent);
       const sanitizedReasoning = this.sanitizeDisplayText(rawReasoning);
-      const normalizedStoredContent = String(rawContent || '').replace(/\r\n/g, '\n').trim();
-      const normalizedStoredReasoning = String(rawReasoning || '').replace(/\r\n/g, '\n').trim();
+      const normalizedStoredContent = String(rawContent || '')
+        .replace(/\r\n/g, '\n')
+        .trim();
+      const normalizedStoredReasoning = String(rawReasoning || '')
+        .replace(/\r\n/g, '\n')
+        .trim();
       if (
         chatLog.role === 'assistant' &&
         ((sanitizedContent && sanitizedContent !== normalizedStoredContent) ||

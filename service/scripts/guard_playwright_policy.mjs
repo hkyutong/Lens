@@ -9,7 +9,7 @@ const SERVICE_DIR = path.resolve(__dirname, '..')
 const REPO_DIR = path.resolve(SERVICE_DIR, '..')
 
 const args = new Set(process.argv.slice(2))
-const requireLocalBrowser = args.has('--require-local-browser')
+const requirePlaywrightChromium = args.has('--require-playwright-chromium')
 
 const SCAN_ROOTS = ['service', 'chat', 'admin', '.github']
 const SKIP_DIRS = new Set([
@@ -97,75 +97,76 @@ const ensureNoPlaywrightInstall = () => {
   if (!blockedLineHits.length) return
 
   console.error('\n[Playwright策略拦截] 检测到被禁止的浏览器安装命令。')
-  console.error('原因：E2E/回归必须固定使用本机 Chrome/Chromium，禁止触发 Playwright 浏览器下载。\n')
+  console.error('原因：E2E/回归必须固定复用共享 Playwright Chromium，禁止在项目内触发浏览器安装。\n')
   for (const hit of blockedLineHits) {
     console.error(`- ${hit.file}:${hit.line}`)
     console.error(`  ${hit.text}`)
   }
-  console.error('\n请移除以上安装命令，改为使用本机 Chrome/Chromium，或在配置中显式指定 executablePath。')
+  console.error('\n请移除以上安装命令，统一复用共享 Playwright Chromium。')
   process.exit(1)
 }
 
-const detectLocalBrowserBinary = () => {
-  const home = os.homedir()
-  const envCandidates = [
-    process.env.PLAYWRIGHT_CHROME_PATH,
-    process.env.GOOGLE_CHROME_BIN,
-    process.env.CHROME_PATH,
-  ]
-  for (const candidate of envCandidates) {
-    if (candidate && fs.existsSync(candidate)) return candidate
-  }
+const getSharedBrowsersPath = () =>
+  process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright')
 
-  const candidates = [
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    path.join(home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    path.join(home, 'Applications/Chromium.app/Contents/MacOS/Chromium'),
-  ]
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p
-  }
+const detectPlaywrightChromiumBinary = () => {
+  const browsersPath = getSharedBrowsersPath()
+  if (!fs.existsSync(browsersPath)) return ''
 
-  const whichCommands = ['google-chrome', 'google-chrome-stable', 'chrome', 'chromium', 'chromium-browser']
-  for (const command of whichCommands) {
-    const whichChrome = spawnSync('which', [command], {
-      encoding: 'utf8',
-    })
-    if (whichChrome.status !== 0) continue
-    const resolved = String(whichChrome.stdout || '').trim()
-    if (resolved && fs.existsSync(resolved)) return resolved
+  const browserDirs = fs
+    .readdirSync(browsersPath, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && entry.name.startsWith('chromium-'))
+    .map(entry => path.join(browsersPath, entry.name))
+    .sort()
+    .reverse()
+
+  const relativeCandidates = [
+    'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+    'chrome-mac/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+    'chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium',
+    'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
+    'chrome-linux/chrome',
+    'chrome-win/chrome.exe',
+  ]
+
+  for (const browserDir of browserDirs) {
+    for (const relativeCandidate of relativeCandidates) {
+      const candidate = path.join(browserDir, relativeCandidate)
+      if (fs.existsSync(candidate)) return candidate
+    }
   }
 
   return ''
 }
 
-const ensureLocalBrowserInstalled = () => {
-  const browserPath = detectLocalBrowserBinary()
+const ensurePlaywrightChromiumInstalled = () => {
+  const browserPath = detectPlaywrightChromiumBinary()
   if (browserPath) {
-    console.log(`[Playwright策略] 本机Chrome/Chromium可用: ${browserPath}`)
+    console.log(`[Playwright策略] 共享 Playwright Chromium 可用: ${browserPath}`)
     return
   }
-  console.error('缺少本机 Chrome/Chromium，已停止，不会自动下载浏览器。')
+  console.error(`缺少共享 Playwright Chromium，已停止，不会回退到本机 Chrome/Edge。期望目录: ${getSharedBrowsersPath()}`)
   process.exit(1)
 }
 
-const ensureConfigUsesLocalBrowser = () => {
+const ensureConfigUsesPlaywrightChromium = () => {
   const configPath = path.join(SERVICE_DIR, 'playwright.config.mjs')
   if (!fs.existsSync(configPath)) {
     console.error(`缺少 Playwright 配置文件: ${configPath}`)
     process.exit(1)
   }
   const text = fs.readFileSync(configPath, 'utf8')
-  if (!/channel\s*:\s*['"]chrome['"]/.test(text) && !/executablePath/.test(text)) {
-    console.error('Playwright 配置未声明本机浏览器策略，请设置 use.channel = "chrome" 或 launchOptions.executablePath。')
+  const usesChromium = /browserName\s*:\s*['"]chromium['"]/.test(text)
+  const usesLocalBrowser = /channel\s*:\s*['"][^'"]+['"]/.test(text) || /executablePath/.test(text) || /PLAYWRIGHT_CHROME_PATH|GOOGLE_CHROME_BIN|CHROME_PATH/.test(text)
+  if (!usesChromium || usesLocalBrowser) {
+    console.error('Playwright 配置未锁定共享 Playwright Chromium，请显式设置 use.browserName = "chromium"，且不要使用 channel、executablePath 或本机 Chrome 环境变量。')
     process.exit(1)
   }
 }
 
 ensureNoPlaywrightInstall()
-ensureConfigUsesLocalBrowser()
-if (requireLocalBrowser) {
-  ensureLocalBrowserInstalled()
+ensureConfigUsesPlaywrightChromium()
+if (requirePlaywrightChromium) {
+  ensurePlaywrightChromiumInstalled()
 }
 console.log('[Playwright策略] 通过')

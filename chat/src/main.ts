@@ -27,15 +27,6 @@ if (disableConsole) {
   console.error = () => {}
 }
 
-function detectSystemTheme() {
-  const theme = 'light'
-  localStorage.setItem('theme', theme)
-  document.documentElement.classList.remove('dark')
-  document.documentElement.style.colorScheme = theme
-  document.documentElement.dataset.theme = theme
-  window.theme = theme
-}
-
 const authStore = useAuthStoreWithout()
 
 async function bootstrap() {
@@ -52,9 +43,6 @@ async function bootstrap() {
 
   // 安装Vue Router
   app.use(router)
-
-  // 检测系统主题并设置应用主题
-  detectSystemTheme()
 
   // 初始化主题
   const { init } = useTheme()

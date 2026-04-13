@@ -639,7 +639,7 @@ watch(
     <div v-if="activeView === 'main'">
       <!-- 套餐列表卡片 -->
       <div
-        class="mb-5 flex flex-col space-y-6 rounded-[28px] border border-[var(--paper-border)] bg-white p-6 shadow-[0_24px_60px_rgba(8,8,8,0.05)]"
+        class="mb-5 flex flex-col space-y-6 rounded-[28px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-panel)]"
       >
         <div
           class="mb-1 flex flex-col gap-3 border-b border-[var(--paper-border)] pb-4 md:flex-row md:items-center md:justify-between"
@@ -654,13 +654,13 @@ watch(
           </div>
 
           <div
-            class="inline-flex items-center self-start rounded-full border border-[var(--paper-border)] bg-[var(--surface-panel)] p-1.5 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.5)]"
+            class="inline-flex items-center self-start rounded-full border border-[var(--paper-border)] bg-[var(--surface-panel)] p-1.5"
           >
             <button
               type="button"
               :class="[
                 billingCycle === 'monthly'
-                  ? 'bg-white text-[var(--text-main)] shadow-[0_2px_8px_rgba(8,8,8,0.06)]'
+                  ? 'bg-[var(--surface-card)] text-[var(--text-main)] shadow-[var(--shadow-soft)]'
                   : 'text-[var(--text-sub)]',
                 'rounded-full px-5 py-2.5 text-sm font-medium transition-colors',
               ]"
@@ -672,7 +672,7 @@ watch(
               type="button"
               :class="[
                 billingCycle === 'annual'
-                  ? 'bg-white text-[var(--text-main)] shadow-[0_2px_8px_rgba(8,8,8,0.06)]'
+                  ? 'bg-[var(--surface-card)] text-[var(--text-main)] shadow-[var(--shadow-soft)]'
                   : 'text-[var(--text-sub)]',
                 'rounded-full px-5 py-2.5 text-sm font-medium transition-colors',
               ]"
@@ -680,7 +680,7 @@ watch(
             >
               <span>{{ t('lens.member.annual') }}</span>
               <span
-                class="ml-2 inline-flex rounded-full bg-[var(--text-main)] px-2.5 py-1 text-[10px] font-semibold leading-none text-white"
+                class="ml-2 inline-flex rounded-full bg-[var(--text-main)] px-2.5 py-1 text-[10px] font-semibold leading-none text-[var(--bg-body)]"
               >
                 {{ t('lens.member.annualBetter') }}
               </span>
@@ -694,9 +694,9 @@ watch(
             :key="index"
             :class="[
               item.name == selectName
-                ? 'border-[var(--text-main)] shadow-[0_18px_40px_rgba(8,8,8,0.08)]'
-                : 'border-[var(--paper-border)] shadow-[0_10px_26px_rgba(8,8,8,0.04)]',
-              'flex h-full min-h-[520px] flex-col rounded-[28px] border bg-white p-7 transition-all hover:shadow-[0_18px_40px_rgba(8,8,8,0.08)]',
+                ? 'border-[var(--text-main)] shadow-[var(--shadow-panel)]'
+                : 'border-[var(--paper-border)] shadow-[var(--shadow-soft)]',
+              'flex h-full min-h-[520px] flex-col rounded-[28px] border bg-[var(--surface-card)] p-7 transition-all hover:shadow-[var(--shadow-panel)]',
             ]"
             @click="handleSelect(item)"
           >
@@ -734,7 +734,7 @@ watch(
             <div class="mt-7">
               <button
                 @click.stop="handleSuccess(item)"
-                class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-white transition hover:bg-[#1b1b1b]"
+                class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
               >
                 {{ t('lens.member.openNow') }}
               </button>
@@ -784,7 +784,7 @@ watch(
       <div class="mb-4 grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <!-- 签到日历卡片 - 左侧 -->
         <div
-          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-white p-6 shadow-[0_18px_50px_rgba(8,8,8,0.04)]"
+          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-soft)]"
         >
           <!-- 卡片标题 -->
           <div
@@ -840,7 +840,7 @@ watch(
                   type="button"
                   :class="[
                     day.isToday
-                      ? 'bg-[var(--btn-bg-primary)] text-white'
+                      ? 'bg-[var(--btn-bg-primary)] text-[var(--btn-text-primary)]'
                       : day.isSigned
                         ? 'text-[var(--text-main)]'
                         : 'text-[var(--text-sub)]',
@@ -858,7 +858,7 @@ watch(
             <button
               @click="handleSignIn"
               :disabled="hasSignedInToday || signInLoading"
-              class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-white transition hover:bg-[#1b1b1b] disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span v-if="signInLoading">签到中...</span>
               <span v-else-if="hasSignedInToday">已签到</span>
@@ -869,7 +869,7 @@ watch(
 
         <!-- 钱包余额卡片 - 右侧 -->
         <div
-          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-white p-6 shadow-[0_18px_50px_rgba(8,8,8,0.04)]"
+          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-soft)]"
         >
           <!-- 卡片标题 -->
           <div
@@ -970,7 +970,7 @@ watch(
               <button
                 :disabled="loading || !code"
                 @click="useCrami"
-                class="inline-flex w-[116px] items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-5 py-3 text-[15px] font-medium text-white transition hover:bg-[#1b1b1b] disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex w-[116px] items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-5 py-3 text-[15px] font-medium text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 兑换
               </button>

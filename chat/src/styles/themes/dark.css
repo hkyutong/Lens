@@ -1,63 +1,73 @@
 :root[data-theme='dark'] {
   /* Core Palette */
-  --bg-body: #0a0d12;
-  --bg-sidebar: rgba(13, 16, 20, 0.94);
-  --surface-card: rgba(18, 22, 28, 0.98);
-  --surface-muted: rgba(255, 255, 255, 0.04);
-  --surface-panel: #12161c;
-  --paper-bg: rgba(18, 22, 28, 0.98);
+  --bg-body: #0c1016;
+  --bg-sidebar: #10151d;
+  --surface-card: #131922;
+  --surface-muted: #181f29;
+  --surface-panel: #111720;
+  --surface-elevated: rgba(15, 20, 28, 0.94);
+  --paper-bg: #111720;
   --paper-border: rgba(255, 255, 255, 0.08);
-  --text-main: #f5f7fb;
-  --text-sub: rgba(245, 247, 251, 0.68);
-  --ink-soft: rgba(245, 247, 251, 0.76);
-  --ink-faint: rgba(245, 247, 251, 0.42);
+  --user-avatar-bg: #5a7dff;
+  --text-main: #eef2f8;
+  --text-sub: #99a4b8;
+  --ink-soft: #cad3e1;
+  --ink-faint: #6e7b90;
   --border-color: rgba(255, 255, 255, 0.08);
-  --accent: #9bbdff;
-  --accent-strong: #bfd4ff;
-  --accent-soft: rgba(155, 189, 255, 0.12);
+  --accent: #dce5ff;
+  --accent-strong: #f6f8ff;
+  --accent-soft: rgba(111, 142, 255, 0.14);
   --grid-line: rgba(255, 255, 255, 0.06);
-  --shadow-glow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  --shadow-soft: 0 6px 16px rgba(0, 0, 0, 0.18);
-  --shadow-panel: 0 8px 18px rgba(0, 0, 0, 0.2);
+  --shadow-glow: 0 18px 48px rgba(0, 0, 0, 0.4);
+  --shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.28);
+  --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.4);
+  --modal-overlay: rgba(3, 5, 8, 0.62);
+  --dialog-bg: rgba(13, 18, 25, 0.94);
+  --dialog-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
 
   /* Button Color */
-  --btn-bg-primary: var(--accent);
-  --btn-bg-primary-hover: var(--accent-strong);
-  --btn-bg-primary-active: var(--accent-strong);
-  --btn-text-primary: #0a0d12;
+  --btn-bg-primary: #f3f6fb;
+  --btn-bg-primary-hover: #ffffff;
+  --btn-bg-primary-active: #e8eefb;
+  --btn-text-primary: #0c1016;
   --btn-border-primary: transparent;
+  --btn-border-primary-hover: transparent;
+  --btn-border-primary-active: transparent;
 
   --btn-bg-secondary: rgba(255, 255, 255, 0.04);
   --btn-bg-secondary-hover: rgba(255, 255, 255, 0.08);
-  --btn-bg-secondary-active: rgba(255, 255, 255, 0.08);
-  --btn-text-secondary: #ffffff;
+  --btn-bg-secondary-active: rgba(255, 255, 255, 0.1);
+  --btn-text-secondary: var(--text-main);
   --btn-border-secondary: rgba(255, 255, 255, 0.1);
-  --btn-border-secondary-hover: rgba(255, 255, 255, 0.16);
+  --btn-border-secondary-hover: rgba(255, 255, 255, 0.14);
   --btn-border-secondary-active: rgba(255, 255, 255, 0.16);
 
   --btn-bg-ghost: transparent;
   --btn-bg-ghost-hover: rgba(255, 255, 255, 0.08);
   --btn-bg-ghost-active: rgba(255, 255, 255, 0.12);
-  --btn-text-ghost: #ffffff;
+  --btn-text-ghost: var(--text-main);
+  --btn-border-ghost: transparent;
 
   --btn-bg-danger: #f87171;
   --btn-bg-danger-hover: #ef4444;
   --btn-bg-danger-active: #dc2626;
   --btn-text-danger: #07111f;
+  --btn-border-danger: transparent;
 
   /* Input Color */
   --input-border: rgba(255, 255, 255, 0.1);
   --input-border-hover: rgba(255, 255, 255, 0.16);
-  --input-border-focus: var(--accent);
+  --input-border-focus: rgba(220, 229, 255, 0.34);
   --input-border-error: #f87171;
-  --input-bg: rgba(18, 22, 28, 0.94);
-  --input-text: #ffffff;
-  --input-placeholder: rgba(255, 255, 255, 0.6);
+  --input-bg: rgba(19, 25, 34, 0.96);
+  --input-text: var(--text-main);
+  --input-placeholder: var(--text-sub);
 
   /* Tab Component */
-  --tab-group-bg-dark: rgba(255, 255, 255, 0.06);
-  --tab-group-bg-filled-dark: rgba(255, 255, 255, 0.08);
-  --tab-text-dark: rgba(255, 255, 255, 0.7);
-  --tab-active-bg-dark: rgba(127, 180, 255, 0.96);
-  --tab-active-text-dark: #07111f;
+  --tab-group-bg: rgba(255, 255, 255, 0.06);
+  --tab-group-bg-filled: rgba(255, 255, 255, 0.08);
+  --tab-text: var(--text-sub);
+  --tab-active-bg: rgba(255, 255, 255, 0.94);
+  --tab-active-text: #0c1016;
+  --tab-active-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
 }

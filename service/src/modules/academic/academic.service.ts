@@ -194,9 +194,11 @@ export class AcademicService {
   }
 
   private buildAcademicWorkflowTaskData(
-    steps: Array<Required<Pick<AcademicWorkflowStageMeta, 'index' | 'kind' | 'name' | 'displayName'>> & {
-      args?: string;
-    }>,
+    steps: Array<
+      Required<Pick<AcademicWorkflowStageMeta, 'index' | 'kind' | 'name' | 'displayName'>> & {
+        args?: string;
+      }
+    >,
     modelName = '',
   ): AcademicWorkflowTaskData {
     return {
@@ -235,6 +237,23 @@ export class AcademicService {
     };
   }
 
+  private computeWorkflowStageHeartbeatProgress(
+    stageIndex: number,
+    totalStages: number,
+    tick: number,
+  ) {
+    const safeTotal = Math.max(Number(totalStages || 0), 1);
+    const safeStage = Math.min(Math.max(Number(stageIndex || 1), 1), safeTotal);
+    const stageStart = Math.round(((safeStage - 1) / safeTotal) * 100);
+    const stageDone = Math.round((safeStage / safeTotal) * 100);
+    const stageCeiling = Math.max(
+      stageStart,
+      Math.min(stageDone - (safeStage === safeTotal ? 2 : 4), 98),
+    );
+    if (stageCeiling <= stageStart) return stageStart;
+    return Math.min(stageCeiling, stageStart + 5 + Math.max(0, tick - 1) * 2);
+  }
+
   private emitAcademicWorkflowEvent(
     res: Response,
     payload: Record<string, any>,
@@ -242,6 +261,10 @@ export class AcademicService {
     taskData: AcademicWorkflowTaskData,
     chatId?: number,
   ) {
+    const streamRes = res as Response & {
+      flush?: () => void;
+      flushHeaders?: () => void;
+    };
     res.write(
       `${JSON.stringify({
         ...payload,
@@ -250,6 +273,7 @@ export class AcademicService {
         taskData,
       })}\n`,
     );
+    streamRes.flush?.();
   }
 
   private async ensureAcademicWorkflowMember(userId: number) {
@@ -259,7 +283,10 @@ export class AcademicService {
     const expiration = expirationTime ? new Date(`${expirationTime}T23:59:59`) : null;
     const hasMember = packageId > 0 && (!expiration || expiration.getTime() > Date.now());
     if (!hasMember) {
-      throw new HttpException('多能力编排仅限会员使用，请升级套餐后使用', HttpStatus.PAYMENT_REQUIRED);
+      throw new HttpException(
+        '多能力编排仅限会员使用，请升级套餐后使用',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
     }
     return balance;
   }
@@ -268,12 +295,16 @@ export class AcademicService {
     const rawSteps = Array.isArray(body?.workflow?.steps) ? body.workflow?.steps || [] : [];
     const normalized = rawSteps
       .slice(0, 3)
-      .map((step): AcademicWorkflowStep => ({
-        kind: step?.kind === 'plugin' ? 'plugin' : 'core',
-        name: String(step?.name || '').trim(),
-        displayName: String(step?.displayName || step?.name || '').trim(),
-        args: String(step?.args || '').trim().slice(0, 300),
-      }))
+      .map(
+        (step): AcademicWorkflowStep => ({
+          kind: step?.kind === 'plugin' ? 'plugin' : 'core',
+          name: String(step?.name || '').trim(),
+          displayName: String(step?.displayName || step?.name || '').trim(),
+          args: String(step?.args || '')
+            .trim()
+            .slice(0, 300),
+        }),
+      )
       .filter(step => Boolean(step.name));
 
     const resolved: Array<{
@@ -435,15 +466,7 @@ export class AcademicService {
         modelInfo: explicitModelInfo,
       };
     }
-
-    if (requested || requestedDisplayName) {
-      return {
-        requestedModel: requested,
-        requestedModelName: requestedDisplayName,
-        resolvedModel: '',
-        modelInfo: null,
-      };
-    }
+    const hasExplicitRequest = Boolean(requested || requestedDisplayName);
 
     const baseConfig = await this.modelsService.getBaseConfig();
     const baseModel = String(baseConfig?.modelInfo?.model || '').trim();
@@ -470,6 +493,15 @@ export class AcademicService {
         requestedModelName: requestedDisplayName,
         resolvedModel: String(fallbackModelInfo.model || ''),
         modelInfo: fallbackModelInfo,
+      };
+    }
+
+    if (hasExplicitRequest) {
+      return {
+        requestedModel: requested,
+        requestedModelName: requestedDisplayName,
+        resolvedModel: '',
+        modelInfo: null,
       };
     }
 
@@ -567,7 +599,7 @@ export class AcademicService {
       this.pickBestAcademicOutput(currentState),
     );
     const shouldFallback =
-      Boolean(currentState?.streamError) &&
+      this.isAcademicEmptyFailureState(currentState, currentContent) &&
       !currentState?.fileVectorResult &&
       !this.isMeaningfulAcademicContent(currentContent);
     if (!shouldFallback) return null;
@@ -998,7 +1030,9 @@ export class AcademicService {
   }
 
   private getStablePolishRowKey(before: string, after: string) {
-    return `${this.normalizeLeakedPolishControlText(before)}\u0000${this.normalizeLeakedPolishControlText(after)}`;
+    return `${this.normalizeLeakedPolishControlText(
+      before,
+    )}\u0000${this.normalizeLeakedPolishControlText(after)}`;
   }
 
   private readonly stablePolishReasonCuePattern =
@@ -1282,11 +1316,18 @@ export class AcademicService {
   private stripLeadingStablePolishOverflowBlock(text: string) {
     const lines = String(text || '').split('\n');
     let firstMeaningfulIndex = 0;
-    while (firstMeaningfulIndex < lines.length && !String(lines[firstMeaningfulIndex] || '').trim()) {
+    while (
+      firstMeaningfulIndex < lines.length &&
+      !String(lines[firstMeaningfulIndex] || '').trim()
+    ) {
       firstMeaningfulIndex += 1;
     }
     if (firstMeaningfulIndex >= lines.length) return '';
-    if (!String(lines[firstMeaningfulIndex] || '').trim().startsWith('|')) {
+    if (
+      !String(lines[firstMeaningfulIndex] || '')
+        .trim()
+        .startsWith('|')
+    ) {
       return String(text || '').trimStart();
     }
     let cursor = firstMeaningfulIndex;
@@ -1479,6 +1520,19 @@ export class AcademicService {
     return contentText || reasoningText || '';
   }
 
+  private isAcademicEmptyFailureState(state: AcademicStreamState, candidateContent = '') {
+    const finishReason = String(state.finishReason || '')
+      .trim()
+      .toLowerCase();
+    const normalizedCandidate = candidateContent || this.pickBestAcademicOutput(state);
+    if (this.isAcademicPlaceholderContent(normalizedCandidate)) return true;
+    const hasRenderableOutput = Boolean(
+      this.isMeaningfulAcademicContent(normalizedCandidate) || state.fileVectorResult,
+    );
+    if (hasRenderableOutput) return false;
+    return Boolean(String(state.streamError || '').trim()) || finishReason === 'error';
+  }
+
   private preserveStablePolishDisplay(
     state: AcademicStreamState,
     candidate: string,
@@ -1652,9 +1706,16 @@ export class AcademicService {
       this.sanitizeAcademicOutput(this.extractTextFromSerializedContent(String(value || ''))),
     );
     if (!normalized) return '';
+    if (this.isAcademicAuthPlaceholderContent(normalized)) {
+      return '学术模型鉴权失败，请联系管理员检查模型密钥配置';
+    }
     if (/^(?:academic\s+error|error|null|undefined)$/i.test(normalized)) return '';
     if (/^(?:学术服务异常|服务器内部错误|internal server error)$/i.test(normalized)) return '';
-    return sanitizeClientErrorMessage(normalized, HttpStatus.BAD_GATEWAY, '学术服务处理失败，请重试');
+    return sanitizeClientErrorMessage(
+      normalized,
+      HttpStatus.BAD_GATEWAY,
+      '学术服务处理失败，请重试',
+    );
   }
 
   private async collectAcademicStreamState(
@@ -1934,8 +1995,8 @@ export class AcademicService {
           typeof result.name === 'string' && result.name
             ? result.name
             : typeof result.displayName === 'string'
-              ? result.displayName
-              : '';
+            ? result.displayName
+            : '';
         const normalizedName = this.normalizePluginName(sourceName);
         if (renameMap[normalizedName]) {
           result.displayName = renameMap[normalizedName];
@@ -2328,8 +2389,9 @@ export class AcademicService {
 
     let assistantLogId = 0;
     if (overwriteReply && requestedAssistantLogId > 0) {
-      const existingAssistantLog =
-        await this.chatLogService.findOneChatLog(requestedAssistantLogId);
+      const existingAssistantLog = await this.chatLogService.findOneChatLog(
+        requestedAssistantLogId,
+      );
       if (
         existingAssistantLog &&
         Number(existingAssistantLog.userId) === Number(req.user.id) &&
@@ -2373,7 +2435,16 @@ export class AcademicService {
       assistantLogId = Number(assistantSaveLog.id);
     }
     res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Connection', 'keep-alive');
+    const streamRes = res as Response & {
+      flush?: () => void;
+      flushHeaders?: () => void;
+    };
+    streamRes.flushHeaders?.();
     res.write(`${JSON.stringify({ chatId: assistantLogId, requestId })}\n`);
+    streamRes.flush?.();
 
     const controller = new AbortController();
     let responseCompleted = false;
@@ -2610,8 +2681,8 @@ export class AcademicService {
         ? this.getSafeAcademicErrorMessage(uploadErrorMessage) ||
           '文件上传处理失败，请重新上传后重试'
         : normalizedPluginName === this.normalizePluginName('论文速读')
-          ? '论文速读需要上传 PDF 文件，或直接输入有效 DOI / arXiv ID。'
-          : '该学术插件需要先上传文件，再发送消息';
+        ? '论文速读需要上传 PDF 文件，或直接输入有效 DOI / arXiv ID。'
+        : '该学术插件需要先上传文件，再发送消息';
       try {
         await this.chatLogService.updateChatLog(assistantLogId, {
           content: fileRequiredMessage,
@@ -2716,10 +2787,10 @@ export class AcademicService {
       const idleTimeoutMs = isArxivPlugin
         ? Math.max(arxivIdleTimeoutMs, 10000)
         : isPaperQuickRead
-          ? Math.max(paperIdleTimeoutMs, 15000)
-          : isLongRunningPlugin
-            ? Math.max(longIdleTimeoutMs, 60000)
-            : Math.max(defaultIdleTimeoutMs, 30000);
+        ? Math.max(paperIdleTimeoutMs, 15000)
+        : isLongRunningPlugin
+        ? Math.max(longIdleTimeoutMs, 60000)
+        : Math.max(defaultIdleTimeoutMs, 30000);
       const defaultMaxDurationMs = Number(process.env.ACADEMIC_STREAM_MAX_DURATION_MS || 600000);
       const longMaxDurationMs = Number(process.env.ACADEMIC_STREAM_MAX_DURATION_LONG_MS || 900000);
       const arxivMaxDurationMs = Number(
@@ -2731,10 +2802,10 @@ export class AcademicService {
       const maxDurationMs = isArxivPlugin
         ? Math.max(arxivMaxDurationMs, 30000)
         : isPaperQuickRead
-          ? Math.max(paperMaxDurationMs, 60000)
-          : isLongRunningPlugin
-            ? Math.max(longMaxDurationMs, 120000)
-            : Math.max(defaultMaxDurationMs, 60000);
+        ? Math.max(paperMaxDurationMs, 60000)
+        : isLongRunningPlugin
+        ? Math.max(longMaxDurationMs, 120000)
+        : Math.max(defaultMaxDurationMs, 60000);
       let idleTimer: NodeJS.Timeout | null = null;
       let maxDurationTimer: NodeJS.Timeout | null = null;
       let idleTimedOut = false;
@@ -2856,9 +2927,21 @@ export class AcademicService {
           const contentForOutput = this.pickBestAcademicOutput(state);
           let finalContent = await buildDisplayContent(contentForOutput, !state.streamError);
           finalContent = this.preserveStablePolishDisplay(state, finalContent, contentForOutput);
+          if (
+            this.hasAcademicAuthPlaceholderRaw(
+              state.fullContent,
+              state.fullReasoning,
+              state.streamError,
+              contentForOutput,
+              finalContent,
+            )
+          ) {
+            this.applyAcademicAuthFailure(state);
+            finalContent = '';
+          }
           const shouldRetryOnEmptyError =
             !controller.signal.aborted &&
-            Boolean(state.streamError) &&
+            this.isAcademicEmptyFailureState(state, finalContent) &&
             !state.fileVectorResult &&
             !this.isMeaningfulAcademicContent(finalContent);
           if (shouldRetryOnEmptyError) {
@@ -2914,7 +2997,11 @@ export class AcademicService {
               );
             }
           }
-          if (Boolean(state.streamError) && !state.fileVectorResult && !this.isMeaningfulAcademicContent(finalContent)) {
+          if (
+            this.isAcademicEmptyFailureState(state, finalContent) &&
+            !state.fileVectorResult &&
+            !this.isMeaningfulAcademicContent(finalContent)
+          ) {
             const runtimeFallback = await this.tryAcademicRuntimeFallback(
               academicPayload,
               controller.signal,
@@ -3016,6 +3103,14 @@ export class AcademicService {
           }
           if (!this.isMeaningfulAcademicContent(finalContent) && state.fileVectorResult) {
             finalContent = '文件已生成，可在下方下载。';
+          }
+          if (
+            !this.isMeaningfulAcademicContent(finalContent) &&
+            !state.fileVectorResult &&
+            this.isAcademicEmptyFailureState(state, finalContent) &&
+            !String(state.streamError || '').trim()
+          ) {
+            state.streamError = '学术服务处理失败，请重试';
           }
           if (!this.isMeaningfulAcademicContent(finalContent) && !state.fileVectorResult) {
             state.streamError = state.streamError || '学术后端未返回可展示内容';
@@ -3259,7 +3354,7 @@ export class AcademicService {
             this.isMeaningfulAcademicContent(partialContent) &&
             !this.isAcademicHeartbeatText(partialContent)) ||
             state.fileVectorResult) &&
-          hasArxivSummary,
+            hasArxivSummary,
         );
         const abortedByUpstream = /aborted/i.test(String(error?.message || ''));
         if (abortedByUpstream && hasRenderablePartial) {
@@ -3524,8 +3619,9 @@ export class AcademicService {
 
     let assistantLogId = 0;
     if (overwriteReply && requestedAssistantLogId > 0) {
-      const existingAssistantLog =
-        await this.chatLogService.findOneChatLog(requestedAssistantLogId);
+      const existingAssistantLog = await this.chatLogService.findOneChatLog(
+        requestedAssistantLogId,
+      );
       if (
         existingAssistantLog &&
         Number(existingAssistantLog.userId) === Number(req.user.id) &&
@@ -3567,14 +3663,26 @@ export class AcademicService {
         status: 2,
         modelAvatar: body.modelAvatar || '',
         taskData: JSON.stringify(
-          this.buildAcademicWorkflowTaskData(normalizedWorkflowSteps, body.modelName || useModelName),
+          this.buildAcademicWorkflowTaskData(
+            normalizedWorkflowSteps,
+            body.modelName || useModelName,
+          ),
         ),
       });
       assistantLogId = Number(assistantSaveLog.id);
     }
 
     res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Connection', 'keep-alive');
+    const streamRes = res as Response & {
+      flush?: () => void;
+      flushHeaders?: () => void;
+    };
+    streamRes.flushHeaders?.();
     res.write(`${JSON.stringify({ chatId: assistantLogId, requestId })}\n`);
+    streamRes.flush?.();
 
     const controller = new AbortController();
     let responseCompleted = false;
@@ -3652,7 +3760,8 @@ export class AcademicService {
       }
       if (!this.isMeaningfulAcademicContent(finalContent) && !state.fileVectorResult) {
         finalContent =
-          this.getSafeAcademicErrorMessage(state.streamError || fallback) || '学术服务未返回可展示内容';
+          this.getSafeAcademicErrorMessage(state.streamError || fallback) ||
+          '学术服务未返回可展示内容';
       }
       return finalContent;
     };
@@ -3674,6 +3783,59 @@ export class AcademicService {
         const rawCoreFunction = step.kind === 'core' ? step.name : '';
         const normalizedPluginName = this.normalizePluginName(rawPluginName || '');
         const isArxivPlugin = this.isArxivPlugin(normalizedPluginName);
+        const baseProgress = Math.round(((step.index - 1) / taskData.totalStages) * 100);
+        const workflowHeartbeatMs = Math.max(
+          Number(process.env.ACADEMIC_WORKFLOW_HEARTBEAT_MS || 2000),
+          1500,
+        );
+        let workflowHeartbeatTimer: NodeJS.Timeout | null = null;
+        let workflowHeartbeatTick = 0;
+        const stopWorkflowHeartbeat = () => {
+          if (workflowHeartbeatTimer) {
+            clearInterval(workflowHeartbeatTimer);
+            workflowHeartbeatTimer = null;
+          }
+        };
+        const startWorkflowHeartbeat = () => {
+          if (!(workflowHeartbeatMs > 0)) return;
+          stopWorkflowHeartbeat();
+          workflowHeartbeatTick = 0;
+          this.emitAcademicWorkflowEvent(
+            res,
+            {
+              workflowStageChunk: true,
+              stepName: step.displayName,
+              progress: baseProgress,
+              nodeType: 'workflow',
+            },
+            requestId,
+            taskData,
+            assistantLogId,
+          );
+          workflowHeartbeatTimer = setInterval(() => {
+            if (controller.signal.aborted || res.writableEnded || res.writableFinished) {
+              stopWorkflowHeartbeat();
+              return;
+            }
+            workflowHeartbeatTick += 1;
+            this.emitAcademicWorkflowEvent(
+              res,
+              {
+                workflowStageChunk: true,
+                stepName: step.displayName,
+                progress: this.computeWorkflowStageHeartbeatProgress(
+                  step.index,
+                  taskData.totalStages,
+                  workflowHeartbeatTick,
+                ),
+                nodeType: 'workflow',
+              },
+              requestId,
+              taskData,
+              assistantLogId,
+            );
+          }, workflowHeartbeatMs);
+        };
 
         taskData = this.patchAcademicWorkflowTaskData(
           taskData,
@@ -3697,7 +3859,7 @@ export class AcademicService {
           {
             workflowStageStart: true,
             stepName: step.displayName,
-            progress: Math.round(((step.index - 1) / taskData.totalStages) * 100),
+            progress: baseProgress,
             nodeType: 'workflow',
           },
           requestId,
@@ -3730,6 +3892,7 @@ export class AcademicService {
         if (Object.keys(incomingLlmKwargs).length) {
           academicPayload.llm_kwargs = { ...academicPayload.llm_kwargs, ...incomingLlmKwargs };
         }
+        this.applyAcademicRuntimeModel(academicPayload, modelInfo);
 
         if (step.kind === 'plugin') {
           const normalizedKwargs = this.normalizePluginKwargs(rawPluginName, {
@@ -3749,9 +3912,7 @@ export class AcademicService {
           }
           academicPayload.plugin_kwargs = normalizedKwargs;
         } else {
-          academicPayload.plugin_kwargs = rawCoreFunction
-            ? { core_function: rawCoreFunction }
-            : {};
+          academicPayload.plugin_kwargs = rawCoreFunction ? { core_function: rawCoreFunction } : {};
         }
 
         if (uploadDir) {
@@ -3777,6 +3938,29 @@ export class AcademicService {
           }
         }
 
+        // 最终出站前再次强制回填运行模型参数，避免中途链路改写 llm_kwargs 后丢失鉴权字段。
+        this.applyAcademicRuntimeModel(academicPayload, modelInfo);
+
+        this.logger.log(
+          JSON.stringify({
+            event: 'academic_workflow_payload',
+            requestId,
+            userId,
+            chatId: assistantLogId,
+            step: step.index,
+            function: academicPayload.function,
+            llmModel: String(academicPayload.llm_kwargs?.llm_model || '').trim(),
+            hasApiKey: Boolean(String(academicPayload.llm_kwargs?.api_key || '').trim()),
+            apiKeyPassthrough: Boolean(academicPayload.llm_kwargs?.api_key_passthrough),
+            hasApiEndpoint: Boolean(String(academicPayload.llm_kwargs?.api_endpoint || '').trim()),
+            hasMaxToken:
+              academicPayload.llm_kwargs?.max_token !== undefined &&
+              academicPayload.llm_kwargs?.max_token !== null,
+            modelInfoId: Number(modelInfo?.id || 0),
+            modelInfoKeyLength: String(modelInfo?.key || '').trim().length,
+          }),
+        );
+
         const allowQuickReadByReference =
           normalizedPluginName === this.normalizePluginName('论文速读') &&
           this.hasAcademicPaperReference(stageInput || String(academicPayload.main_input || ''));
@@ -3789,29 +3973,142 @@ export class AcademicService {
         ) {
           throw new Error(
             uploadErrorMessage
-              ? this.getSafeAcademicErrorMessage(uploadErrorMessage) || '文件上传处理失败，请重新上传后重试'
+              ? this.getSafeAcademicErrorMessage(uploadErrorMessage) ||
+                '文件上传处理失败，请重新上传后重试'
               : normalizedPluginName === this.normalizePluginName('论文速读')
-                ? '论文速读需要上传 PDF 文件，或直接输入有效 DOI / arXiv ID。'
-                : '该研究工具需要先上传文件，再发送消息',
+              ? '论文速读需要上传 PDF 文件，或直接输入有效 DOI / arXiv ID。'
+              : '该研究工具需要先上传文件，再发送消息',
           );
         }
 
-        let state = await this.collectAcademicStreamState(academicPayload, controller.signal);
+        startWorkflowHeartbeat();
+        let state: AcademicStreamState;
+        try {
+          state = await this.collectAcademicStreamState(academicPayload, controller.signal);
+        } finally {
+          stopWorkflowHeartbeat();
+        }
+        let rawStageOutput = this.pickBestAcademicOutput(state);
         let stageContent = buildDisplayContent(state, stageInput);
-        if (state.streamError && !state.fileVectorResult && !this.isMeaningfulAcademicContent(stageContent)) {
-          const runtimeFallback = await this.tryAcademicRuntimeFallback(
-            academicPayload,
-            controller.signal,
-            modelInfo,
-            state,
-            requestId,
-            userId,
-            'workflow',
-          );
+        if (
+          this.hasAcademicAuthPlaceholderRaw(
+            state.fullContent,
+            state.fullReasoning,
+            state.streamError,
+            rawStageOutput,
+            stageContent,
+          )
+        ) {
+          this.applyAcademicAuthFailure(state);
+          rawStageOutput = '';
+          stageContent = '';
+        }
+        if (!state.fileVectorResult && !this.isMeaningfulAcademicContent(rawStageOutput)) {
+          if (!controller.signal.aborted) {
+            try {
+              startWorkflowHeartbeat();
+              let retryState: AcademicStreamState;
+              try {
+                retryState = await this.collectAcademicStreamState(
+                  academicPayload,
+                  controller.signal,
+                );
+              } finally {
+                stopWorkflowHeartbeat();
+              }
+              const retryOutput = this.pickBestAcademicOutput(retryState);
+              let retryContent = buildDisplayContent(retryState, stageInput);
+              retryContent = this.preserveStablePolishDisplay(
+                retryState,
+                retryContent,
+                retryOutput,
+              );
+              if (!this.isMeaningfulAcademicContent(retryContent) && retryState.fileVectorResult) {
+                retryContent = '文件已生成，可在下方下载。';
+              }
+              if (
+                this.isMeaningfulAcademicContent(retryOutput) ||
+                this.isMeaningfulAcademicContent(retryContent) ||
+                Boolean(retryState.fileVectorResult)
+              ) {
+                state = retryState;
+                rawStageOutput = retryOutput;
+                stageContent = retryContent;
+                if (
+                  this.hasAcademicAuthPlaceholderRaw(
+                    state.fullContent,
+                    state.fullReasoning,
+                    state.streamError,
+                    rawStageOutput,
+                    stageContent,
+                  )
+                ) {
+                  this.applyAcademicAuthFailure(state);
+                  rawStageOutput = '';
+                  stageContent = '';
+                }
+              }
+            } catch (retryError) {
+              this.logger.warn(
+                JSON.stringify({
+                  event: 'academic_workflow_retry_failed',
+                  requestId,
+                  userId,
+                  model: useModel,
+                  step: step.index,
+                  message: (retryError as Error)?.message || 'retry failed',
+                }),
+              );
+            }
+          }
+        }
+        if (
+          !state.fileVectorResult &&
+          !this.isMeaningfulAcademicContent(rawStageOutput) &&
+          !controller.signal.aborted
+        ) {
+          startWorkflowHeartbeat();
+          let runtimeFallback: Awaited<ReturnType<typeof this.tryAcademicRuntimeFallback>>;
+          try {
+            runtimeFallback = await this.tryAcademicRuntimeFallback(
+              academicPayload,
+              controller.signal,
+              modelInfo,
+              state,
+              requestId,
+              userId,
+              'workflow',
+            );
+          } finally {
+            stopWorkflowHeartbeat();
+          }
           if (runtimeFallback) {
             state = runtimeFallback.state;
+            rawStageOutput = this.pickBestAcademicOutput(state);
             stageContent = runtimeFallback.content;
+            if (
+              this.hasAcademicAuthPlaceholderRaw(
+                state.fullContent,
+                state.fullReasoning,
+                state.streamError,
+                rawStageOutput,
+                stageContent,
+              )
+            ) {
+              this.applyAcademicAuthFailure(state);
+              rawStageOutput = '';
+              stageContent = '';
+            }
           }
+        }
+        stopWorkflowHeartbeat();
+        if (
+          !this.isMeaningfulAcademicContent(stageContent) &&
+          !state.fileVectorResult &&
+          this.isAcademicEmptyFailureState(state, stageContent) &&
+          !String(state.streamError || '').trim()
+        ) {
+          state.streamError = '学术服务处理失败，请重试';
         }
         if (isArxivPlugin) {
           stageContent = await this.ensureArxivSummary(
@@ -3856,18 +4153,54 @@ export class AcademicService {
           }
         }
 
+        if (
+          !this.isMeaningfulAcademicContent(stageContent) &&
+          !state.fileVectorResult &&
+          !String(state.streamError || '').trim()
+        ) {
+          state.streamError = '学术后端未返回可展示内容';
+        }
+
         const persistedStageContent = this.resolvePersistedAcademicContent(
           state,
           stageContent,
           this.pickBestAcademicOutput(state),
         );
+        if (
+          this.hasAcademicAuthPlaceholderRaw(
+            state.fullContent,
+            state.fullReasoning,
+            state.streamError,
+            rawStageOutput,
+            stageContent,
+            persistedStageContent,
+          )
+        ) {
+          this.applyAcademicAuthFailure(state);
+        }
 
-        if (state.streamError && !this.isMeaningfulAcademicContent(persistedStageContent)) {
-          throw new Error(this.getSafeAcademicErrorMessage(state.streamError) || '学术服务处理失败，请重试');
+        if (
+          this.isAcademicEmptyFailureState(state, persistedStageContent) &&
+          !this.isMeaningfulAcademicContent(persistedStageContent)
+        ) {
+          throw new Error(
+            this.getSafeAcademicErrorMessage(state.streamError) || '学术服务处理失败，请重试',
+          );
+        }
+        if (!state.fileVectorResult && this.isAcademicPlaceholderContent(persistedStageContent)) {
+          throw new Error(
+            this.getSafeAcademicErrorMessage(state.streamError || persistedStageContent) ||
+              '学术服务处理失败，请重试',
+          );
+        }
+        if (this.isAcademicAuthPlaceholderContent(persistedStageContent)) {
+          throw new Error('学术模型鉴权失败，请联系管理员检查模型密钥配置');
         }
 
         const promptTokens = await getTokenCount(stageInput || prompt || '');
-        const completionTokens = await getTokenCount(`${state.fullReasoning}${persistedStageContent}`);
+        const completionTokens = await getTokenCount(
+          `${state.fullReasoning}${persistedStageContent}`,
+        );
         let charge = deduct * (usingDeepThinking ? deductDeepThink : 1);
         if (isTokenBased === true) {
           charge =
@@ -3900,6 +4233,7 @@ export class AcademicService {
             status: 'done',
             completedAt: this.formatWorkflowTimestamp(),
             contentPreview: this.truncateAcademicWorkflowPreview(persistedStageContent),
+            error: '',
           },
           {
             status: step.index === taskData.totalStages ? 'done' : 'running',
@@ -4014,7 +4348,8 @@ export class AcademicService {
         Math.max(taskData.totalStages || 1, 1),
       );
       const currentStep =
-        taskData.steps.find(step => step.index === currentStage) || taskData.steps[currentStage - 1];
+        taskData.steps.find(step => step.index === currentStage) ||
+        taskData.steps[currentStage - 1];
       taskData = currentStep
         ? this.patchAcademicWorkflowTaskData(
             taskData,
@@ -4040,7 +4375,8 @@ export class AcademicService {
           ? `${previousOutput}\n\n---\n\n第 ${currentStage} 步执行失败：${
               this.getSafeAcademicErrorMessage(err?.message || '') || '请稍后重试'
             }`
-          : this.getSafeAcademicErrorMessage(err?.message || '') || '多能力编排执行失败，请稍后重试';
+          : this.getSafeAcademicErrorMessage(err?.message || '') ||
+            '多能力编排执行失败，请稍后重试';
 
       await this.chatLogService.updateChatLog(userLogId, {
         promptTokens: totalPromptTokens,
@@ -4244,6 +4580,8 @@ export class AcademicService {
     if (!normalized) return true;
     if (normalized === '已收到请求，但学术后端未返回可展示内容。') return true;
     if (normalized === '学术后端未返回可展示内容') return true;
+    if (this.isAcademicAuthPlaceholderContent(normalized)) return true;
+    if (this.isAcademicServiceFailureContent(normalized)) return true;
     if (
       /(使用方式|点击插件开始分析|正在分析论文|正在提取文本内容|请稍作等待|paper_file类型)/i.test(
         normalized,
@@ -4255,10 +4593,45 @@ export class AcademicService {
     return false;
   }
 
+  private isAcademicAuthPlaceholderContent(text: string) {
+    const normalized = this.sanitizeAcademicOutput(String(text || '')).trim();
+    if (!normalized) return false;
+    return /缺少\s*api[_-]?key|api[_-]?key\s*缺失|please\s+provide\s+api[_-]?key/i.test(normalized);
+  }
+
+  private hasAcademicAuthPlaceholderRaw(...values: any[]) {
+    return values.some(value =>
+      /缺少\s*api[_-]?key|api[_-]?key\s*缺失|please\s+provide\s+api[_-]?key/i.test(
+        String(value || ''),
+      ),
+    );
+  }
+
+  private applyAcademicAuthFailure(state: AcademicStreamState) {
+    state.streamError = '学术模型鉴权失败，请联系管理员检查模型密钥配置';
+    state.finishReason = 'error';
+    state.fullContent = '';
+    state.fullReasoning = '';
+    state.stablePolishContent = '';
+    state.hasStreamContent = false;
+  }
+
+  private isAcademicServiceFailureContent(text: string) {
+    const normalized = this.normalizeDisplayContent(
+      this.sanitizeAcademicOutput(String(text || '')),
+    );
+    if (!normalized) return false;
+    const compact = normalized.replace(/\s+/g, ' ').trim();
+    return /^(?:学术服务处理失败，请重试|学术服务连接异常，请稍后重试。?|学术模型鉴权失败，请联系管理员检查模型密钥配置|多能力编排执行失败，请稍后重试|执行失败，请重试|请稍后重试。?)$/i.test(
+      compact,
+    );
+  }
+
   private isMeaningfulAcademicContent(text: string) {
     const normalized = this.sanitizeAcademicOutput(String(text || '')).trim();
     if (!normalized) return false;
     if (this.isAcademicPlaceholderContent(normalized)) return false;
+    if (this.isAcademicServiceFailureContent(normalized)) return false;
     if (
       /^(?:学术服务异常|学术服务处理失败，请重试|服务器内部错误|internal server error)$/i.test(
         normalized,
@@ -5053,9 +5426,7 @@ export class AcademicService {
       }
       if (
         /Markdown\s*表格/i.test(trimmed) &&
-        /(修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)/.test(
-          trimmed,
-        )
+        /(修改前原文片段|每一行只描述一个局部修改|每个单元格(?:内容)?(?:将)?尽量简短)/.test(trimmed)
       ) {
         continue;
       }
@@ -6369,13 +6740,13 @@ export class AcademicService {
       ? req
         ? `${req.protocol}://${req.get('host')}`
         : siteUrl
-          ? formatUrl(siteUrl)
-          : ''
-      : siteUrl
         ? formatUrl(siteUrl)
-        : req
-          ? `${req.protocol}://${req.get('host')}`
-          : '';
+        : ''
+      : siteUrl
+      ? formatUrl(siteUrl)
+      : req
+      ? `${req.protocol}://${req.get('host')}`
+      : '';
     if (!baseUrl) return trimmed;
     if (trimmed.startsWith('/')) return `${baseUrl}${trimmed}`;
     return `${baseUrl}/${trimmed}`;
@@ -6446,7 +6817,11 @@ export class AcademicService {
     userName: string,
   ) {
     const tempRoot = this.getAcademicTempRoot();
-    const workspaceDir = path.join(tempRoot, String(userName || 'default_user'), this.formatAcademicWorkspaceTag());
+    const workspaceDir = path.join(
+      tempRoot,
+      String(userName || 'default_user'),
+      this.formatAcademicWorkspaceTag(),
+    );
     const relativeWorkspacePath = path.relative(tempRoot, workspaceDir);
     if (
       !relativeWorkspacePath ||
