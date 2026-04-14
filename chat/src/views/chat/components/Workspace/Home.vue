@@ -9,7 +9,6 @@ import { computed, nextTick } from 'vue'
 type StarterTask = {
   id: string
   title: string
-  desc: string
   prompt: string
   mode: 'core' | 'plugin'
   selectorGroups: string[][]
@@ -41,7 +40,6 @@ const starterTasks = computed<StarterTask[]>(() => [
   {
     id: 'paper-summary',
     title: t('lens.workspace.starterPaperSummary'),
-    desc: t('lens.workspace.starterPaperSummaryDesc'),
     prompt: t('lens.workspace.starterPaperSummaryPrompt'),
     mode: 'plugin',
     selectorGroups: [
@@ -52,7 +50,6 @@ const starterTasks = computed<StarterTask[]>(() => [
   {
     id: 'pdf-deep-read',
     title: t('lens.workspace.starterPdfDeepRead'),
-    desc: t('lens.workspace.starterPdfDeepReadDesc'),
     prompt: t('lens.workspace.starterPdfDeepReadPrompt'),
     mode: 'plugin',
     selectorGroups: [['pdf', '深度理解']],
@@ -60,7 +57,6 @@ const starterTasks = computed<StarterTask[]>(() => [
   {
     id: 'english-polish',
     title: t('lens.workspace.starterEnglishPolish'),
-    desc: t('lens.workspace.starterEnglishPolishDesc'),
     prompt: t('lens.workspace.starterEnglishPolishPrompt'),
     mode: 'core',
     selectorGroups: [['英文润色']],
@@ -68,7 +64,6 @@ const starterTasks = computed<StarterTask[]>(() => [
   {
     id: 'latex-translation',
     title: t('lens.workspace.starterLatexTranslation'),
-    desc: t('lens.workspace.starterLatexTranslationDesc'),
     prompt: t('lens.workspace.starterLatexTranslationPrompt'),
     mode: 'plugin',
     selectorGroups: [
@@ -79,7 +74,6 @@ const starterTasks = computed<StarterTask[]>(() => [
   {
     id: 'code-explain',
     title: t('lens.workspace.starterCodeExplain'),
-    desc: t('lens.workspace.starterCodeExplainDesc'),
     prompt: t('lens.workspace.starterCodeExplainPrompt'),
     mode: 'core',
     selectorGroups: [
@@ -90,7 +84,6 @@ const starterTasks = computed<StarterTask[]>(() => [
   {
     id: 'arxiv-summary',
     title: t('lens.workspace.starterArxivSummary'),
-    desc: t('lens.workspace.starterArxivSummaryDesc'),
     prompt: t('lens.workspace.starterArxivSummaryPrompt'),
     mode: 'plugin',
     selectorGroups: [
@@ -273,9 +266,7 @@ const startCustomWorkflow = async () => {
       <div class="workspace-home__hero">
         <div class="workspace-home__hero-main">
           <div class="workspace-home__hero-copy">
-            <span class="workspace-home__hero-kicker">Lens</span>
             <h2 class="workspace-home__headline">{{ t('lens.workspace.heroTitle') }}</h2>
-            <p class="workspace-home__hero-note">{{ t('lens.workspace.starterDesc') }}</p>
           </div>
           <div class="workspace-home__hero-actions">
             <button
@@ -297,10 +288,6 @@ const startCustomWorkflow = async () => {
       </div>
 
       <div class="workspace-home__board">
-        <div class="workspace-home__section-head">
-          <div class="workspace-home__section-title">{{ t('lens.workspace.starterTitle') }}</div>
-        </div>
-
         <div class="workspace-home__track-list">
           <section
             v-for="(lane, laneIndex) in resolvedStarterLanes"
@@ -312,7 +299,6 @@ const startCustomWorkflow = async () => {
             <div class="workspace-home__track-main">
               <div class="workspace-home__track-head">
                 <strong class="workspace-home__track-title">{{ lane.title }}</strong>
-                <span class="workspace-home__track-desc">{{ lane.desc }}</span>
               </div>
               <div class="workspace-home__starter-list">
                 <button
@@ -325,14 +311,6 @@ const startCustomWorkflow = async () => {
                 >
                   <span class="workspace-home__starter-copy">
                     <strong class="workspace-home__starter-name">{{ item.title }}</strong>
-                    <span class="workspace-home__starter-note">{{ item.desc }}</span>
-                    <span class="workspace-home__starter-meta">
-                      {{
-                        item.mode === 'plugin'
-                          ? t('lens.academicPanel.pluginLabel')
-                          : t('lens.academicPanel.coreLabel')
-                      }}
-                    </span>
                   </span>
                   <span class="workspace-home__starter-arrow">{{ t('lens.workspace.starterAction') }}</span>
                 </button>
@@ -343,7 +321,6 @@ const startCustomWorkflow = async () => {
               >
                 <div class="workspace-home__workflow-head">
                   <span class="workspace-home__workflow-label">{{ t('lens.workflow.templateTitle') }}</span>
-                  <span class="workspace-home__workflow-note">{{ t('lens.workspace.workflowSectionDesc') }}</span>
                 </div>
                 <div class="workspace-home__workflow-list">
                   <button
@@ -434,24 +411,16 @@ const startCustomWorkflow = async () => {
   display: flex;
   width: 100%;
   min-width: 0;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 28px;
+  gap: 20px;
 }
 
 .workspace-home__hero-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
-}
-
-.workspace-home__hero-kicker {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  gap: 0;
 }
 
 .workspace-home__headline {
@@ -462,14 +431,6 @@ const startCustomWorkflow = async () => {
   line-height: 0.96;
   letter-spacing: -0.05em;
   color: var(--text-main);
-}
-
-.workspace-home__hero-note {
-  max-width: 46ch;
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text-sub);
 }
 
 .workspace-home__hero-actions {
@@ -520,27 +481,9 @@ const startCustomWorkflow = async () => {
   gap: 14px;
 }
 
-.workspace-home__section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.workspace-home__section-title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  line-height: 1.35;
-  color: var(--ink-faint);
-}
-
 .workspace-home__track-list {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--grid-line);
 }
 
 .workspace-home__track {
@@ -582,11 +525,7 @@ const startCustomWorkflow = async () => {
 }
 
 .workspace-home__track-desc {
-  max-width: 24ch;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-sub);
-  text-align: right;
+  display: none;
 }
 
 .workspace-home__starter-list {
@@ -615,12 +554,6 @@ const startCustomWorkflow = async () => {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-faint);
-}
-
-.workspace-home__workflow-note {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-sub);
 }
 
 .workspace-home__workflow-list {
@@ -671,7 +604,7 @@ const startCustomWorkflow = async () => {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .workspace-home__starter-name,
@@ -682,13 +615,6 @@ const startCustomWorkflow = async () => {
   color: var(--text-main);
 }
 
-.workspace-home__starter-note {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-sub);
-}
-
-.workspace-home__starter-meta,
 .workspace-home__workflow-row-step,
 .workspace-home__workflow-row-side small {
   font-size: 11px;
@@ -746,10 +672,6 @@ const startCustomWorkflow = async () => {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
-  }
-
-  .workspace-home__hero-note {
-    max-width: none;
   }
 
   .workspace-home__hero-actions {

@@ -1443,7 +1443,7 @@ defineExpose({
                     aria-label="发送消息"
                   >
                     <SendOne size="15" />
-                    <span class="ml-1.5 whitespace-nowrap">提交任务</span>
+                    <span class="ml-1.5 whitespace-nowrap">发送</span>
                   </button>
 
                   <button
@@ -1593,7 +1593,7 @@ defineExpose({
                     aria-label="发送消息"
                   >
                     <SendOne size="15" />
-                    <span class="ml-2">提交任务</span>
+                    <span class="ml-2">发送</span>
                   </button>
                   <div v-if="!isMobile" class="tooltip tooltip-top">发送</div>
                 </div>

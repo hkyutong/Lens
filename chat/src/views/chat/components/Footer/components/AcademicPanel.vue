@@ -5,12 +5,10 @@ import { useAuthStore, useGlobalStoreWithOut, useChatStore } from '@/store'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { computed, ref, watch } from 'vue'
 import {
-  getAcademicEntityDisplayDescription,
   getAcademicEntityDisplayLabel,
   getAcademicEntityRawLabel,
   getAcademicEntitySelectorValue,
 } from '@/utils/academicI18n'
-import { getAcademicWorkflowChainLabel } from '@/utils/academicWorkflow'
 
 interface Props {
   embedded?: boolean
@@ -38,9 +36,6 @@ const { isMobile } = useBasicLayout()
 const coreFunctions = computed(() => chatStore.academicCoreFunctions || [])
 const activePlugin = computed(() => chatStore.currentAcademicPlugin)
 const activeCore = computed(() => chatStore.currentAcademicCore)
-const activeModelLabel = computed(() =>
-  String(chatStore.preferredModel?.label || chatStore.activeModelName || '').trim()
-)
 const workflowEnabled = computed(() => Boolean(chatStore.academicWorkflowEnabled))
 const workflowSteps = computed(() => chatStore.academicWorkflowSteps || [])
 const workflowRunning = computed(() => Boolean(chatStore.academicWorkflowRunning))
@@ -353,68 +348,8 @@ const pluginArgs = computed({
   set: (value: string) => chatStore.setAcademicPluginArgs(sanitizePluginArgs(value)),
 })
 
-const workflowLabel = computed(() => {
-  if (workflowEnabled.value && workflowSteps.value.length) {
-    return getAcademicWorkflowChainLabel(workflowSteps.value) || t('lens.workflow.empty')
-  }
-  return getAcademicEntityDisplayLabel(activePlugin.value || activeCore.value) ||
-    t('lens.academicPanel.workflowFallbackLabel')
-})
-
-const workflowDescription = computed(() => {
-  if (workflowEnabled.value && workflowSteps.value.length) {
-    return t('lens.workflow.currentChainDesc')
-  }
-  return (
-    getAcademicEntityDisplayDescription(activePlugin.value || activeCore.value) ||
-    t('lens.academicPanel.workflowFallbackDesc')
-  )
-})
-
-const selectedKind = computed(() => {
-  if (workflowEnabled.value && workflowSteps.value.length) {
-    return t('lens.workflow.currentChain')
-  }
-  if (activePlugin.value) return t('lens.academicPanel.selectedKindTool')
-  if (activeCore.value) return t('lens.academicPanel.selectedKindCore')
-  return t('lens.academicPanel.selectedKindPending')
-})
-
-const workflowOverviewChips = computed(() => {
-  const chips: string[] = []
-  chips.push(workflowEnabled.value ? t('lens.workflow.workflowMode') : t('lens.workflow.singleMode'))
-
-  if (workflowEnabled.value) {
-    chips.push(`${workflowSteps.value.length}/3 ${t('lens.workflow.stepsShort')}`)
-    if (workflowRunning.value) {
-      chips.push(t('lens.message.workflowStatusRunning'))
-    } else if (workflowSteps.value.length) {
-      chips.push(t('lens.message.workflowStatusPending'))
-    } else {
-      chips.push(t('lens.workflow.empty'))
-    }
-  } else if (activePlugin.value || activeCore.value) {
-    chips.push(t('lens.message.workflowStatusDone'))
-  } else {
-    chips.push(t('lens.message.workflowStatusPending'))
-  }
-
-  return chips
-})
-
 const quickPluginCandidates = computed(() => pluginList.value.slice(0, 4))
 const quickCoreCandidates = computed(() => coreFunctions.value.slice(0, 4))
-const panelGuidance = computed(() => {
-  if (workflowEnabled.value) {
-    if (!workflowMemberAvailable.value) return t('lens.workflow.memberOnly')
-    if (workflowSteps.value.length) return t('lens.workflow.currentChainDesc')
-    return t('lens.workflow.empty')
-  }
-  if (activePlugin.value || activeCore.value) {
-    return t('lens.academicPanel.selectedReadyHint')
-  }
-  return t('lens.academicPanel.workflowFallbackDesc')
-})
 
 const isPluginArgsEnabled = computed(() => Boolean(activePlugin.value))
 const pluginArgsPlaceholder = computed(() => {
@@ -529,37 +464,6 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
             ×
           </button>
         </div>
-      </div>
-
-      <div class="research-controls__overview">
-        <div class="research-controls__overview-row">
-          <span>{{ t('lens.academicPanel.modeLabel') }}</span>
-          <strong>
-            {{
-              workflowEnabled
-                ? t('lens.workflow.modeWorkflow')
-                : t('lens.academicPanel.researchMode')
-            }}
-          </strong>
-        </div>
-        <div v-if="activeModelLabel" class="research-controls__overview-row">
-          <span>{{ t('lens.academicPanel.modelLabel') }}</span>
-          <strong>{{ activeModelLabel }}</strong>
-        </div>
-        <div class="research-controls__overview-row">
-          <span>{{ selectedKind }}</span>
-          <strong>{{ workflowLabel }}</strong>
-        </div>
-        <div v-if="showAdvanced || pluginArgs" class="research-controls__overview-row">
-          <span>{{ t('lens.academicPanel.advancedInstruction') }}</span>
-          <strong>{{ pluginArgs ? t('lens.academicPanel.filled') : t('lens.academicPanel.empty') }}</strong>
-        </div>
-        <div class="research-controls__overview-chips">
-          <span v-for="chip in workflowOverviewChips" :key="chip" class="research-controls__overview-chip">
-            {{ chip }}
-          </span>
-        </div>
-        <p class="research-controls__overview-note">{{ panelGuidance }}</p>
       </div>
 
       <div class="research-controls__mode-switch">
@@ -774,13 +678,6 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
         <p class="research-controls__hint">{{ t('lens.academicPanel.customInstructionHint') }}</p>
       </div>
 
-      <div class="research-controls__workflow">
-        <div class="research-controls__workflow-label">{{ t('lens.academicPanel.workflowLabel') }}</div>
-        <div class="research-controls__workflow-title">{{ workflowLabel }}</div>
-        <div class="research-controls__workflow-desc">
-          {{ workflowDescription }}
-        </div>
-      </div>
     </section>
   </div>
 </template>
