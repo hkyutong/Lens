@@ -358,58 +358,56 @@ const startCustomWorkflow = async () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 6px;
+  gap: 16px;
+  padding-top: 2px;
   animation: workspace-home-enter 320ms ease;
 }
 
 .workspace-home__hero {
   display: flex;
   justify-content: flex-start;
-  padding: 0 0 10px;
-  border-bottom: 1px solid var(--grid-line);
+  padding: 0;
 }
 
 .workspace-home__hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: 8px;
 }
 
 .workspace-home__hero-action {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  padding: 0;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 13px;
   border: none;
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  font-size: 11px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
   transition:
+    background-color 0.18s ease,
     color 0.18s ease,
-    border-color 0.18s ease,
     transform 0.18s ease;
 }
 
 .workspace-home__hero-action:hover {
-  transform: translateX(2px);
+  transform: translateY(-1px);
 }
 
 .workspace-home__hero-action--primary {
-  color: var(--text-main);
-  border-color: var(--text-main);
+  color: var(--btn-text-primary);
+  background: var(--btn-bg-primary);
 }
 
 .workspace-home__hero-action--secondary {
-  color: var(--text-sub);
+  color: var(--text-main);
 }
 
 .workspace-home__hero-action--secondary:hover {
-  color: var(--text-main);
-  border-color: var(--paper-border);
+  background: var(--accent-soft);
 }
 
 .workspace-home__board {
@@ -421,19 +419,18 @@ const startCustomWorkflow = async () => {
 .workspace-home__track-list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0 24px;
+  gap: 0 34px;
 }
 
 .workspace-home__track {
   min-width: 0;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--grid-line);
+  padding: 8px 0;
 }
 
 .workspace-home__track-main {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -445,10 +442,11 @@ const startCustomWorkflow = async () => {
 }
 
 .workspace-home__track-title {
-  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Noto Serif SC', 'Source Han Serif SC', serif;
-  font-size: 17px;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
   color: var(--text-main);
 }
 
@@ -459,19 +457,20 @@ const startCustomWorkflow = async () => {
 .workspace-home__starter-list {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0;
+  gap: 4px;
 }
 
 .workspace-home__workflow-block {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .workspace-home__workflow-list {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 .workspace-home__starter-row,
@@ -481,8 +480,9 @@ const startCustomWorkflow = async () => {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 0 8px;
-  border-bottom: 1px solid var(--grid-line);
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 12px;
   background: transparent;
   color: var(--text-main);
   text-align: left;
@@ -495,16 +495,13 @@ const startCustomWorkflow = async () => {
 
 .workspace-home__starter-row:hover,
 .workspace-home__workflow-row:hover {
-  transform: translateX(2px);
-  background-color: var(--accent-soft);
-}
-
-.workspace-home__workflow-list > .workspace-home__workflow-row:last-child {
-  border-bottom: none;
+  transform: translateY(-1px);
+  background-color: var(--surface-muted);
 }
 
 .workspace-home__starter-row--active {
   color: var(--text-main);
+  background: var(--accent-soft);
 }
 
 .workspace-home__starter-row--active .workspace-home__starter-name {
@@ -523,7 +520,7 @@ const startCustomWorkflow = async () => {
 .workspace-home__workflow-row-title {
   font-size: 14px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--text-main);
 }
 
@@ -536,9 +533,21 @@ const startCustomWorkflow = async () => {
 
 .workspace-home__starter-arrow,
 .workspace-home__workflow-row-action {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-faint);
+  opacity: 0.76;
+  transition:
+    color 0.16s ease,
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.workspace-home__starter-row:hover .workspace-home__starter-arrow,
+.workspace-home__workflow-row:hover .workspace-home__workflow-row-action {
+  color: var(--text-main);
+  opacity: 1;
+  transform: translate(1px, -1px);
 }
 
 .workspace-home__workflow-row--locked {
@@ -596,8 +605,8 @@ const startCustomWorkflow = async () => {
   .workspace-home__workflow-row {
     grid-template-columns: 1fr;
     align-items: flex-start;
-    gap: 10px;
-    padding: 16px 0;
+    gap: 8px;
+    padding: 12px 10px;
   }
 
   .workspace-home__workflow-row-side {
