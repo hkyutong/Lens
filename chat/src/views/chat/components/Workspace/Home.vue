@@ -67,16 +67,6 @@ const starterTasks = computed<StarterTask[]>(() => [
     ],
   },
   {
-    id: 'code-explain',
-    title: t('lens.workspace.starterCodeExplain'),
-    prompt: t('lens.workspace.starterCodeExplainPrompt'),
-    mode: 'core',
-    selectorGroups: [
-      ['学术型代码解释'],
-      ['代码解释'],
-    ],
-  },
-  {
     id: 'arxiv-summary',
     title: t('lens.workspace.starterArxivSummary'),
     prompt: t('lens.workspace.starterArxivSummaryPrompt'),
@@ -116,7 +106,7 @@ const starterLanes = computed<StarterLane[]>(() => [
     id: 'analysis',
     title: t('lens.workspace.analysisTitle'),
     desc: t('lens.workspace.analysisDesc'),
-    taskIds: ['code-explain'],
+    taskIds: [],
   },
 ])
 const resolvedStarterLanes = computed(() =>
@@ -252,18 +242,6 @@ const startCustomWorkflow = async () => {
 <template>
   <section class="workspace-home">
     <div class="workspace-home__shell">
-      <div class="workspace-home__hero">
-        <div class="workspace-home__hero-actions">
-          <button
-            type="button"
-            class="workspace-home__hero-action workspace-home__hero-action--primary"
-            @click="focusComposer"
-          >
-            {{ t('lens.workspace.heroPrimaryAction') }}
-          </button>
-        </div>
-      </div>
-
       <div class="workspace-home__board">
         <div class="workspace-home__track-list">
           <section
@@ -276,7 +254,7 @@ const startCustomWorkflow = async () => {
               <div class="workspace-home__track-head">
                 <strong class="workspace-home__track-title">{{ lane.title }}</strong>
               </div>
-              <div class="workspace-home__starter-list">
+              <div v-if="lane.tasks.length" class="workspace-home__starter-list">
                 <button
                   v-for="item in lane.tasks"
                   :key="item.id"
@@ -342,48 +320,9 @@ const startCustomWorkflow = async () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   padding-top: 2px;
   animation: workspace-home-enter 320ms ease;
-}
-
-.workspace-home__hero {
-  display: flex;
-  justify-content: flex-start;
-  padding: 0;
-}
-
-.workspace-home__hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.workspace-home__hero-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  padding: 0 13px;
-  border: none;
-  border-radius: 999px;
-  background: var(--surface-muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  transition:
-    background-color 0.18s ease,
-    color 0.18s ease,
-    transform 0.18s ease;
-}
-
-.workspace-home__hero-action:hover {
-  transform: translateY(-1px);
-}
-
-.workspace-home__hero-action--primary {
-  color: var(--btn-text-primary);
-  background: var(--btn-bg-primary);
 }
 
 .workspace-home__board {
@@ -457,7 +396,7 @@ const startCustomWorkflow = async () => {
   gap: 10px;
   width: 100%;
   min-height: 38px;
-  padding: 8px 10px;
+  padding: 8px 0;
   border-radius: 12px;
   background: transparent;
   color: var(--text-main);
@@ -582,7 +521,7 @@ const startCustomWorkflow = async () => {
     grid-template-columns: 1fr;
     align-items: flex-start;
     gap: 8px;
-    padding: 12px 10px;
+    padding: 12px 0;
   }
 
   .workspace-home__workflow-row-side {
