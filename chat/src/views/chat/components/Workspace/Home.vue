@@ -419,7 +419,7 @@ const startCustomWorkflow = async () => {
 
 .workspace-home__track-title {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0.01em;
@@ -494,7 +494,7 @@ const startCustomWorkflow = async () => {
 
 .workspace-home__starter-name,
 .workspace-home__workflow-row-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
   color: var(--text-sub);
