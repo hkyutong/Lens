@@ -1,8 +1,79 @@
 # 更新日志
 
+## 0.0.62 (2026-04-20)
+- 首页继续按反馈做减法：`chat/src/views/chat/components/Workspace/Home.vue` 已删除“提问”主动作与空 Hero 占位；案例行左侧 padding 清零，使下面案例和 `读材料 / 写内容 / 研究链路` 三个分区标题左对齐。
+- 研究链路继续降噪：已从“研究链路”分区移除 `代码解释` 入口，仅保留编排相关入口。已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`，构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅首页前端展示。回滚方式：恢复 `Workspace/Home.vue` 到本次改动前版本即可。
+- 已完成本轮安全同步：代码已提交为 `489fb38 refactor: remove workspace home action chrome` 并推送到 `origin/main`；随后已将最新 `chat/dist` 零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，线上回查 `https://lens.yutoai.net/?v=20260420223100` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-20 14:31:06 GMT`，`9520/38000` 监听未变。影响范围：仅首页前端展示。回滚方式：回退 GitHub 到上一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.61 (2026-04-20)
+- 首页字号关系调整：`chat/src/views/chat/components/Workspace/Home.vue` 已将 `读材料 / 写内容 / 研究链路` 三个分区标题从 `13px` 调整为 `14px`，并将下面案例标题从 `14px` 调整为 `13px`，保留案例灰色与 `500` 字重，避免重新变成黑色粗标题墙。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。
+- 已完成本轮安全同步：代码已提交为 `4d0297e refactor: adjust workspace home type scale` 并推送到 `origin/main`；随后已将最新 `chat/dist` 零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，线上回查 `https://lens.yutoai.net/?v=20260420213200` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-20 13:31:55 GMT`，`9520/38000` 监听未变。影响范围：仅首页前端展示。回滚方式：回退 GitHub 到上一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.60 (2026-04-20)
+- 首页继续按截图做减法：`chat/src/views/chat/components/Workspace/Home.vue` 已移除顶部动作中的“导入”，首页空状态现在只保留“提问”主动作；同时将能力案例标题从黑色粗字降为 `text-sub` 灰色与 `500` 字重，降低案例行视觉权重。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。
+- 已完成本轮安全同步：代码已提交为 `d90bbeb refactor: soften workspace home entries` 并推送到 `origin/main`；随后已将最新 `chat/dist` 零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，线上回查 `https://lens.yutoai.net/?v=20260420212200` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-20 13:21:08 GMT`，`9520/38000` 监听未变。影响范围：仅首页前端展示。回滚方式：回退 GitHub 到上一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.59 (2026-04-20)
+- 首页字体与灰线治理：`chat/src/views/chat/components/Workspace/Home.vue` 已移除首页分组标题上的衬线字体，改为继承产品统一无衬线体系；同时去掉 Hero、分组和入口行上的密集灰色横线，改用留白、轻量胶囊动作和 hover 背景表达层级。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。浏览器截图尝试受本地预览代理配置阻塞，已立即关闭 Chromium、停止预览并清理临时 profile，无后台进程残留。
+- 已完成本轮安全同步：代码已提交为 `9668ea2 refactor: align workspace home typography` 并推送到 `origin/main`；随后已将最新 `chat/dist` 零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，线上回查 `https://lens.yutoai.net/?v=20260420203500` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-20 12:32:36 GMT`，`9520/38000` 监听未变。影响范围：仅首页前端样式。回滚方式：回退 GitHub 到上一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.58 (2026-04-15)
+- 已同步新的浏览器清理约束：按根目录 `AGENTS.md`，以后每次使用 Playwright / Chromium 完成调试、截图、自动化或验收后，必须立即关闭浏览器窗口、会话和残留后台进程，不允许继续占用系统资源。
+- 本地记录已补齐：`memory.md` 已把这条要求写入当前长期约束，后续所有浏览器相关操作都按这条规则收尾。影响范围：仅本地规则与记忆文件。回滚方式：恢复本地记录到本次补充前版本即可。
+
+## 0.0.57 (2026-04-15)
+- 已纠正 Chromium 路径真相源：按根目录 `AGENTS.md` 重新核对后，当前固定 Playwright Chromium 本体应以 `/Users/hkyutong/Library/Application Support/PlaywrightChromium/chromium-1217/...` 为准，`~/Library/Caches/ms-playwright` 不再作为是否可用的判断依据。
+- 本地记录已同步校正：`Agents.md`、`memory.md` 已补上“先看固定本体路径、不要再把缓存目录当真相源”的说明，避免后续 Playwright/Chromium 验收时再沿用旧路径判断。影响范围：仅本地规则与记忆文件。回滚方式：恢复三份本地记录到本次修正前版本即可。
+
+## 0.0.56 (2026-04-15)
+- 首页继续做减法并完成发布：`chat/src/views/chat/components/Workspace/Home.vue` 已移除大标题 Hero，只保留一行动作入口；读材料区撤下 `Arxiv 摘要`，第三列标题收成“研究链路”，并把 `代码解释 / 自己编排 / 1 条精选案例` 合并进同一列，首页整体从“分段展示”进一步收敛成更短的研究目录。
+- 多语言文案同步压缩：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 已把首页动作按钮缩成更短的操作词，并统一第三列标题语义，避免首页继续靠长句撑版面。
+- 已完成本轮安全同步：代码已提交为 `01d514a refactor: tighten the research entry` 并推送到 `origin/main`；随后已将最新 `chat/dist` 零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，线上回查 `https://lens.yutoai.net/?v=20260415080300` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-15 00:01:14 GMT`，`9520/38000` 监听未变。影响范围：仅首页前端结构与五套 locale。回滚方式：回退 GitHub 到上一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.55 (2026-04-15)
+- 首页继续做减法：`chat/src/views/chat/components/Workspace/Home.vue` 已移除 `01/02/03` 编号、入口右侧“进入”文字、流程模板的重复步骤展开，并把流程案例缩到 1 条；当前首页收成三栏主入口加一块极简编排区，减少层级和重复阅读。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅首页前端结构。回滚方式：恢复 `Workspace/Home.vue` 到本次改动前版本即可。
+
+## 0.0.54 (2026-04-14)
+- 已完成本轮安全同步：主界面去噪改动已提交为 `f43ab15 refactor: reduce workspace noise` 并推送到 `origin/main`；本次仍未把本地 `Agents.md / memory.md / changelog.md` 推上 GitHub，只同步了前端显示层代码与构建产物。
+- 已完成前端零停机发布：本地 `chat/dist` 已再次同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，继续采用“先同步除 `index.html` 外的静态资源、最后覆盖 `index.html`”的方式，不重启 `9520` 与 `38000`，也不触碰学术服务目录。
+- 线上回查通过：`https://lens.yutoai.net/?v=20260414082441` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-14 00:24:41 GMT`；服务器 `public/chat/index.html` 修改时间为 `2026-04-14 08:24:41 +0800`，`9520` 仍由进程 `4048630` 监听，`38000` 仍由进程 `4048524` 监听。影响范围：仅前端显示层与语义层。回滚方式：回退 GitHub 到前一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.53 (2026-04-14)
+- 继续给主界面做减法：`chat/src/views/chat/components/Workspace/Home.vue` 已移除 Hero 辅助说明、入口用途说明、能力标签和编排说明句，首页从“解释入口”继续收敛成“直接操作入口”；`chat/src/views/chat/components/Footer/components/AcademicPanel.vue` 已移除顶部综述卡和底部“当前任务”重复摘要，只保留真正需要操作的控制项。
+- 修正 SEO 语义层串入产品界面：`chat/index.html` 中的 `seo-snapshot` 现在改为真正的视觉隐藏语义层，仍保留给抓取器读取，但不再直接堆在应用页底部干扰学术用户操作。
+- 同步压缩交互文案：`chat/src/views/chat/components/Footer/index.vue` 把“提交任务”收成“发送”；`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 同步缩短首页区块标题、登录占位文案和右侧面板标题/空态提示。已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`，构建仍只有既有 warning。影响范围：仅前端显示层与语义层。回滚方式：恢复 `Workspace/Home.vue`、`AcademicPanel.vue`、`Footer/index.vue`、`chat/index.html` 与上述 locale 到本次改动前版本即可。
+
+## 0.0.52 (2026-04-14)
+- 已完成本轮安全同步：首页重设计已提交为 `4c2e360 refactor: redesign the research workspace` 并推送到 `origin/main`；本次仍未把本地 `Agents.md / memory.md / changelog.md` 推上 GitHub，只同步了首页前端代码与构建产物。
+- 已完成前端零停机发布：本地 `chat/dist` 已再次同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，继续采用“先同步除 `index.html` 外的静态资源、最后覆盖 `index.html`”的方式，不重启 `9520` 与 `38000`，也不触碰学术服务目录。
+- 线上回查通过：`https://lens.yutoai.net/?v=20260414081200` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-14 00:12:35 GMT`；服务器 `public/chat/index.html` 修改时间为 `2026-04-14 08:12:35 +0800`，`9520` 仍由进程 `4048630` 监听，`38000` 仍由进程 `4048524` 监听。影响范围：仅首页前端静态资源。回滚方式：回退 GitHub 到前一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.51 (2026-04-14)
+- 首页继续做成更像专业科研平台的研究界面：`chat/src/views/chat/components/Workspace/Home.vue` 这轮把首页从“目录式入口”进一步重构为“Lens 标识 + 研究入口 Hero + 三段研究工作流”，加入更强的编辑式排版层级、弱化功能陈列感，并把代码解释与多步流程统一收到“拆方法与编排”区域。
+- 首页入口全部改成任务语义：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 已为论文总结、PDF 深读、Arxiv 摘要、英文润色、LaTeX 翻译、代码解释补上用途说明，并把按钮文案收敛成“进入 / Open / 開く / 進入 / 열기”，让入口更像研究动作而不是功能标签。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅首页前端结构与五套 locale。回滚方式：恢复 `Workspace/Home.vue` 与对应 locale 到本次改动前版本即可。
+
+## 0.0.50 (2026-04-14)
+- 已完成本轮安全同步：首页“工作方式入口”改造已提交为 `0b25356 refactor: focus the research entry` 并推送到 `origin/main`；本次没有把本地 `Agents.md / memory.md / changelog.md` 推上 GitHub，只同步了首页前端代码与构建产物。
+- 已完成前端零停机发布：本地 `chat/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，继续采用“先同步除 `index.html` 外的静态资源、最后覆盖 `index.html`”的方式，未重启 `9520` 与 `38000`，也未触碰学术服务目录。
+- 线上回查通过：`https://lens.yutoai.net/?v=20260414074458` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-13 23:44:58 GMT`；服务器 `public/chat/index.html` 修改时间为 `2026-04-14 07:44:58 +0800`，`9520` 仍由进程 `4048630` 监听，`38000` 仍由进程 `4048524` 监听。影响范围：仅首页前端静态资源。回滚方式：回退 GitHub 到前一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
+
+## 0.0.49 (2026-04-14)
+- 首页继续从“功能目录”收敛成“工作方式入口”：`chat/src/views/chat/components/Workspace/Home.vue` 已取消左右双区工作台，把首页改成单列三段式结构，按“读材料 / 写内容 / 多步流程”组织入口；用户先判断自己在做哪类研究工作，再进入具体能力，减少功能货架感并强化首屏主次。
+- 首页文案进一步改成任务导向：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 已把主标题与分区标题改成更直接的研究语义，如“开始研究 / 先选工作方式 / 读材料 / 写内容”，避免“研究工作台 / 单步任务”这类偏后台或产品目录的措辞。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅首页前端结构与五套 locale。回滚方式：恢复 `Workspace/Home.vue` 与对应 locale 到本次改动前版本即可。
+
+## 0.0.48 (2026-04-14)
+- 首页结构继续专业化：`chat/src/views/chat/components/Workspace/Home.vue` 已从“高频能力 + 能力编排”的同层清单，重构为“单步任务 / 多步流程”的双区工作台；左侧按“阅读与理解 / 写作与改写”组织入口，右侧独立承载流程编排，减少功能市场感并强化研究任务导向。
+- 首页文案改成操作语言：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 已把首页改成更偏研究操作的措辞，如 “研究工作台 / 单步任务 / 直接提问 / 阅读与理解 / 写作与改写”，避免学术用户先读营销式或泛功能式标题。
+- 长期规则入口迁移到本地 `Agents.md`：后续以 `Agents.md / memory.md / changelog.md` 持续维护流程与记忆，`.gitignore` 已补充 `Agents.md`。本地验证：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 通过；Playwright 浏览器验收本轮受现有共享 Chromium 缺失提示阻塞，未下载或替换任何运行时。影响范围：仅首页前端结构、五套 locale、本地规则文件与忽略规则。回滚方式：恢复 `Workspace/Home.vue`、对应 locale、`.gitignore` 与本地记录文件到本次改动前版本即可。
 ## 0.0.47 (2026-04-14)
 - 继续收掉空主页文案噪音：`chat/src/views/chat/chatBase.vue` 已移除空主页内容区的大字“你的项目”，`chat/src/views/chat/components/Workspace/Home.vue` 已移除说明句“直接提问，或先导入资料。”，首页进一步只保留真正可操作的标题与入口。
-- 补充同步纪律：后续默认按“完成改动后立即同步”的方式执行，至少包含本地校验、更新 `memory.md / sop.md / changelog.md`、推送 GitHub，以及按影响范围同步服务器；前端展示层改动默认热同步 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。
+- 补充同步纪律：后续默认按“完成改动后立即同步”的方式执行，至少包含本地校验、更新 `Agents.md / memory.md / changelog.md`、推送 GitHub，以及按影响范围同步服务器；前端展示层改动默认热同步 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。
 - 本地验证：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`。影响范围：仅聊天空主页与首页 Hero 展示，以及后续交付流程约束。回滚方式：恢复 `chatBase.vue`、`Workspace/Home.vue` 与记录文件到本次改动前版本即可。
 
 ## 0.0.46 (2026-04-14)
