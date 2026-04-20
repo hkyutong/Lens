@@ -21,14 +21,9 @@ type StarterLane = {
   taskIds: string[]
 }
 
-interface Emit {
-  (ev: 'import'): void
-}
-
 const chatStore = useChatStore()
 const authStore = useAuthStore()
 const useGlobalStore = useGlobalStoreWithOut()
-const emit = defineEmits<Emit>()
 const { isMobile } = useBasicLayout()
 const normalizeText = (value: any) =>
   String(value || '')
@@ -200,10 +195,6 @@ const applyStarterTask = async (task: StarterTask) => {
   await focusComposer()
 }
 
-const triggerImport = () => {
-  emit('import')
-}
-
 const openMemberDialog = () => {
   if (isMobile.value) {
     useGlobalStore.updateMobileSettingsDialog(true, DIALOG_TABS.MEMBER)
@@ -269,13 +260,6 @@ const startCustomWorkflow = async () => {
             @click="focusComposer"
           >
             {{ t('lens.workspace.heroPrimaryAction') }}
-          </button>
-          <button
-            type="button"
-            class="workspace-home__hero-action workspace-home__hero-action--secondary"
-            @click="triggerImport"
-          >
-            {{ t('lens.workspace.importData') }}
           </button>
         </div>
       </div>
@@ -402,14 +386,6 @@ const startCustomWorkflow = async () => {
   background: var(--btn-bg-primary);
 }
 
-.workspace-home__hero-action--secondary {
-  color: var(--text-main);
-}
-
-.workspace-home__hero-action--secondary:hover {
-  background: var(--accent-soft);
-}
-
 .workspace-home__board {
   display: flex;
   flex-direction: column;
@@ -505,7 +481,7 @@ const startCustomWorkflow = async () => {
 }
 
 .workspace-home__starter-row--active .workspace-home__starter-name {
-  color: var(--text-main);
+  color: var(--text-sub);
 }
 
 .workspace-home__starter-copy,
@@ -519,9 +495,9 @@ const startCustomWorkflow = async () => {
 .workspace-home__starter-name,
 .workspace-home__workflow-row-title {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
-  color: var(--text-main);
+  color: var(--text-sub);
 }
 
 .workspace-home__workflow-row-step,
