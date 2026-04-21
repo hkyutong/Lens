@@ -795,7 +795,7 @@ watch(
 
           <!-- 签到信息 -->
           <div
-            class="mb-2 rounded-[20px] border border-[var(--paper-border)] bg-[var(--surface-panel)] p-4 text-sm leading-7 text-[var(--text-sub)]"
+            class="mb-2 rounded-[20px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-4 text-sm leading-7 text-[var(--text-sub)]"
           >
             <span>签到赠送：</span>
             <span v-if="signInModel3Count > 0 && !isHideModel3Point"
@@ -883,7 +883,7 @@ watch(
             <!-- 普通积分 -->
             <div
               v-if="!isHideModel3Point"
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
             >
               <div class="w-28 text-[var(--text-sub)]">{{ model3Name }}</div>
               <div class="text-lg font-bold text-[var(--text-main)]">
@@ -903,7 +903,7 @@ watch(
             <!-- 高级模型积分 -->
             <div
               v-if="!isHideModel4Point"
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
             >
               <div class="w-28 text-[var(--text-sub)]">{{ model4Name }}</div>
               <div class="text-lg font-bold text-[var(--text-main)]">
@@ -923,7 +923,7 @@ watch(
             <!-- 顶级模型额度 -->
             <div
               v-if="!isHideDrawMjPoint"
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
             >
               <div class="w-28 text-[var(--text-sub)]">{{ drawMjName }}</div>
               <div class="text-lg font-bold text-[var(--text-main)]">
@@ -942,7 +942,7 @@ watch(
 
             <!-- 会员到期时间 -->
             <div
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 py-3"
+              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
             >
               <div class="w-28 text-[var(--text-sub)]">会员状态</div>
               <div

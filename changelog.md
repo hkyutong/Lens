@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.67 (2026-04-21)
+- 会员中心视觉细节调整：`chat/src/components/Settings/MemberCenter.vue` 中“签到赠送”、普通积分、高级积分、顶级模型额度和会员状态信息行不再使用灰色 `surface-panel` 背景，改回跟随原有白色 `surface-card` 背景，仅保留边框、圆角和排版层级。
+- 影响范围：仅会员中心签到和额度信息展示样式，不涉及签到、积分、会员到期时间等业务数据或接口逻辑。回滚方式：将上述信息行背景从 `surface-card` 恢复为 `surface-panel` 后重新构建并同步 `chat/dist`。
+
 ## 0.0.66 (2026-04-21)
 - 补齐旧法律页删除语义：由于 SPA fallback 会把不存在的 `/legal/terms.html` 与 `/legal/privacy.html` 回退到 `index.html`，`service/src/modules/spa/spa.controller.ts` 已对这两个旧 Lens 本地路径显式返回 `410 Gone`，避免它们在浏览器或爬虫侧继续表现为可访问页面。
 - 影响范围：仅旧本地法律页路径的 HTTP 行为；登录弹窗仍使用 `https://yutoai.net/terms/` 与 `https://yutoai.net/privacy-policy/`。回滚方式：移除 `removedLocalLegalPaths` 分支并重新构建、同步 `service/dist`。
