@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.66 (2026-04-21)
+- 补齐旧法律页删除语义：由于 SPA fallback 会把不存在的 `/legal/terms.html` 与 `/legal/privacy.html` 回退到 `index.html`，`service/src/modules/spa/spa.controller.ts` 已对这两个旧 Lens 本地路径显式返回 `410 Gone`，避免它们在浏览器或爬虫侧继续表现为可访问页面。
+- 影响范围：仅旧本地法律页路径的 HTTP 行为；登录弹窗仍使用 `https://yutoai.net/terms/` 与 `https://yutoai.net/privacy-policy/`。回滚方式：移除 `removedLocalLegalPaths` 分支并重新构建、同步 `service/dist`。
+
 ## 0.0.65 (2026-04-21)
 - 协议入口纠正：Lens 登录弹窗中的《服务协议》《隐私政策》不再指向本地 `/legal/terms.html` 与 `/legal/privacy.html`，改为统一加载 YutoAI 主站协议 `https://yutoai.net/terms/` 与 `https://yutoai.net/privacy-policy/`；新增 `chat/src/constants/legalLinks.ts` 统一维护链接，避免邮箱登录和微信登录分叉。
 - 删除 Lens 本地法律页：已移除 `chat/public/legal/terms.html` 与 `chat/public/legal/privacy.html`，同步清理 `chat/index.html`、`chat/public/llms.txt`、`chat/public/llms-full.txt`、`chat/public/seo/research-workspace.html`、`chat/public/robots.txt` 与 `service/src/modules/spa/spa.controller.ts` 中的本地 `/legal/*.html` 入口和 sitemap 条目。

@@ -15,6 +15,10 @@ export class SpaController {
   private readonly exists: boolean;
   private readonly adminPath: string;
   private readonly legacyAdminPath = '/admin';
+  private readonly removedLocalLegalPaths = new Set([
+    '/legal/terms.html',
+    '/legal/privacy.html',
+  ]);
 
   constructor(private readonly globalConfigService: GlobalConfigService) {
     // 检查index.html是否存在
@@ -97,6 +101,10 @@ ${routes
       (this.adminPath !== this.legacyAdminPath && req.path.startsWith(this.legacyAdminPath))
     ) {
       return next();
+    }
+
+    if (this.removedLocalLegalPaths.has(req.path)) {
+      return res.status(410).type('text/plain; charset=utf-8').send('Gone');
     }
 
     // 检查是否为静态资源请求（如js、css等文件）
