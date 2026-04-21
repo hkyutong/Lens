@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.63 (2026-04-21)
+- 公开法律页更新：`chat/public/legal/terms.html` 已替换为用户提供的 2026-04-21 版 `YutoAI 服务协议 / Terms of Service`，`chat/public/legal/privacy.html` 已替换为 2026-04-21 版 `YutoAI 隐私政策 / Privacy Policy`，补齐服务主体、服务范围、账号安全、API、退款、第三方服务、企业服务、投诉、责任限制、香港法律与隐私数据处理等完整条款。
+- 法律页排版同步调整为网站静态文档格式：新增 `YutoAI Legal` 页眉、双语标题、更新时间、章节锚点目录、主体信息块、清晰分节和移动端适配；保持纯静态 HTML，不引入脚本和新运行时依赖，兼容登录弹窗 iframe 与公开访问。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`，并确认 `chat/dist/legal/terms.html`、`chat/dist/legal/privacy.html` 包含 2026-04-21 版内容；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅公开法律页静态内容与排版。回滚方式：恢复两份 `chat/public/legal/*.html` 到上一版本并重新同步 `chat/dist` 即可。
+
 ## 0.0.62 (2026-04-20)
 - 首页继续按反馈做减法：`chat/src/views/chat/components/Workspace/Home.vue` 已删除“提问”主动作与空 Hero 占位；案例行左侧 padding 清零，使下面案例和 `读材料 / 写内容 / 研究链路` 三个分区标题左对齐。
 - 研究链路继续降噪：已从“研究链路”分区移除 `代码解释` 入口，仅保留编排相关入口。已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`，构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅首页前端展示。回滚方式：恢复 `Workspace/Home.vue` 到本次改动前版本即可。

@@ -3,165 +3,567 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Lens 服务协议</title>
+    <meta
+      name="description"
+      content="YutoAI 服务协议，说明账号、API、订阅、退款、用户内容、AI 输出免责声明和争议解决规则。"
+    />
+    <title>YutoAI 服务协议 | Terms of Service</title>
     <style>
       :root {
         color-scheme: light;
-        --bg: #f5f7fb;
-        --card: #ffffff;
-        --text: #111827;
-        --sub: #4b5563;
-        --line: #e5e7eb;
+        --page: #ffffff;
+        --paper: #ffffff;
+        --ink: #111111;
+        --muted: #666b73;
+        --soft: #8b9097;
+        --line: rgba(17, 17, 17, 0.08);
+        --line-strong: rgba(17, 17, 17, 0.14);
+        --accent: #111111;
+        --accent-soft: #f5f5f2;
       }
+
       * {
         box-sizing: border-box;
       }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         margin: 0;
-        padding: 28px 32px 36px;
-        background: #ffffff;
-        color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-        line-height: 1.75;
+        background: var(--page);
+        color: var(--ink);
+        font-family:
+          "IBM Plex Sans",
+          "PingFang SC",
+          "Source Han Sans SC",
+          "Microsoft YaHei",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.72;
       }
-      .card {
-        max-width: none;
-        margin: 0;
-        background: transparent;
-        border: 0;
-        border-radius: 0;
-        padding: 0;
+
+      a {
+        color: inherit;
+        text-decoration: none;
       }
-      h1, h2 {
+
+      .legal-page {
+        width: min(920px, 100%);
+        margin: 0 auto;
+        padding: 32px 32px 56px;
+      }
+
+      .legal-mark {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 34px;
+        color: var(--soft);
+        font-size: 13px;
+      }
+
+      .legal-mark strong {
+        color: var(--ink);
+        font-size: 14px;
+        letter-spacing: 0.02em;
+      }
+
+      .legal-header {
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .eyebrow {
         margin: 0 0 10px;
+        color: var(--soft);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 5vw, 54px);
+        line-height: 1.04;
+        letter-spacing: -0.04em;
+      }
+
+      .subtitle {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: clamp(18px, 2.4vw, 24px);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .updated {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin-top: 20px;
+        color: var(--soft);
+        font-size: 13px;
+      }
+
+      .lead {
+        margin: 24px 0 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 24px 0 10px;
+      }
+
+      .toc a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 6px 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+        transition:
+          border-color 0.16s ease,
+          color 0.16s ease,
+          background-color 0.16s ease;
+      }
+
+      .toc a:hover {
+        border-color: var(--line-strong);
+        background: var(--accent-soft);
+        color: var(--ink);
+      }
+
+      .legal-content {
+        display: grid;
+        gap: 0;
+        margin-top: 22px;
+      }
+
+      section {
+        padding: 26px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      section:first-child {
+        border-top: 0;
+      }
+
+      h2 {
+        margin: 0 0 12px;
+        font-size: clamp(20px, 3vw, 28px);
+        line-height: 1.2;
+        letter-spacing: -0.03em;
+      }
+
+      h3 {
+        margin: 22px 0 8px;
+        font-size: 16px;
         line-height: 1.35;
       }
-      h1 {
-        font-size: 28px;
+
+      p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 15px;
       }
-      h2 {
-        margin-top: 24px;
-        font-size: 18px;
+
+      ul,
+      ol {
+        margin: 10px 0 0;
+        padding-left: 1.35em;
+        color: var(--muted);
       }
-      p, li {
-        color: var(--sub);
+
+      li {
+        margin: 6px 0;
+        padding-left: 0.1em;
       }
-      ul {
-        margin: 8px 0 0;
-        padding-left: 20px;
+
+      .identity-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 18px;
+        margin-top: 14px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--accent-soft);
       }
-      .meta {
-        margin: 8px 0 20px;
-        color: #6b7280;
+
+      .identity-list p {
+        margin: 0;
+      }
+
+      .identity-list span {
+        display: block;
+        color: var(--soft);
+        font-size: 12px;
+      }
+
+      .identity-list strong {
+        display: block;
+        margin-top: 2px;
+        color: var(--ink);
         font-size: 14px;
       }
-      .tip {
+
+      .contact {
         margin-top: 16px;
-        padding: 12px 14px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #fafafa;
+        padding: 18px;
+        border-radius: 20px;
+        background: var(--accent-soft);
+      }
+
+      .contact p {
+        margin: 4px 0;
+      }
+
+      @media (max-width: 720px) {
+        .legal-page {
+          padding: 24px 20px 44px;
+        }
+
+        .legal-mark {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 4px;
+          margin-bottom: 26px;
+        }
+
+        .identity-list {
+          grid-template-columns: 1fr;
+        }
+
+        section {
+          padding: 22px 0;
+        }
       }
     </style>
   </head>
   <body>
-    <main class="card">
-      <h1>Lens 服务协议</h1>
-      <div class="meta">最后更新日期：2026年2月14日</div>
-      <p>
-        欢迎使用 YutoAI（“本公司”）提供的 Lens AI 服务。在使用本网站、客户端或 API（以下统称“本服务”）前，
-        请您仔细阅读并理解本《服务协议》（“本协议”）。您继续访问或使用本服务，即表示您已阅读、理解并同意本协议全部条款。
-        若您不同意本协议任何内容，请立即停止使用本服务。
-      </p>
+    <main class="legal-page">
+      <div class="legal-mark">
+        <strong>YutoAI Legal</strong>
+        <span>Yutong International Group Co., Ltd.</span>
+      </div>
 
-      <h2>一、服务使用规范</h2>
-      <p>
-        本服务旨在为个人学习、研究与其他合法用途提供技术支持。除非获得本公司书面许可，您不得将本服务用于未授权商业用途，
-        或以任何方式转售、镜像、批量分发本服务能力。
-      </p>
-      <p>您在使用本服务时，应以善意、审慎、合法方式进行，不得损害本公司及任何第三方合法权益。</p>
-      <p>您承诺不得利用本服务从事危害国家安全、社会公共利益、经济秩序，或侵犯他人合法权益的行为。</p>
-      <p>您对输入内容负全部责任，并确保不包含以下违法、违规或侵权内容（包括但不限于）：</p>
-      <ul>
-        <li>违反适用法律法规（含香港特别行政区及用户所在地适用法律）的内容；</li>
-        <li>危害国家主权、安全、统一，泄露国家秘密，颠覆国家政权的内容；</li>
-        <li>损害国家荣誉和利益、歪曲或侮辱英雄烈士事迹与精神的内容；</li>
-        <li>宣扬恐怖主义、极端主义或煽动相关活动的内容；</li>
-        <li>煽动民族仇恨、民族歧视，破坏民族团结的内容；</li>
-        <li>破坏宗教政策、宣扬邪教和封建迷信的内容；</li>
-        <li>散布谣言、虚假信息，扰乱社会或经济秩序的内容；</li>
-        <li>淫秽、色情、赌博、暴力、凶杀、恐怖或教唆犯罪的内容；</li>
-        <li>侮辱、诽谤、侵犯名誉权、隐私权、知识产权及其他合法权益的内容；</li>
-        <li>含有虚假、有害、胁迫、骚扰、中伤、粗俗、猥亵或其他明显不当内容；</li>
-        <li>任何根据适用法律法规被限制或禁止处理、传播的其他内容。</li>
-      </ul>
-      <p>
-        本公司有权对输入内容进行审查，并对违反本协议的内容采取删除信息、限流、冻结账号、中止或终止服务等措施。
-      </p>
+      <header class="legal-header">
+        <p class="eyebrow">Terms of Service</p>
+        <h1>YutoAI 服务协议</h1>
+        <p class="subtitle">Terms of Service</p>
+        <div class="updated">
+          <span>最后更新日期：2026年4月21日</span>
+          <span>Last Updated: April 21, 2026</span>
+        </div>
+        <p class="lead">
+          欢迎使用 YutoAI。本服务由昱通國際集團有限公司（Yutong International Group Co., Ltd.，以下简称“YutoAI”“本公司”“我们”）运营。
+        </p>
+        <p class="lead">
+          本协议适用于您访问、注册、购买、充值、登录、调用 API 或使用 YutoAI 及其相关网站、产品、服务、API、应用程序、收银台及相关功能。您访问、注册、购买、充值、调用 API、使用 AI 对话、上传文件、使用 YutoAI 相关产品或服务，即表示您已阅读、理解并同意本协议。如您不同意本协议，请立即停止使用本服务。
+        </p>
+      </header>
 
-      <h2>二、个人信息与数据保护</h2>
-      <p>
-        您应避免在输入中提交不必要的敏感信息。对于您主动提交且违反法律、协议约定的数据，由此引发的数据泄露、侵权纠纷或损失，
-        由您自行承担相应责任。
-      </p>
+      <nav class="toc" aria-label="服务协议目录">
+        <a href="#entity">服务主体</a>
+        <a href="#scope">服务范围</a>
+        <a href="#account">账号安全</a>
+        <a href="#rules">使用规范</a>
+        <a href="#ai-output">AI 输出</a>
+        <a href="#api">API 服务</a>
+        <a href="#content-ip">内容与知识产权</a>
+        <a href="#billing">订阅与计费</a>
+        <a href="#refund">退款政策</a>
+        <a href="#third-party">第三方服务</a>
+        <a href="#termination">服务变更</a>
+        <a href="#enterprise">企业服务</a>
+        <a href="#complaints">投诉处理</a>
+        <a href="#liability">责任限制</a>
+        <a href="#force-majeure">不可抗力</a>
+        <a href="#law">法律与争议</a>
+        <a href="#updates">协议更新</a>
+        <a href="#contact">联系我们</a>
+      </nav>
 
-      <h2>三、知识产权</h2>
-      <p>
-        本服务相关知识产权（包括但不限于软件、算法、模型编排、商标、文本、界面设计）归本公司或相关权利人所有。
-        您通过本服务获得的输出内容应在合法合规范围内使用，不得用于侵犯本公司或第三方知识产权。
-      </p>
+      <div class="legal-content">
+        <section id="entity">
+          <h2>一、服务主体</h2>
+          <p>本服务由以下主体提供：</p>
+          <div class="identity-list">
+            <p><span>公司名称</span><strong>昱通國際集團有限公司</strong></p>
+            <p><span>英文名称</span><strong>Yutong International Group Co., Ltd.</strong></p>
+            <p><span>品牌名称</span><strong>YutoAI</strong></p>
+            <p><span>注册地</span><strong>香港特别行政区</strong></p>
+            <p><span>联系邮箱</span><strong>international@hkyutong.com</strong></p>
+          </div>
+        </section>
 
-      <h2>四、免责声明与责任限制</h2>
-      <p>
-        本服务输出由人工智能自动生成，可能存在错误、偏差、遗漏、过时或不完整。本公司不对输出内容的准确性、完整性、
-        可靠性、适用性作任何明示或默示保证。输出内容不代表本公司立场，不构成法律、医疗、投资等专业建议。
-        您基于输出作出的任何决策或行为，风险由您自行承担。
-      </p>
+        <section id="scope">
+          <h2>二、服务范围</h2>
+          <p>YutoAI 提供的服务包括但不限于：</p>
+          <ol>
+            <li>AI 对话、文本生成、图片生成、文档处理、学术辅助、翻译、总结、写作、代码辅助等功能；</li>
+            <li>在线 AI 服务、开发者 API 服务、模型聚合、额度管理、计费与控制台服务；</li>
+            <li>面向学习、研究、论文阅读、文献处理、学术写作辅助的 AI 服务；</li>
+            <li>企业级 AI Agent、SaaS、私有化部署、技术咨询、定制开发及相关服务；</li>
+            <li>订阅、充值、服务额度、套餐、企业合同及其他数字服务。</li>
+          </ol>
+          <p>
+            具体服务内容、功能范围、价格、计费方式、模型支持情况、额度规则、交付方式，以对应产品页面、订单页面、控制台、服务说明、报价单或双方书面协议为准。
+          </p>
+        </section>
 
-      <h2>五、不可抗力</h2>
-      <p>
-        因超出本公司合理控制范围的事件导致未能履约或延迟履约的，本公司不承担责任。不可抗力包括但不限于网络故障、电力故障、
-        罢工、劳动争议、暴乱、火灾、洪水、风暴、战争、政府行为、司法命令、黑客攻击、病毒攻击、运营商技术调整或政府管制等。
-      </p>
+        <section id="account">
+          <h2>三、账号注册与安全</h2>
+          <ol>
+            <li>您应提供真实、准确、完整、合法的信息完成注册、登录、购买或使用服务。</li>
+            <li>您应妥善保管账号、密码、API Key、访问令牌、支付凭证及其他身份凭证。</li>
+            <li>您不得出租、出借、出售、转让、共享、倒卖账号、API Key、套餐额度或服务权限。</li>
+            <li>因您自身保管不善、共享账号、泄露 API Key、使用弱密码、被他人盗用等原因造成的损失，由您自行承担。</li>
+            <li>如我们发现账号存在异常登录、批量滥用、恶意请求、转售、欺诈、攻击、绕过限制或其他风险行为，我们有权采取限流、冻结、暂停、终止服务、重置密钥、要求身份验证等措施。</li>
+          </ol>
+        </section>
 
-      <h2>六、第三方链接与服务</h2>
-      <p>
-        本服务可能在特定功能中接入第三方能力或链接。该等能力或链接仅为便利提供，您应自行判断并承担访问风险。本公司不对第三方内容、
-        服务可用性及结果承担保证责任。
-      </p>
+        <section id="rules">
+          <h2>四、服务使用规范</h2>
+          <p>您承诺以合法、善意、审慎的方式使用本服务。您不得利用本服务从事以下行为：</p>
+          <ol>
+            <li>违反香港特别行政区法律、用户所在地适用法律，或任何与本服务使用相关的适用法律法规的行为；</li>
+            <li>危害公共安全、社会秩序、公共利益的行为；</li>
+            <li>生成、传播、协助制作违法、欺诈、骚扰、仇恨、恐怖主义、极端主义、暴力、色情、赌博、侵权或其他不当内容；</li>
+            <li>侵犯他人隐私权、肖像权、名誉权、知识产权、商业秘密或其他合法权益；</li>
+            <li>未经授权处理、上传、泄露他人的个人信息、敏感信息、商业秘密、账号凭证或保密资料；</li>
+            <li>生成恶意代码、钓鱼内容、诈骗话术、绕过风控、批量注册、垃圾营销、网络攻击、爬虫滥用或其他破坏性内容；</li>
+            <li>冒充他人、虚假宣传、虚假代言、制造误导性深度伪造内容；</li>
+            <li>未经合法授权，生成、上传、编辑、传播、展示、出售、许可或以其他方式使用任何真实人物、名人、公众人物、艺人、网红或其他可识别个人的肖像、拟真图像、面部特征、声音、身份或形象衍生内容；</li>
+            <li>逆向工程、破解、绕过模型限制、规避计费、绕过安全策略、攻击系统或干扰服务正常运行；</li>
+            <li>将本服务用于本公司未授权的批量转售、镜像站、套壳服务、共享账号平台或其他损害 YutoAI 合法权益的商业用途。</li>
+          </ol>
+          <p>
+            如您违反上述规则，我们有权根据情节采取警告、删除内容、限制功能、限流、暂停服务、封禁账号、终止合同、拒绝退款、配合投诉或监管调查等措施。
+          </p>
+        </section>
 
-      <h2>七、账户管理与用户行为</h2>
-      <p>
-        您的账户仅限本人使用，您对账户下发生的全部行为承担责任。您不得转让、出借、出售或授权他人使用账户。
-        对于辱骂、威胁、恶意骚扰、攻击客服或工作人员等行为，本公司有权立即中止或永久终止账户权限，并保留追究法律责任的权利。
-      </p>
+        <section id="ai-output">
+          <h2>五、AI 输出免责声明</h2>
+          <ol>
+            <li>本服务中的 AI 输出由人工智能模型自动生成，可能存在错误、遗漏、偏差、过时、不完整、不准确或不适合特定场景的情况。</li>
+            <li>AI 输出不代表 YutoAI 的立场、观点、承诺或保证。</li>
+            <li>AI 输出不构成法律、医疗、金融、投资、税务、心理咨询、工程安全、签证移民或其他专业意见。</li>
+            <li>您应自行核验 AI 输出的准确性、合法性、权属情况和适用性。</li>
+            <li>您基于 AI 输出作出的任何决策、发布、交易、投资、医疗、法律、商业或其他行为，风险由您自行承担。</li>
+            <li>对于因您使用、依赖、传播、修改或商业化 AI 输出产生的损失、争议、投诉或法律责任，除法律明确规定外，YutoAI 不承担责任。</li>
+          </ol>
+        </section>
 
-      <h2>八、服务中止与终止</h2>
-      <p>发生以下任一情形时，本公司有权中断或终止服务，且无需承担赔偿责任：</p>
-      <ul>
-        <li>您提供的信息不真实或存在重大误导；</li>
-        <li>您违反本协议或平台规则；</li>
-        <li>您未按时支付费用（如适用）；</li>
-        <li>基于风控、安全、合规或运营需要，本公司认为有必要的其他情形。</li>
-      </ul>
+        <section id="api">
+          <h2>六、API 服务规则</h2>
+          <p>如您使用 YutoAI 的 API 或开发者服务，您还应遵守以下规则：</p>
+          <ol>
+            <li>您应按照控制台、接口文档、套餐说明、价格页面及技术规范使用 API。</li>
+            <li>API 额度、并发、速率限制、模型可用性、上下文长度、调用价格、计费单位、支持模型可能根据上游供应商、技术成本、合规要求或业务调整而变化。</li>
+            <li>您不得泄露、出售、共享、公开 API Key。</li>
+            <li>您不得通过脚本、代理池、多账号、绕过限制等方式规避计费、限流或风控。</li>
+            <li>您应对通过您账号、API Key 或应用发起的全部请求、输入内容、输出内容、终端用户行为承担责任。</li>
+            <li>如您的应用面向终端用户提供服务，您应向终端用户提供必要的服务条款、隐私政策、AI 免责声明及投诉渠道。</li>
+            <li>因第三方模型供应商、云服务商、支付服务商、网络运营商、地区政策、上游限流、模型下线、价格变动等原因导致 API 服务变化、中断、延迟或不可用的，YutoAI 将尽合理努力协助处理，但不承诺永久可用或固定不变。</li>
+          </ol>
+        </section>
 
-      <h2>九、协议修改</h2>
-      <p>
-        本公司有权根据业务与法律变化更新本协议，并通过站内页面进行公示。您继续使用本服务即视为接受更新后的协议内容。
-      </p>
+        <section id="content-ip">
+          <h2>七、用户内容与知识产权</h2>
+          <ol>
+            <li>您保留对您依法拥有的输入内容、上传文件、提示词、业务资料及其他用户内容的权利。</li>
+            <li>您授予 YutoAI 在提供、维护、保护、排查、改进本服务所必要范围内处理、传输、缓存、存储、分析和展示用户内容的权利。</li>
+            <li>除非另有说明、取得您的授权，或双方另有书面约定，YutoAI 不会将企业客户通过 API、私有部署或企业服务提交的内容用于训练公开模型。</li>
+            <li>您应确保您上传、输入或处理的内容拥有合法权利，不侵犯任何第三方权益。</li>
+            <li>YutoAI 的软件、网站、界面、系统架构、模型编排、代码、文档、商标、Logo、品牌、数据库、算法、设计、商业流程等知识产权归 YutoAI 或相关权利人所有。</li>
+            <li>未经 YutoAI 书面许可，您不得复制、改编、分发、出售、出租、反向工程、镜像、爬取或以其他方式侵犯 YutoAI 的知识产权。</li>
+          </ol>
+        </section>
 
-      <h2>十、适用法律与争议解决</h2>
-      <p>
-        本协议的订立、效力、解释、履行及争议解决，适用香港特别行政区法律。在不与强制性法律冲突的前提下，
-        因本协议引起的争议，双方应先协商解决；协商不成的，提交香港特别行政区有管辖权的法院诉讼解决。
-      </p>
+        <section id="billing">
+          <h2>八、订阅、充值与计费</h2>
+          <ol>
+            <li>本服务可能采用订阅制、按量计费、预付额度、套餐、积分、API 调用额度、企业合同、一次性服务费等方式收费。</li>
+            <li>具体产品名称、服务内容、价格、币种、计费周期、额度、有效期、模型范围及适用限制，以对应产品页面、订单页面、控制台、报价单或双方书面协议为准。</li>
+            <li>您在付款前应仔细确认产品名称、服务内容、价格、币种、计费周期、额度、有效期、适用限制及退款规则。</li>
+            <li>完成付款即表示您确认并同意相关订单信息及本协议项下的计费与退款规则。</li>
+            <li>因汇率、支付通道、银行、发卡组织、税费、跨境支付、第三方手续费产生的额外成本，除另有说明外，由用户自行承担。</li>
+            <li>YutoAI 可根据业务成本、上游模型价格、市场情况或服务升级调整价格。对于已购买且仍在有效期内的服务，除另有说明外，通常不影响已付款订单的当前服务期。</li>
+          </ol>
+        </section>
 
-      <h2>十一、其他</h2>
-      <p>
-        本协议构成双方关于本服务的完整协议。若本协议任何条款被认定无效或不可执行，不影响其余条款的效力。
-        在法律允许范围内，YutoAI 保留本服务的最终解释权及相关权利。
-      </p>
+        <section id="refund">
+          <h2>九、订阅、计费与退款政策</h2>
+          <h3>9.1 数字服务退款原则</h3>
+          <p>
+            YutoAI 提供的服务主要属于数字服务、AI 服务、虚拟商品、API 调用额度、在线订阅、软件服务、技术服务或企业定制服务。由于相关服务一经开通、交付、调用、消耗或产生上游成本后通常无法退回，除本协议明确规定或适用法律强制要求外，已开通、已使用、已交付、已消耗或已产生上游成本的服务原则上不支持无理由退款。
+          </p>
 
+          <h3>9.2 可以申请退款的情形</h3>
+          <p>在符合本协议及适用法律的前提下，以下情形可以申请退款：</p>
+          <ol>
+            <li>重复扣款：因系统、支付通道或其他技术原因导致同一订单被重复扣款，且用户未重复获得对应服务的，可申请退还重复扣款部分；</li>
+            <li>错误扣款：因系统错误导致用户被错误扣款，且经核实确属 YutoAI 或支付系统原因的，可申请退款；</li>
+            <li>付款成功但服务未开通且未使用：用户付款成功后，如服务未成功开通，且用户未使用任何对应服务、额度、账号、订阅、API 调用或数字权益，可申请退款或重新开通服务；</li>
+            <li>平台主动取消服务：如 YutoAI 主动永久停止某项已预付服务，且用户仍有未使用的有效服务期限或额度，YutoAI 可根据实际情况提供按比例退款、余额转换、替代服务或其他合理安排；</li>
+            <li>适用法律明确要求退款的其他情形。</li>
+          </ol>
+
+          <h3>9.3 通常不支持退款的情形</h3>
+          <ol>
+            <li>已开通并已使用的订阅服务；</li>
+            <li>已消耗的 API 额度、积分、tokens、调用次数、模型额度或其他计量资源；</li>
+            <li>已交付的数字商品、账号服务、虚拟权益、文件处理结果、生成内容、技术服务或咨询服务；</li>
+            <li>因用户个人原因购买错误、选错套餐、忘记取消、改变主意、不再需要、不会使用、使用效果未达个人主观预期而申请退款；</li>
+            <li>因用户违反服务协议、滥用服务、共享账号、倒卖账号、泄露 API Key、攻击系统、违法违规使用、侵犯第三方权益而被限制、暂停或封禁账号；</li>
+            <li>因第三方模型、第三方平台、云服务、支付渠道、地区政策、网络环境、用户设备、浏览器、代理、VPN、账号风控等非 YutoAI 可完全控制原因导致的服务异常；</li>
+            <li>用户已经获得相应服务、额度、账号权限、API 权限、文件处理结果、生成内容或技术交付成果；</li>
+            <li>企业定制服务、私有部署、技术咨询、开发服务等已启动排期、已投入人力或已完成部分交付的项目，除双方书面合同另有约定外，不支持无理由退款；</li>
+            <li>促销、优惠、折扣、兑换码、赠送额度、活动权益、补偿额度等非现金购买权益，不支持折现或退款。</li>
+          </ol>
+
+          <h3>9.4 周期性订阅取消</h3>
+          <p>
+            如您购买的是周期性订阅服务，您可以根据产品页面、控制台或客服指引取消续订。取消续订通常不影响当前已付款服务期内的使用权。当前服务期结束后，订阅将不再续费。除适用法律另有要求或本协议另有明确规定外，已支付的当前周期订阅费用通常不因提前取消而按剩余天数退款。
+          </p>
+
+          <h3>9.5 数字额度</h3>
+          <p>
+            API 额度、积分、tokens、调用次数、预付余额等属于数字服务额度。相关额度一经购买、发放、兑换、消耗或过期，通常不支持退款或折现。如因 YutoAI 主动永久停止服务导致用户无法使用仍在有效期内且未消耗的付费额度，YutoAI 可根据实际情况提供替代额度、迁移、延期、按比例退款或其他合理安排。
+          </p>
+
+          <h3>9.6 退款申请材料</h3>
+          <p>
+            申请退款时，您应通过 international@hkyutong.com 联系我们，并提供注册邮箱或账号信息、订单号或交易凭证、付款时间、付款金额、付款方式、退款原因及必要证明材料。为保障账户和支付安全，我们可能要求您完成身份验证或补充相关信息。
+          </p>
+
+          <h3>9.7 退款路径与到账时间</h3>
+          <p>
+            经确认符合退款条件的，我们将按原支付路径或双方确认的其他方式处理退款。退款到账时间取决于支付方式、银行、发卡组织、支付服务商及跨境结算规则，可能需要数个工作日至更长时间。YutoAI 无法控制银行或支付机构的实际到账时间。
+          </p>
+
+          <h3>9.8 第三方费用</h3>
+          <p>
+            除因 YutoAI 明确错误导致的退款外，退款过程中由银行、发卡组织、支付服务商、跨境支付、汇率转换、税费或第三方机构收取的费用，可能无法退还，具体以支付服务商和银行规则为准。
+          </p>
+
+          <h3>9.9 拒付与争议</h3>
+          <p>
+            如您对订单有疑问，应优先通过 international@hkyutong.com 联系我们处理。未经沟通直接发起拒付、争议、chargeback 或恶意投诉，可能导致账号暂停、服务中止、额度冻结或后续交易受限。如经核实用户存在欺诈、滥用、恶意拒付、虚假陈述、违反本协议或损害平台权益的行为，YutoAI 保留采取进一步措施的权利。
+          </p>
+
+          <h3>9.10 企业项目退款</h3>
+          <p>
+            企业服务、私有部署、定制开发、AI Agent、技术咨询、集成服务、培训服务及其他 B2B 项目的退款规则，以双方签署的合同、报价单、订单、服务说明或补充协议为准。如无特别约定，已启动交付、已排期、已投入人力、已发生第三方成本或已完成阶段性交付的企业服务，不支持无理由退款。
+          </p>
+        </section>
+
+        <section id="third-party">
+          <h2>十、第三方服务与上游供应商</h2>
+          <p>本服务可能接入或依赖第三方模型、云服务、支付服务、短信邮件服务、风控服务、数据存储服务、分析工具及其他技术服务。</p>
+          <p>您理解并同意：</p>
+          <ol>
+            <li>部分 AI 模型、API、支付、云基础设施由第三方提供；</li>
+            <li>您的输入内容、请求参数、文件、日志或必要信息可能在服务所需范围内发送至第三方供应商处理；</li>
+            <li>第三方服务可能因政策、地区、价格、限流、故障、维护、风控、合规或不可抗力发生变化；</li>
+            <li>YutoAI 不对第三方服务的永久可用性、完全准确性或持续兼容性作出保证；</li>
+            <li>我们会在合理商业范围内选择合规供应商，并采取必要措施保护用户权益。</li>
+          </ol>
+        </section>
+
+        <section id="termination">
+          <h2>十一、服务变更、中断与终止</h2>
+          <p>YutoAI 可基于以下原因调整、中断、暂停或终止全部或部分服务：</p>
+          <ol>
+            <li>系统维护、升级、迁移或安全修复；</li>
+            <li>上游模型、云服务、支付通道、网络运营商变化；</li>
+            <li>法律法规、监管要求、风控、合规或安全需要；</li>
+            <li>用户违反本协议、隐私政策或其他平台规则；</li>
+            <li>用户长期未使用、未付款、欠费或存在异常风险；</li>
+            <li>不可抗力或超出合理控制范围的事件。</li>
+          </ol>
+          <p>
+            如 YutoAI 主动永久停止某项已预付且未使用的服务，在适用法律及具体订单规则允许范围内，YutoAI 可为未使用部分提供退款、余额转换、替代服务或其他合理安排。
+          </p>
+        </section>
+
+        <section id="enterprise">
+          <h2>十二、企业服务与私有部署</h2>
+          <p>
+            如您购买企业服务、私有部署、定制开发、AI Agent、技术咨询或其他 B2B 服务，具体交付内容、费用、周期、验收、售后、保密、数据处理、安全责任、退款及违约责任，以双方签署的书面合同、订单、报价单或补充协议为准。
+          </p>
+          <p>如企业合同与本协议存在冲突，以双方另行签署的书面合同为准。</p>
+        </section>
+
+        <section id="complaints">
+          <h2>十三、投诉与侵权处理</h2>
+          <p>
+            如您认为本服务中的内容、输出、账号行为或用户行为侵犯您的合法权益，可通过 international@hkyutong.com 联系我们，并提供必要证明材料。
+          </p>
+          <p>
+            我们收到有效投诉后，可根据实际情况采取删除、限制、冻结、暂停、终止服务、要求用户补充授权证明、配合争议处理等措施。
+          </p>
+        </section>
+
+        <section id="liability">
+          <h2>十四、责任限制</h2>
+          <p>
+            在适用法律允许的最大范围内，YutoAI 对任何间接、附带、特殊、惩罚性、衍生性损失，或利润损失、业务中断、数据损失、商誉损失、机会损失不承担责任。
+          </p>
+          <p>
+            除法律另有强制规定外，YutoAI 对任何订单、服务或争议承担的总责任，不超过用户就引发该争议的相关服务在过去三个月内实际支付给 YutoAI 的金额。
+          </p>
+        </section>
+
+        <section id="force-majeure">
+          <h2>十五、不可抗力</h2>
+          <p>
+            因超出 YutoAI 合理控制范围的事件导致服务中断、延迟、数据错误、支付失败、无法访问、无法交付或无法履约的，YutoAI 不承担违约责任。不可抗力包括但不限于自然灾害、战争、暴乱、政府行为、司法命令、监管政策变化、网络攻击、病毒、黑客攻击、支付通道故障、云服务故障、运营商故障、上游模型服务中断、国际网络波动、断电、罢工及其他无法合理控制的事件。
+          </p>
+        </section>
+
+        <section id="law">
+          <h2>十六、适用法律与争议解决</h2>
+          <p>
+            本协议的订立、效力、解释、履行及争议解决，适用香港特别行政区法律。
+          </p>
+          <p>
+            因本协议或本服务产生的争议，双方应先友好协商解决；协商不成的，提交香港特别行政区有管辖权的法院解决，除非双方另有书面约定。
+          </p>
+        </section>
+
+        <section id="updates">
+          <h2>十七、协议更新</h2>
+          <p>
+            YutoAI 有权根据业务发展、法律法规、监管要求、风控需要或产品变化更新本协议。更新后的协议将在相关网站页面公示。您在协议更新后继续使用本服务，即视为接受更新后的协议。
+          </p>
+        </section>
+
+        <section id="contact">
+          <h2>十八、联系我们</h2>
+          <p>如您对本协议、本服务、退款、隐私、投诉或其他事项有疑问，可通过以下方式联系我们：</p>
+          <div class="contact">
+            <p>YutoAI / 昱通國際集團有限公司</p>
+            <p>Yutong International Group Co., Ltd.</p>
+            <p>Email: international@hkyutong.com</p>
+            <p>Website: yutoai.net</p>
+          </div>
+        </section>
+      </div>
     </main>
   </body>
 </html>
