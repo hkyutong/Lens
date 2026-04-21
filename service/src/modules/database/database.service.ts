@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { Connection } from 'typeorm';
+import { LENS_USAGE_NOTICE } from '@/common/constants/usageNotice.constant';
 
 interface UserInfo {
   username: string;
@@ -88,12 +89,7 @@ export class DatabaseService implements OnModuleInit {
     try {
       const code = ``;
 
-      const noticeInfo = `
-#### Lens 欢迎您
- - 欢迎使用 Lens
- - 初始管理员账号密码  super  123456 【前台后台登录都可以修改】
- - 初始预览账号密码  admin  123456 【为后台查看账号 仅可查看部分非敏感数据】
-`;
+      const noticeInfo = LENS_USAGE_NOTICE;
 
       const defaultConfig = [
         { configKey: 'siteName', configVal: '', public: 1, encrypt: 0 },
@@ -120,6 +116,7 @@ export class DatabaseService implements OnModuleInit {
         },
         { configKey: 'openaiBaseKey', configVal: 'sk-', public: 0, encrypt: 0 },
         { configKey: 'noticeInfo', configVal: noticeInfo, public: 1, encrypt: 0 },
+        { configKey: 'noticeTitle', configVal: '用户必读', public: 1, encrypt: 0 },
         {
           configKey: 'registerSendStatus',
           configVal: '1',

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore } from '@/store'
+import { LENS_USAGE_NOTICE } from '@/constants/usageNotice'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { computed, onMounted, watch } from 'vue'
@@ -10,14 +11,13 @@ const appStore = useAppStore()
 const darkMode = computed(() => appStore.theme === 'dark')
 const { isMobile } = useBasicLayout()
 
-const { noticeInfo } = authStore.globalConfig
-
 interface Props {
   visible: boolean
 }
 
 const props = defineProps<Props>()
 const globalConfig = computed(() => authStore.globalConfig)
+const noticeContent = computed(() => globalConfig.value.noticeInfo || LENS_USAGE_NOTICE)
 
 function openDrawerAfter() {
   // 刷新全局配置数据，确保获取最新的公告信息
@@ -60,7 +60,7 @@ onMounted(() => {
       <div class="overflow-y-auto" :class="{ 'max-h-[calc(70vh-120px)]': !isMobile }">
         <MdPreview
           editorId="preview-only"
-          :modelValue="noticeInfo"
+          :modelValue="noticeContent"
           :theme="darkMode ? 'dark' : 'light'"
           class="w-full"
         />
