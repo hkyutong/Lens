@@ -3,6 +3,7 @@
 ## 0.0.71 (2026-04-21)
 - 控制面板减噪：`chat/src/views/chat/components/Footer/components/AcademicPanel.vue` 已删除高级设置中补充输入框上方的独立“补充要求”标题，保留输入框 placeholder 与“只有在需要约束术语、输出格式或翻译策略时再填写。”提示说明，避免表单层级过重。
 - 影响范围：仅能力设置面板的显示文案结构，不影响补充要求输入、清洗、提交或编排逻辑。回滚方式：恢复该 textarea 上方的 label 后重新构建并同步 `chat/dist`。
+- 已完成 GitHub 与服务器同步：提交 `bd57e84 fix: remove extra instruction label` 已推送到 `origin/main`；最新 `chat/dist` 已零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，未重启 `9520` 或 `38000`。线上回查 `https://lens.yutoai.net/?v=20260421232200` 返回 `HTTP 200`，`Last-Modified` 已更新为 `2026-04-21 15:16:18 GMT`；服务器端口保持 `9520` PID `2860669`、`38000` PID `4048524`。
 
 ## 0.0.70 (2026-04-21)
 - 编排耗时排查：线上最近一次三步多能力编排总耗时约 `264s`，第一步插件阶段约 `196s`，第二步基础能力约 `58s`，第三步约 `10s`；主要原因是编排链路按步骤串行执行，且第一步插件内部包含资料处理与上游模型等待，耗时不只取决于最终输出模型速度。
