@@ -94,6 +94,8 @@ interface AcademicStreamState {
   finishReason: string;
 }
 
+type AcademicPlanTier = 'free' | 'plus' | 'pro' | 'max';
+
 @Injectable()
 export class AcademicService {
   private readonly logger = new Logger(AcademicService.name);
@@ -315,17 +317,138 @@ export class AcademicService {
 
   private async ensureAcademicWorkflowMember(userId: number) {
     const balance: any = await this.userBalanceService.queryUserBalance(userId);
-    const packageId = Number(balance?.packageId || 0);
-    const expirationTime = String(balance?.expirationTime || '').trim();
-    const expiration = expirationTime ? new Date(`${expirationTime}T23:59:59`) : null;
-    const hasMember = packageId > 0 && (!expiration || expiration.getTime() > Date.now());
-    if (!hasMember) {
+    const workflowStepLimit = this.getAcademicWorkflowStepLimit(balance);
+    if (workflowStepLimit <= 0) {
       throw new HttpException(
-        '多能力编排仅限会员使用，请升级套餐后使用',
+        '多能力编排仅限 Pro 及以上套餐使用，请升级套餐后使用',
         HttpStatus.PAYMENT_REQUIRED,
       );
     }
     return balance;
+  }
+
+  private resolveAcademicPlanTier(balance: any): AcademicPlanTier {
+    const packageId = Number(balance?.packageId || 0);
+    const expirationTime = String(balance?.expirationTime || '').trim();
+    const expiration = expirationTime ? new Date(`${expirationTime}T23:59:59`) : null;
+    const activeMember =
+      packageId > 0 && (!expirationTime || (expiration instanceof Date && expiration.getTime() > Date.now()));
+    if (!activeMember) return 'free';
+
+    const weight = Number(balance?.packageWeight || 0);
+    if (weight >= 30) return 'max';
+    if (weight >= 20) return 'pro';
+    if (weight >= 10) return 'plus';
+
+    const packageName = this.normalizePluginName(String(balance?.packageName || ''));
+    if (packageName.includes('max')) return 'max';
+    if (packageName.includes('pro')) return 'pro';
+    if (packageName.includes('plus')) return 'plus';
+    return 'plus';
+  }
+
+  private getAcademicWorkflowStepLimit(balance: any) {
+    const tier = this.resolveAcademicPlanTier(balance);
+    if (tier === 'max') return 3;
+    if (tier === 'pro') return 2;
+    return 0;
+  }
+
+  private canUseAcademicCoreByTier(name: string, tier: AcademicPlanTier) {
+    const normalized = this.normalizePluginName(name);
+    if (!normalized) return false;
+    if (tier === 'pro' || tier === 'max') return true;
+    return [
+      '中文润色',
+      '英文润色',
+      '绘制脑图',
+      '中英互译',
+      '学术中英互译',
+      '参考文献转bib',
+      '学术型代码解释',
+      '解释代码',
+    ].some(item => normalized.includes(this.normalizePluginName(item)));
+  }
+
+  private canUseAcademicPluginByTier(name: string, tier: AcademicPlanTier) {
+    const normalized = this.normalizePluginName(name);
+    if (!normalized) return false;
+    if (tier === 'max') return true;
+
+    const plusAllowed =
+      normalized.includes(this.normalizePluginName('论文速读')) ||
+      normalized.includes(this.normalizePluginName('速读论文')) ||
+      (normalized.includes('arxiv') &&
+        (normalized.includes(this.normalizePluginName('摘要')) ||
+          normalized.includes(this.normalizePluginName('下载')) ||
+          normalized.includes(this.normalizePluginName('翻译'))));
+    if (plusAllowed) return true;
+    if (tier !== 'pro') return false;
+
+    return [
+      'pdf',
+      'word',
+      'latex',
+      'tex论文',
+      '本地latex',
+      '读tex论文',
+    ].some(item => normalized.includes(this.normalizePluginName(item)));
+  }
+
+  private async assertAcademicSingleAccess(
+    userId: number,
+    kind: 'chat' | 'basic' | 'plugin',
+    requestedName: string,
+  ) {
+    if (kind === 'chat' || !requestedName) return;
+    const balance: any = await this.userBalanceService.queryUserBalance(userId);
+    const tier = this.resolveAcademicPlanTier(balance);
+    const resolvedName =
+      kind === 'plugin'
+        ? await this.resolvePluginName(requestedName)
+        : await this.resolveCoreFunction(requestedName);
+    const accessName = `${requestedName} ${resolvedName}`;
+    const allowed =
+      kind === 'plugin'
+        ? this.canUseAcademicPluginByTier(accessName, tier)
+        : this.canUseAcademicCoreByTier(accessName, tier);
+    if (allowed) return;
+    throw new HttpException(
+      '当前学术能力不包含在你的套餐内，请升级后使用',
+      HttpStatus.PAYMENT_REQUIRED,
+    );
+  }
+
+  private assertAcademicWorkflowAccess(
+    balance: any,
+    steps: Array<{
+      kind: 'core' | 'plugin';
+      name: string;
+      displayName: string;
+    }>,
+  ) {
+    const stepLimit = this.getAcademicWorkflowStepLimit(balance);
+    if (steps.length > stepLimit) {
+      throw new HttpException(
+        `当前套餐最多支持 ${stepLimit} 步能力编排，请升级 Max 后使用更多步骤`,
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
+
+    const tier = this.resolveAcademicPlanTier(balance);
+    for (const step of steps) {
+      const accessName = `${step.displayName || ''} ${step.name || ''}`;
+      const allowed =
+        step.kind === 'plugin'
+          ? this.canUseAcademicPluginByTier(accessName, tier)
+          : this.canUseAcademicCoreByTier(accessName, tier);
+      if (!allowed) {
+        throw new HttpException(
+          `当前套餐不可在能力编排中使用“${step.displayName || step.name}”，请升级后使用`,
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
   }
 
   private async normalizeAcademicWorkflowSteps(body: AcademicWorkflowBody) {
@@ -2369,6 +2492,12 @@ export class AcademicService {
       }
     }
 
+    await this.assertAcademicSingleAccess(
+      req.user.id,
+      effectiveFunction,
+      effectiveFunction === 'plugin' ? candidatePluginName : candidateCoreName,
+    );
+
     if (groupId) {
       try {
         await this.chatGroupService.updateTime(groupId);
@@ -3576,7 +3705,7 @@ export class AcademicService {
 
     await this.userBalanceService.checkUserCertification(userId);
     await this.userService.checkUserStatus(req.user);
-    await this.ensureAcademicWorkflowMember(userId);
+    const workflowBalance = await this.ensureAcademicWorkflowMember(userId);
 
     const openaiBaseModelConfig = await this.globalConfigService.getConfigs(['openaiBaseModel']);
     const openaiBaseModel =
@@ -3619,6 +3748,7 @@ export class AcademicService {
     if (!normalizedWorkflowSteps.length) {
       throw new HttpException('请至少添加一个能力步骤后再执行', HttpStatus.BAD_REQUEST);
     }
+    this.assertAcademicWorkflowAccess(workflowBalance, normalizedWorkflowSteps);
 
     if (groupId) {
       try {

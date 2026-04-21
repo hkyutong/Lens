@@ -16,6 +16,9 @@ export function removeToken() {
 
 export interface UserBalance {
   isMember: boolean
+  packageId: number
+  packageName: string
+  packageWeight: number
   model3Count: number
   model4Count: number
   drawMjCount: number
@@ -62,6 +65,9 @@ export function defaultUserInfo(): UserInfo {
 export function defaultUserBalance(): UserBalance {
   return {
     isMember: false,
+    packageId: 0,
+    packageName: '',
+    packageWeight: 0,
     model3Count: 0,
     model4Count: 0,
     drawMjCount: 0,

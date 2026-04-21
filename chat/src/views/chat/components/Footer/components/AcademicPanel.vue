@@ -9,6 +9,11 @@ import {
   getAcademicEntityRawLabel,
   getAcademicEntitySelectorValue,
 } from '@/utils/academicI18n'
+import {
+  canUseAcademicCore,
+  canUseAcademicPlugin,
+  getAcademicWorkflowStepLimit,
+} from '@/utils/academicPlanAccess'
 
 interface Props {
   embedded?: boolean
@@ -33,19 +38,19 @@ const authStore = useAuthStore()
 const useGlobalStore = useGlobalStoreWithOut()
 const { isMobile } = useBasicLayout()
 
-const coreFunctions = computed(() => chatStore.academicCoreFunctions || [])
+const userBalance = computed(() => authStore.userBalance || {})
+const coreFunctions = computed(() =>
+  (chatStore.academicCoreFunctions || []).filter((core: any) =>
+    canUseAcademicCore(core, userBalance.value)
+  )
+)
 const activePlugin = computed(() => chatStore.currentAcademicPlugin)
 const activeCore = computed(() => chatStore.currentAcademicCore)
 const workflowEnabled = computed(() => Boolean(chatStore.academicWorkflowEnabled))
 const workflowSteps = computed(() => chatStore.academicWorkflowSteps || [])
 const workflowRunning = computed(() => Boolean(chatStore.academicWorkflowRunning))
-const workflowMemberAvailable = computed(() => {
-  const balance: any = authStore.userBalance || {}
-  return (
-    Number(balance.packageId || 0) > 0 ||
-    (balance.expirationTime && new Date(balance.expirationTime) > new Date())
-  )
-})
+const workflowStepLimit = computed(() => getAcademicWorkflowStepLimit(userBalance.value))
+const workflowMemberAvailable = computed(() => workflowStepLimit.value > 0)
 const openMemberDialog = () => {
   if (isMobile.value) {
     useGlobalStore.updateMobileSettingsDialog(true, DIALOG_TABS.MEMBER)
@@ -170,6 +175,7 @@ const pluginList = computed(() => {
       }
       return { item: cloned, index }
     })
+    .filter(entry => canUseAcademicPlugin(entry.item, userBalance.value))
 
   return candidates
     .sort((a, b) => {
@@ -360,7 +366,11 @@ const pluginArgsPlaceholder = computed(() => {
 const selectQuickCore = (core: any) => {
   if (workflowEnabled.value) {
     const nextIndex = workflowSteps.value.length
-    if (nextIndex >= 3) return
+    if (!workflowMemberAvailable.value) {
+      openMemberDialog()
+      return
+    }
+    if (nextIndex >= workflowStepLimit.value) return
     chatStore.addAcademicWorkflowStep({
       kind: 'core',
       name: String(core?.name || '').trim(),
@@ -374,7 +384,11 @@ const selectQuickCore = (core: any) => {
 const selectQuickPlugin = (plugin: any) => {
   if (workflowEnabled.value) {
     const nextIndex = workflowSteps.value.length
-    if (nextIndex >= 3) return
+    if (!workflowMemberAvailable.value) {
+      openMemberDialog()
+      return
+    }
+    if (nextIndex >= workflowStepLimit.value) return
     chatStore.addAcademicWorkflowStep({
       kind: 'plugin',
       name: String(plugin?.name || '').trim(),
@@ -436,7 +450,7 @@ const addWorkflowStep = () => {
     openMemberDialog()
     return
   }
-  if (workflowSteps.value.length >= 3) return
+  if (workflowSteps.value.length >= workflowStepLimit.value) return
   chatStore.addAcademicWorkflowStep({ kind: 'plugin' })
 }
 
@@ -520,10 +534,10 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
         <div class="research-controls__workflow-head">
           <div class="research-controls__workflow-head-copy">
             <span>{{ t('lens.workflow.builderTitle') }}</span>
-            <small>{{ workflowSteps.length }}/3 {{ t('lens.workflow.stepsShort') }}</small>
+            <small>{{ workflowSteps.length }}/{{ workflowStepLimit || 0 }} {{ t('lens.workflow.stepsShort') }}</small>
           </div>
           <button
-            v-if="workflowSteps.length < 3"
+            v-if="workflowMemberAvailable && workflowSteps.length < workflowStepLimit"
             type="button"
             class="research-controls__advanced"
             @click="addWorkflowStep"

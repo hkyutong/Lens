@@ -4,6 +4,11 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { buildAcademicWorkflowTemplates, findAcademicWorkflowSelector } from '@/utils/academicWorkflow'
+import {
+  canUseAcademicCore,
+  canUseAcademicPlugin,
+  getAcademicWorkflowStepLimit,
+} from '@/utils/academicPlanAccess'
 import { computed, nextTick } from 'vue'
 
 type StarterTask = {
@@ -25,6 +30,7 @@ const chatStore = useChatStore()
 const authStore = useAuthStore()
 const useGlobalStore = useGlobalStoreWithOut()
 const { isMobile } = useBasicLayout()
+const userBalance = computed(() => authStore.userBalance || {})
 const normalizeText = (value: any) =>
   String(value || '')
     .trim()
@@ -118,14 +124,11 @@ const resolvedStarterLanes = computed(() =>
   }))
 )
 const workflowTemplates = computed(() => buildAcademicWorkflowTemplates())
+const workflowStepLimit = computed(() => getAcademicWorkflowStepLimit(userBalance.value))
+const isWorkflowMemberAvailable = computed(() => workflowStepLimit.value > 0)
 const featuredWorkflowTemplates = computed(() => workflowTemplates.value.slice(0, 1))
-const isWorkflowMemberAvailable = computed(() => {
-  const balance: any = authStore.userBalance || {}
-  return (
-    Number(balance.packageId || 0) > 0 ||
-    (balance.expirationTime && new Date(balance.expirationTime) > new Date())
-  )
-})
+const canUseWorkflowTemplate = (template: Chat.AcademicWorkflowTemplate) =>
+  isWorkflowMemberAvailable.value && template.steps.length <= workflowStepLimit.value
 
 const ensureAcademicData = async () => {
   if (!chatStore.academicCoreFunctions?.length) {
@@ -166,9 +169,11 @@ const applyStarterTask = async (task: StarterTask) => {
       chatStore.academicCoreFunctions || [],
       task.selectorGroups
     )
-    if (matchedCore) {
-      chatStore.setAcademicCore(matchedCore)
+    if (!matchedCore || !canUseAcademicCore(matchedCore, userBalance.value)) {
+      openMemberDialog()
+      return
     }
+    chatStore.setAcademicCore(matchedCore)
   } else {
     chatStore.setAcademicCore(undefined)
     chatStore.setAcademicPlugin(undefined)
@@ -176,9 +181,11 @@ const applyStarterTask = async (task: StarterTask) => {
       chatStore.academicPluginList || [],
       task.selectorGroups
     )
-    if (matchedPlugin) {
-      chatStore.setAcademicPlugin(matchedPlugin)
+    if (!matchedPlugin || !canUseAcademicPlugin(matchedPlugin, userBalance.value)) {
+      openMemberDialog()
+      return
     }
+    chatStore.setAcademicPlugin(matchedPlugin)
   }
 
   chatStore.setPrompt(task.prompt)
@@ -194,24 +201,30 @@ const openMemberDialog = () => {
 }
 
 const applyWorkflowTemplate = async (template: Chat.AcademicWorkflowTemplate) => {
-  if (!isWorkflowMemberAvailable.value) {
+  if (!canUseWorkflowTemplate(template)) {
     openMemberDialog()
     return
   }
   await ensureAcademicData()
   const nextSteps: Chat.AcademicWorkflowStep[] = template.steps
-    .map(step => {
+    .reduce<Chat.AcademicWorkflowStep[]>((steps, step) => {
       const sourceList =
         step.kind === 'plugin' ? chatStore.academicPluginList || [] : chatStore.academicCoreFunctions || []
       const matched = findAcademicWorkflowSelector(sourceList, [[step.name]])
-      return {
+      const allowed =
+        step.kind === 'plugin'
+          ? canUseAcademicPlugin(matched || step, userBalance.value)
+          : canUseAcademicCore(matched || step, userBalance.value)
+      if (!allowed) return steps
+      const nextStep: Chat.AcademicWorkflowStep = {
         kind: step.kind,
         name: String(matched?.name || step.name || '').trim(),
         displayName: String(matched?.displayName || matched?.name || step.displayName || step.name || '').trim(),
         args: String(step.args || '').trim(),
       }
-    })
-    .filter(step => Boolean(step.name))
+      if (nextStep.name) steps.push(nextStep)
+      return steps
+    }, [])
 
   if (!nextSteps.length) return
   chatStore.setAcademicCore(undefined)
@@ -290,14 +303,14 @@ const startCustomWorkflow = async () => {
                     :key="item.id"
                     type="button"
                     class="workspace-home__workflow-row"
-                    :class="{ 'workspace-home__workflow-row--locked': !isWorkflowMemberAvailable }"
+                    :class="{ 'workspace-home__workflow-row--locked': !canUseWorkflowTemplate(item) }"
                     @click="applyWorkflowTemplate(item)"
                   >
                     <span class="workspace-home__workflow-row-copy">
                       <strong class="workspace-home__workflow-row-title">{{ item.title }}</strong>
                     </span>
                     <span class="workspace-home__workflow-row-side">
-                      <small v-if="!isWorkflowMemberAvailable">{{ t('lens.workflow.memberOnly') }}</small>
+                      <small v-if="!canUseWorkflowTemplate(item)">{{ t('lens.workflow.memberOnly') }}</small>
                       <span v-else class="workspace-home__workflow-row-action" aria-hidden="true">↗</span>
                     </span>
                   </button>

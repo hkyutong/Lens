@@ -410,6 +410,19 @@ export class UserBalanceService {
       res.sumDrawMjCount = res.packageId
         ? res.drawMjCount + res.memberDrawMjCount
         : res.drawMjCount;
+      const expirationDate = res.expirationTime ? new Date(res.expirationTime) : null;
+      const isActiveMember =
+        Number(res.packageId || 0) > 0 &&
+        (!expirationDate || Number.isNaN(expirationDate.getTime()) || expirationDate.getTime() > Date.now());
+      const packageInfo = res.packageId
+        ? await this.cramiPackageEntity.findOne({
+            where: { id: Number(res.packageId) },
+            select: ['id', 'name', 'weight'],
+          })
+        : null;
+      res.isMember = isActiveMember;
+      res.packageName = packageInfo?.name || '';
+      res.packageWeight = isActiveMember ? Number(packageInfo?.weight || 0) : 0;
       res.expirationTime = res.expirationTime ? formatDate(res.expirationTime, 'YYYY-MM-DD') : null;
       return res;
     } catch (error) {
