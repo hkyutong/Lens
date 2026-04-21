@@ -1,5 +1,11 @@
 # 更新日志
 
+## 0.0.77 (2026-04-22)
+- 学术会员分层限制落地：新增 `chat/src/utils/academicPlanAccess.ts` 统一前端套餐能力判断；前端学术面板和首页入口会根据用户套餐过滤可用单能力，Plus/非会员只保留轻量单能力，Pro 可使用 PDF/Word/LaTeX 等进阶能力并支持最多 2 步能力编排，Max 支持全部能力和最多 3 步编排。影响范围：学术能力入口展示、快捷入口、编排模板和编排步骤上限；不改变套餐购买、卡密兑换、积分扣费或文件上传逻辑。回滚方式：回退本次前端权限过滤文件与面板改动并重新构建同步 `chat/dist`。
+- 后端硬校验补齐：`service/src/modules/userBalance/userBalance.service.ts` 的余额接口新增 `isMember / packageName / packageWeight`，用于稳定区分 Plus/Pro/Max；`service/src/modules/academic/academic.service.ts` 在普通学术任务和多能力编排执行前做服务端套餐校验，避免绕过前端直接调用 Pro/Max 能力。影响范围：`/api/academic/chat-process` 与 `/api/academic/workflow-process` 的越权请求会返回升级提示；不改变学术服务端口、模型配置、扣费顺序或数据库结构。回滚方式：恢复本次服务端校验与余额返回字段后重新构建同步 `service/dist` 并重启 `9520`。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`；前端构建仅有既有 Vite 动静态导入 warning。
+- 已完成 GitHub 与服务器同步：提交 `4f86f59 feat: enforce academic plan access` 已推送到 `origin/main`；`chat/dist` 与 `service/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`。同步前已在服务器创建 `public-chat-before-plan-access-20260422021406.tar.gz` 与 `service-dist-before-plan-access-20260422021406.tar.gz` 备份；`9520` 主服务已从 PID `3061585` 精确切换到 PID `3208282`，`38000` 学术服务保持 `4048524/2995907` 未重启。线上 `https://lens.yutoai.net/?v=202604220215` 返回 `HTTP 200`，远端 `dist/main.js` 已确认包含“当前套餐最多支持”后端拦截，前端产物已确认包含 `packageWeight` 等套餐等级字段。
+
 ## 0.0.76 (2026-04-22)
 - 年会员卡密链路补齐：`service/src/modules/crami/createCrami.dto.ts` 与 `crami.service.ts` 已支持套餐卡密传入 `billingCycle=monthly|annual`；生成套餐卡密时复用现有套餐计费快照逻辑，年卡会按 12 个月额度和 365 天有效期生成，兑换后沿用现有 `addBalanceToUser` 会员到账链路。影响范围：仅套餐类卡密生成；不改变用户直接购买年付套餐的订单逻辑、支付回调或卡密兑换入口。回滚方式：移除 `billingCycle` 入参与 `getPackageBillingOffer` 生成逻辑后重新构建同步 `service/dist`。
 - 后台发行年卡入口：`admin/src/views/package/crami.vue` 的生成卡密弹窗新增“月卡 / 年卡”计费周期选择，并显示即将生成的有效期和三类额度；`admin/src/views/package/package.vue` 在套餐列表操作区新增“发行年卡密”快捷入口，会跳转到卡密管理并预选当前套餐与年卡周期。影响范围：仅后台套餐卡密发行体验，不改变套餐配置字段或已有卡密数据。回滚方式：恢复两个后台页面并重新构建同步 `admin/dist`。
