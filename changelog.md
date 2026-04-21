@@ -5,6 +5,7 @@
 - 后台额度命名收口：`admin` 中“特殊额度”相关表格、表单、校验与 placeholder 改为“顶级额度”，用于套餐、卡密和注册/签到配置页。影响范围：仅后台文案，不改变字段名、接口参数或数据库结构。回滚方式：恢复本次后台文案改动后重新构建同步 `admin/dist`。
 - 生产错误清洗：`service/src/common/utils/sanitizeClientErrorMessage.ts` 与 `chat/src/utils/request/sanitizeErrorMessage.ts` 新增异常前缀剥离，`OrderService.buy` 不再把捕获到的原始 `error.message` 直接抛给前端；“Error: 订单存在!” 会显示为“订单已存在，请勿重复提交”。影响范围：订单购买失败提示和通用请求错误清洗，不改变支付创建、查询或扣费逻辑。回滚方式：恢复清洗器和订单接口 catch 分支后重新构建同步 `chat/dist` 与 `service/dist`。
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`./admin/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production`、`./admin/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`；构建仅有既有 Vite chunk/import 警告和 Browserslist 数据提示。
+- 已完成 GitHub 与服务器同步：提交 `bdf97e7 fix: clean quota labels and order errors` 已推送到 `origin/main`；`chat/dist`、`admin/dist` 与 `service/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`。`9520` 主服务已重启为 PID `2995614`，学术服务父进程仍为 `4048524`，当前监听子进程为 `2995907`，本轮未主动重启学术服务。线上 `https://lens.yutoai.net/?v=20260422002130` 返回 `HTTP 200`，远端构建产物已确认包含“顶级积分”“顶级额度”和“订单已存在，请勿重复提交”，且不再包含 `Error: 订单存在` 原始前缀。
 
 ## 0.0.72 (2026-04-21)
 - 编排准备态兜底：针对用户截图中“能力编排进度 0% 但深度思考长条仍显示通用轮播文案”的问题，`service/src/modules/academic/academic.service.ts` 现在会在文件转交/编排准备阶段立即写入并推送第一条 workflow 事件，把首个步骤标记为 `running`，并显示“正在接收上传资料 / 正在准备编排任务”等安全阶段说明。
