@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.72 (2026-04-21)
+- 编排准备态兜底：针对用户截图中“能力编排进度 0% 但深度思考长条仍显示通用轮播文案”的问题，`service/src/modules/academic/academic.service.ts` 现在会在文件转交/编排准备阶段立即写入并推送第一条 workflow 事件，把首个步骤标记为 `running`，并显示“正在接收上传资料 / 正在准备编排任务”等安全阶段说明。
+- 前端长条兜底：`chat/src/views/chat/components/Message/Text/index.vue` 的 `workflowLiveProgressText` 不再依赖必须已有完整步骤列表；只要当前消息是能力编排且仍在 loading，就优先显示“正在接收上传资料，准备能力编排”或“正在准备能力编排”，避免用户只看到泛化“正在理解用户的想法”。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`。影响范围：仅多能力编排流式状态和前端等待文案，不改变最终模型调用、学术服务处理、扣费或文件生成逻辑。回滚方式：恢复本次对早期 workflow 事件和前端兜底文案的改动，并重新构建同步 `chat/dist` 与 `service/dist`。
+
 ## 0.0.71 (2026-04-21)
 - 控制面板减噪：`chat/src/views/chat/components/Footer/components/AcademicPanel.vue` 已删除高级设置中补充输入框上方的独立“补充要求”标题，保留输入框 placeholder 与“只有在需要约束术语、输出格式或翻译策略时再填写。”提示说明，避免表单层级过重。
 - 影响范围：仅能力设置面板的显示文案结构，不影响补充要求输入、清洗、提交或编排逻辑。回滚方式：恢复该 textarea 上方的 label 后重新构建并同步 `chat/dist`。

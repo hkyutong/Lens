@@ -3746,6 +3746,52 @@ export class AcademicService {
       cleanupConnectionListeners();
     });
 
+    let taskData = this.buildAcademicWorkflowTaskData(
+      normalizedWorkflowSteps,
+      body.modelName || useModelName,
+    );
+    const firstWorkflowStep = normalizedWorkflowSteps[0];
+    if (firstWorkflowStep) {
+      taskData = this.patchAcademicWorkflowTaskData(
+        taskData,
+        firstWorkflowStep.index,
+        {
+          status: 'running',
+          startedAt: this.formatWorkflowTimestamp(),
+          progressText: `第 ${firstWorkflowStep.index}/${Math.max(
+            taskData.totalStages,
+            1,
+          )} 步 ${firstWorkflowStep.displayName}：${
+            body.fileUrl ? '正在接收上传资料' : '正在准备编排任务'
+          }`,
+        },
+        {
+          status: 'running',
+          currentStage: firstWorkflowStep.index,
+        },
+      );
+    }
+    await this.chatLogService.updateChatLog(assistantLogId, {
+      taskData: JSON.stringify(taskData),
+      status: 2,
+    });
+    this.emitAcademicWorkflowEvent(
+      res,
+      {
+        nodeType: 'workflow',
+        workflowEnabled: true,
+        workflowProgress: 0,
+        progress: 0,
+        stepName: firstWorkflowStep?.displayName || '',
+        progressText:
+          taskData.steps.find(workflowStep => workflowStep.index === firstWorkflowStep?.index)
+            ?.progressText || (body.fileUrl ? '正在接收上传资料' : '正在准备编排任务'),
+      },
+      requestId,
+      taskData,
+      assistantLogId,
+    );
+
     let uploadDir = '';
     let uploadErrorMessage = '';
     if (body.fileUrl) {
@@ -3768,10 +3814,6 @@ export class AcademicService {
       return sections.join('\n\n').trim();
     };
 
-    let taskData = this.buildAcademicWorkflowTaskData(
-      normalizedWorkflowSteps,
-      body.modelName || useModelName,
-    );
     await this.chatLogService.updateChatLog(assistantLogId, {
       taskData: JSON.stringify(taskData),
       content: '',

@@ -2325,13 +2325,16 @@ const workflowCurrentStageLabel = computed(() => {
 })
 
 const workflowLiveProgressText = computed(() => {
-  if (!props.loading || !hasWorkflowStageList.value) return ''
+  if (!props.loading || !showWorkflowCard.value) return ''
   const running = workflowStageList.value.find(stage => stage.status === 'running')
   const runningText = String(running?.progressText || '').trim()
   if (runningText) return runningText
 
   const stageName = workflowCurrentStageLabel.value
-  if (!stageName) return ''
+  if (!stageName) {
+    if (props.fileUrl) return '正在接收上传资料，准备能力编排'
+    return '正在准备能力编排'
+  }
   const progress = workflowProgressValue.value ? ` · ${workflowProgressValue.value}%` : ''
   return `正在执行：${stageName}${progress}`
 })
@@ -2341,7 +2344,9 @@ const reasoningPreview = computed(
 )
 
 const workflowSummaryLabel = computed(() => {
-  if (!hasWorkflowStageList.value) return ''
+  if (!hasWorkflowStageList.value) {
+    return props.loading && props.isWorkflowMessage ? '正在准备能力编排' : ''
+  }
   if (workflowCurrentStageLabel.value && props.loading) {
     return t('lens.message.workflowRunningAt', { name: workflowCurrentStageLabel.value })
   }
