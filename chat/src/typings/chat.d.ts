@@ -153,6 +153,7 @@ declare namespace Chat {
     error?: string
     startedAt?: string
     completedAt?: string
+    progressText?: string
   }
 
   interface AcademicWorkflowTaskData {

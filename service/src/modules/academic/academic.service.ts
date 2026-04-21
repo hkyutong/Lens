@@ -66,6 +66,7 @@ interface AcademicWorkflowStageMeta {
   error?: string;
   startedAt?: string;
   completedAt?: string;
+  progressText?: string;
 }
 
 interface AcademicWorkflowTaskData {
@@ -252,6 +253,42 @@ export class AcademicService {
     );
     if (stageCeiling <= stageStart) return stageStart;
     return Math.min(stageCeiling, stageStart + 5 + Math.max(0, tick - 1) * 2);
+  }
+
+  private buildWorkflowStageProgressText(options: {
+    step: Required<
+      Pick<AcademicWorkflowStageMeta, 'index' | 'kind' | 'name' | 'displayName'>
+    > & {
+      args?: string;
+    };
+    totalStages: number;
+    tick: number;
+    hasUploadDir: boolean;
+    isPdfPlugin: boolean;
+    isWordPlugin: boolean;
+    isLatexPlugin: boolean;
+  }) {
+    const { step, totalStages, tick, hasUploadDir, isPdfPlugin, isWordPlugin, isLatexPlugin } =
+      options;
+    const name = String(step.displayName || step.name || `第 ${step.index} 步`).trim();
+    const prefix = `第 ${step.index}/${Math.max(totalStages, 1)} 步 ${name}`;
+    const safeTick = Math.max(Number(tick || 0), 0);
+
+    if (step.kind === 'plugin') {
+      const filePhases = isPdfPlugin
+        ? ['正在接收论文资料', '正在切分论文正文', '正在分析问题、方法和实验结果', '正在汇总论文速读结果']
+        : isWordPlugin
+        ? ['正在接收文档资料', '正在解析文档结构', '正在提取关键内容', '正在汇总文档结果']
+        : isLatexPlugin
+        ? ['正在接收 LaTeX 资料', '正在保留公式与命令结构', '正在生成译文', '正在整理排版结果']
+        : ['正在接收研究资料', '正在解析资料内容', '正在调用学术工具处理', '正在整理本步结果'];
+      const plainPhases = ['正在准备工具输入', '正在调用学术工具', '正在等待上游模型返回', '正在整理本步结果'];
+      const phases = hasUploadDir ? filePhases : plainPhases;
+      return `${prefix}：${phases[Math.min(safeTick, phases.length - 1)]}`;
+    }
+
+    const phases = ['正在读取上一步输出', '正在调用上游模型生成内容', '正在校对和整理本步结果'];
+    return `${prefix}：${phases[Math.min(safeTick, phases.length - 1)]}`;
   }
 
   private emitAcademicWorkflowEvent(
@@ -3783,6 +3820,9 @@ export class AcademicService {
         const rawCoreFunction = step.kind === 'core' ? step.name : '';
         const normalizedPluginName = this.normalizePluginName(rawPluginName || '');
         const isArxivPlugin = this.isArxivPlugin(normalizedPluginName);
+        const isPdfPlugin = step.kind === 'plugin' && this.isPdfPlugin(normalizedPluginName);
+        const isWordPlugin = step.kind === 'plugin' && this.isWordPlugin(normalizedPluginName);
+        const isLatexPlugin = step.kind === 'plugin' && this.isLatexPlugin(normalizedPluginName);
         const baseProgress = Math.round(((step.index - 1) / taskData.totalStages) * 100);
         const workflowHeartbeatMs = Math.max(
           Number(process.env.ACADEMIC_WORKFLOW_HEARTBEAT_MS || 2000),
@@ -3800,12 +3840,34 @@ export class AcademicService {
           if (!(workflowHeartbeatMs > 0)) return;
           stopWorkflowHeartbeat();
           workflowHeartbeatTick = 0;
+          const initialProgressText = this.buildWorkflowStageProgressText({
+            step,
+            totalStages: taskData.totalStages,
+            tick: workflowHeartbeatTick,
+            hasUploadDir: Boolean(uploadDir),
+            isPdfPlugin,
+            isWordPlugin,
+            isLatexPlugin,
+          });
+          taskData = this.patchAcademicWorkflowTaskData(
+            taskData,
+            step.index,
+            {
+              status: 'running',
+              progressText: initialProgressText,
+            },
+            {
+              status: 'running',
+              currentStage: step.index,
+            },
+          );
           this.emitAcademicWorkflowEvent(
             res,
             {
               workflowStageChunk: true,
               stepName: step.displayName,
               progress: baseProgress,
+              progressText: initialProgressText,
               nodeType: 'workflow',
             },
             requestId,
@@ -3818,6 +3880,27 @@ export class AcademicService {
               return;
             }
             workflowHeartbeatTick += 1;
+            const progressText = this.buildWorkflowStageProgressText({
+              step,
+              totalStages: taskData.totalStages,
+              tick: workflowHeartbeatTick,
+              hasUploadDir: Boolean(uploadDir),
+              isPdfPlugin,
+              isWordPlugin,
+              isLatexPlugin,
+            });
+            taskData = this.patchAcademicWorkflowTaskData(
+              taskData,
+              step.index,
+              {
+                status: 'running',
+                progressText,
+              },
+              {
+                status: 'running',
+                currentStage: step.index,
+              },
+            );
             this.emitAcademicWorkflowEvent(
               res,
               {
@@ -3828,6 +3911,7 @@ export class AcademicService {
                   taskData.totalStages,
                   workflowHeartbeatTick,
                 ),
+                progressText,
                 nodeType: 'workflow',
               },
               requestId,
@@ -3844,6 +3928,15 @@ export class AcademicService {
             status: 'running',
             startedAt: this.formatWorkflowTimestamp(),
             error: '',
+            progressText: this.buildWorkflowStageProgressText({
+              step,
+              totalStages: taskData.totalStages,
+              tick: 0,
+              hasUploadDir: Boolean(uploadDir),
+              isPdfPlugin,
+              isWordPlugin,
+              isLatexPlugin,
+            }),
           },
           {
             status: 'running',
@@ -3860,6 +3953,9 @@ export class AcademicService {
             workflowStageStart: true,
             stepName: step.displayName,
             progress: baseProgress,
+            progressText:
+              taskData.steps.find(workflowStep => workflowStep.index === step.index)
+                ?.progressText || '',
             nodeType: 'workflow',
           },
           requestId,
@@ -4234,6 +4330,7 @@ export class AcademicService {
             completedAt: this.formatWorkflowTimestamp(),
             contentPreview: this.truncateAcademicWorkflowPreview(persistedStageContent),
             error: '',
+            progressText: '',
           },
           {
             status: step.index === taskData.totalStages ? 'done' : 'running',

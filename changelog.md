@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.70 (2026-04-21)
+- 编排耗时排查：线上最近一次三步多能力编排总耗时约 `264s`，第一步插件阶段约 `196s`，第二步基础能力约 `58s`，第三步约 `10s`；主要原因是编排链路按步骤串行执行，且第一步插件内部包含资料处理与上游模型等待，耗时不只取决于最终输出模型速度。
+- 编排进度可视化：`service/src/modules/academic/academic.service.ts` 的 workflow heartbeat 现在会附带安全的 `progressText`，按步骤显示“正在接收论文资料 / 正在切分论文正文 / 正在分析问题、方法和实验结果 / 正在汇总结果”等阶段说明；`chat/src/views/chat/components/Message/Text/index.vue` 让“深度思考中”长条优先展示当前编排步骤说明，并在编排详情中展示运行中步骤的阶段文本。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`。影响范围：多能力编排流式状态展示与服务端 workflow 事件，不改变模型调用顺序、扣费逻辑、学术服务处理逻辑或最终结果。回滚方式：移除 `progressText` 字段与 heartbeat 文案生成逻辑，并恢复前端 `reasoningPreview` 为原通用轮播文案后重新构建、同步 `chat/dist` 与 `service/dist`。
+
 ## 0.0.69 (2026-04-21)
 - 研究结果加载态去噪：`chat/src/views/chat/components/Message/Text/index.vue` 已移除助手消息加载时头部的“进行中”状态 chip 和“正在整理分析、引用和可交付结果。”说明句；保留“研究结果”标题和下方深度思考/生成进度展示。
 - 影响范围：仅聊天消息加载态展示文案，不影响生成、推理、联网搜索、文件结果或工作流逻辑。回滚方式：恢复 `recordStatus` 与加载态 `recordSummary` 文案并重新构建、同步 `chat/dist`。

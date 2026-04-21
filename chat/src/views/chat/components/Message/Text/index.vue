@@ -2214,7 +2214,6 @@ const reasoningTips = [
 const reasoningTipIndex = ref(0)
 let reasoningTipTimer: ReturnType<typeof setInterval> | null = null
 
-const reasoningPreview = computed(() => reasoningTips[reasoningTipIndex.value])
 const hasReasoning = computed(() => Boolean(props.reasoningText))
 const showThinkingPill = computed(
   () => !props.isUserMessage && (props.loading || hasReasoning.value)
@@ -2309,6 +2308,7 @@ const workflowStageList = computed(() =>
       displayName: String(step?.displayName || step?.name || '').trim() || `Step ${index + 1}`,
       status: normalizedStatus,
       contentPreview: sanitizeWorkflowPreview(String(step?.contentPreview || '')),
+      progressText: sanitizeWorkflowPreview(String(step?.progressText || '')),
       error,
     }
   })
@@ -2323,6 +2323,22 @@ const workflowCurrentStageLabel = computed(() => {
   const current = workflowStageList.value.find(stage => stage.status === 'running')
   return current?.displayName || ''
 })
+
+const workflowLiveProgressText = computed(() => {
+  if (!props.loading || !hasWorkflowStageList.value) return ''
+  const running = workflowStageList.value.find(stage => stage.status === 'running')
+  const runningText = String(running?.progressText || '').trim()
+  if (runningText) return runningText
+
+  const stageName = workflowCurrentStageLabel.value
+  if (!stageName) return ''
+  const progress = workflowProgressValue.value ? ` · ${workflowProgressValue.value}%` : ''
+  return `正在执行：${stageName}${progress}`
+})
+
+const reasoningPreview = computed(
+  () => workflowLiveProgressText.value || reasoningTips[reasoningTipIndex.value]
+)
 
 const workflowSummaryLabel = computed(() => {
   if (!hasWorkflowStageList.value) return ''
@@ -2852,6 +2868,12 @@ function openSingleImagePreview(src: string) {
             </div>
             <div v-if="stage.args" class="workspace-record__workflow-extra">
               {{ stage.args }}
+            </div>
+            <div
+              v-if="stage.status === 'running' && stage.progressText"
+              class="workspace-record__workflow-extra"
+            >
+              {{ stage.progressText }}
             </div>
             <div v-if="stage.contentPreview" class="workspace-record__workflow-preview">
               {{ stage.contentPreview }}
