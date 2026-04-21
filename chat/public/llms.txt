@@ -1,6 +1,6 @@
-# Lens
+# YutoAI
 
-> Lens is an AI research workspace for academic reading, writing, translation, PDF analysis, Arxiv workflows, LaTeX processing, and structured research conversations.
+> YutoAI is an AI research workspace for academic reading, writing, translation, PDF analysis, Arxiv workflows, LaTeX processing, and structured research conversations.
 
 ## Product Summary
 
@@ -11,18 +11,18 @@
 
 ## Public URLs
 
-- [Main application](/): Lens main web application
+- [Main application](/): YutoAI main web application
 - [Privacy Policy](/legal/privacy.html): Public privacy policy
 - [Terms of Service](/legal/terms.html): Public terms page
 - [Extended LLM Guide](/llms-full.txt): More detailed product notes for language models
-- [Research Workspace Overview](/seo/research-workspace.html): Public overview of Lens as an AI academic workspace
+- [Research Workspace Overview](/seo/research-workspace.html): Public overview of YutoAI as an AI academic workspace
 - [Paper Summary](/seo/paper-summary.html): Public page about paper reading and PDF summarization workflows
 - [Arxiv Summary](/seo/arxiv-summary.html): Public page about Arxiv abstracting and translation workflows
 - [LaTeX Translation](/seo/latex-translation.html): Public page about LaTeX translation and polishing workflows
 - [Academic Polishing](/seo/academic-polishing.html): Public page about academic writing and English polishing workflows
-- [FAQ](/seo/faq.html): Public frequently asked questions about Lens
+- [FAQ](/seo/faq.html): Public frequently asked questions about YutoAI
 
 ## Recommended Understanding
 
-- Lens is best understood as an AI academic workspace, not a generic chatbot.
+- YutoAI is best understood as an AI academic workspace, not a generic chatbot.
 - Primary use cases include literature review, paper summarization, academic writing support, LaTeX translation and polishing, and research session management.

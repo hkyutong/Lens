@@ -5,7 +5,7 @@ import '@/styles/github-markdown.less'
 import '@/styles/global.less'
 // import '@/styles/highlight.less' // 移除旧的highlight样式
 import '@/styles/index.css'
-import { printLensInfo, printAppInfo } from '@/utils/logger'
+import { printYutoAIInfo, printAppInfo } from '@/utils/logger'
 import { message } from '@/utils/message'
 import router from '@/utils/router'
 import { addCollection } from '@iconify/vue'
@@ -52,8 +52,8 @@ async function bootstrap() {
   const msgInstance = message()
 
   // 在开发环境下打印控制台信息
-  printLensInfo()
-  printAppInfo('Lens', '5.0.1')
+  printYutoAIInfo()
+  printAppInfo('YutoAI', '5.0.1')
 
   authStore.getGlobalConfig().catch(() => {})
 

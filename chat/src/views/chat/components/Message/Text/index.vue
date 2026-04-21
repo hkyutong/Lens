@@ -194,7 +194,7 @@ const getMermaidDownloadBaseName = () => {
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(
     now.getHours()
   )}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-  return `Lens-mindmap-${stamp}`
+  return `YutoAI-mindmap-${stamp}`
 }
 
 const triggerBlobDownload = (blob: Blob, fileName: string) => {
@@ -2137,7 +2137,7 @@ const text = computed(() => {
       .replace(/(?:任务处理中\s*[，,]?\s*请稍候\s*[（(][^）)\n]{0,240}[）)]\s*)+/gi, '')
       .replace(/\b任务处理中\s*[，,]?\s*请稍候\b/gi, '')
       .replace(/^\s*请开始多线程操作[。.]?\s*$/gm, '')
-      .replace(/Lens Report\s*｜\s*昱镜报告/g, 'Lens Report｜昱镜报告')
+      .replace(/YutoAI Report\s*｜\s*昱镜报告/g, 'YutoAI Report｜昱镜报告')
       .replace(/\r\n/g, '\n')
       .replace(/\n{4,}/g, '\n\n\n')
     const lines = source.split('\n')

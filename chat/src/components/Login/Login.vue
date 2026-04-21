@@ -46,9 +46,9 @@ function changeLoginType(type: string) {
       <div class="flex-1 flex flex-col items-center justify-center">
         <div class="mb-8 text-center">
           <div class="flex items-center justify-center mb-4">
-            <img :src="logoPath" alt="Lens" class="h-10 w-10 rounded-2xl" />
+            <img :src="logoPath" alt="YutoAI" class="h-10 w-10 rounded-2xl" />
           </div>
-          <div class="text-xl font-semibold tracking-wide">欢迎使用 Lens</div>
+          <div class="text-xl font-semibold tracking-wide">欢迎使用 YutoAI</div>
           <div class="text-sm text-gray-300 mt-2">登录以继续进入科研工作区</div>
         </div>
         <!-- 登录组件区域 -->

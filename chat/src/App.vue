@@ -27,16 +27,16 @@ const wechatSilentLoginStatus = computed(
 const showWatermark = computed(() => Number(authStore.globalConfig?.showWatermark) === 1)
 // 默认不清除缓存，需要在后台配置中设置为1才开启自动清除
 const clearCacheEnabled = computed(() => Number(authStore.globalConfig?.clearCacheEnabled) === 1)
-const siteName = computed(() => authStore.globalConfig?.siteName || 'Lens')
+const siteName = computed(() => authStore.globalConfig?.siteName || 'YutoAI')
 const siteUrl = computed(() => authStore.globalConfig?.siteUrl || '')
-const brandSeoTitle = 'Lens｜YutoAI - AI 科研工作台'
+const brandSeoTitle = 'YutoAI - AI 科研工作台'
 const siteDescription = computed(
   () =>
     authStore.globalConfig?.homeWelcomeContent ||
-    'Lens 是面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织的 AI 学术工作台。'
+    'YutoAI 是面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织的 AI 学术工作台。'
 )
 const siteKeywords =
-  'AI SEO, 学术AI, AI学术平台, AI科研工作台, 论文速读, PDF理解, Arxiv摘要, LaTeX翻译, 英文润色, BibTeX, Lens'
+  'AI SEO, 学术AI, AI学术平台, AI科研工作台, 论文速读, PDF理解, Arxiv摘要, LaTeX翻译, 英文润色, BibTeX, YutoAI'
 
 function toAbsoluteUrl(url: string) {
   const normalized = String(url || '').trim()

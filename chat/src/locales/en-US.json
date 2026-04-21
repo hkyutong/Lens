@@ -772,7 +772,7 @@
     "moveDown": "Move down",
     "removeStep": "Remove",
     "currentChain": "Current pipeline",
-    "currentChainDesc": "Lens will run this research pipeline automatically from top to bottom.",
+    "currentChainDesc": "YutoAI will run this research pipeline automatically from top to bottom.",
     "modeWorkflow": "Capability pipeline",
     "stepsShort": " steps",
     "empty": "No capability added yet",

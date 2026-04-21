@@ -17,7 +17,7 @@ const authStore = useAuthStore()
 const { isMobile } = useBasicLayout()
 const isLogin = computed(() => authStore.isLogin)
 const logoPath = computed(() => authStore.globalConfig.clientLogoPath || logo)
-const siteName = computed(() => authStore.globalConfig?.siteName || 'Lens')
+const siteName = computed(() => authStore.globalConfig?.siteName || 'YutoAI')
 
 const userEmail = computed(() => authStore.userInfo.email || '')
 const avatarText = computed(() => {

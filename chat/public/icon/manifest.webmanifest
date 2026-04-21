@@ -1,6 +1,6 @@
 {
-  "name": "Lens AI 学术工作台",
-  "short_name": "Lens",
+  "name": "YutoAI 学术工作台",
+  "short_name": "YutoAI",
   "description": "论文速读、PDF 理解、Arxiv 摘要、LaTeX 翻译与学术写作辅助的一体化 AI 工作台",
   "start_url": "/",
   "scope": "/",

@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.64 (2026-04-21)
+- 同步链路排查：确认 GitHub `origin/main` 与本地 HEAD 同为 `e084744 docs: record legal policy deployment`，但本地存在 19 个未提交前端/SEO/品牌文案改动；服务器 `/www/wwwroot/Lens`、`/www/wwwroot/Lens/AIWebQuickDeploy`、`/www/wwwroot/Lens/academic-4.0` 均不是 Git 仓库，线上运行版本只能通过构建产物、文件时间与内容校验反推。
+- 法律页品牌开头修正：`chat/public/legal/terms.html` 首段改为“本服务协议适用于 YutoAI 提供的 Lens 等相关服务”，`chat/public/legal/privacy.html` 首段改为“本隐私政策说明 YutoAI 在提供 Lens 等相关服务时如何处理个人信息”；保留 Lens 作为 YutoAI 旗下服务自然出现，不把 Lens 单独拆成独立品牌协议。
+- 本地验证通过：已在 `chat` 子目录执行 `./node_modules/.bin/vue-tsc --noEmit` 与 `./node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：公开法律页开头、现有前端/SEO/品牌文案工作树改动及其构建产物。回滚方式：回退本次提交并重新构建、同步 `chat/dist`；服务器前端静态资源可回退到上一版 `public/chat` 构建产物。
+
 ## 0.0.63 (2026-04-21)
 - 公开法律页更新：`chat/public/legal/terms.html` 已替换为用户提供的 2026-04-21 版 `YutoAI 服务协议 / Terms of Service`，`chat/public/legal/privacy.html` 已替换为 2026-04-21 版 `YutoAI 隐私政策 / Privacy Policy`，补齐服务主体、服务范围、账号安全、API、退款、第三方服务、企业服务、投诉、责任限制、香港法律与隐私数据处理等完整条款。
 - 法律页排版同步调整为网站静态文档格式：新增 `YutoAI Legal` 页眉、双语标题、更新时间、章节锚点目录、主体信息块、清晰分节和移动端适配；保持纯静态 HTML，不引入脚本和新运行时依赖，兼容登录弹窗 iframe 与公开访问。
