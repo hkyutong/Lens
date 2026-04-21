@@ -3,6 +3,7 @@
 ## 0.0.75 (2026-04-22)
 - 研究结果头部对齐修复：`chat/src/views/chat/components/Message/Text/index.vue` 已修正第一个 `workspace-record__meta-chip` 的伪元素布局，避免隐藏圆点仍占用 flex gap，导致“附件 1”比“生成 1 份可下载结果。”右缩。影响范围：仅消息头部元信息排版，不改变下载结果、文件展示、生成正文或接口逻辑。回滚方式：恢复该伪元素样式后重新构建同步 `chat/dist`。
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仅有既有 Vite 动静态导入 warning。
+- 已完成 GitHub 与服务器同步：提交 `cc54b8d fix: align research result metadata` 已推送到 `origin/main`；最新 `chat/dist` 已零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，`index.html` 更新时间为 `2026-04-22 00:40:19 +0800`。线上 `https://lens.yutoai.net/?v=202604220045` 返回 `HTTP 200`，服务器 CSS 已确认包含 `.workspace-record__meta-chip:first-child:before{content:"";display:none}`；`9520` 保持 PID `3008741`，`38000` 保持 `4048524/2995907`，本轮未重启服务。
 
 ## 0.0.74 (2026-04-22)
 - 学术长任务进度接入：`service/src/modules/academic/academic.service.ts` 新增安全 `thinkingPreview` 提炼链路，会从普通学术任务和多能力编排调用学术后端时收到的流式片段中提取、脱敏、降噪、截断后推给前端。多能力编排仍保留 `progressText/taskData`，并把真实流片段同步写入当前步骤进度。影响范围：仅用户等待期间的进度展示，不改变最终正文生成、文件结果、扣费、模型调用顺序或数据库结构。回滚方式：移除 `thinkingPreview` 推送和前端消费逻辑后重新构建同步 `chat/dist` 与 `service/dist`。
