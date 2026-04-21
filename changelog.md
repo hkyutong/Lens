@@ -4,6 +4,7 @@
 - 年会员卡密链路补齐：`service/src/modules/crami/createCrami.dto.ts` 与 `crami.service.ts` 已支持套餐卡密传入 `billingCycle=monthly|annual`；生成套餐卡密时复用现有套餐计费快照逻辑，年卡会按 12 个月额度和 365 天有效期生成，兑换后沿用现有 `addBalanceToUser` 会员到账链路。影响范围：仅套餐类卡密生成；不改变用户直接购买年付套餐的订单逻辑、支付回调或卡密兑换入口。回滚方式：移除 `billingCycle` 入参与 `getPackageBillingOffer` 生成逻辑后重新构建同步 `service/dist`。
 - 后台发行年卡入口：`admin/src/views/package/crami.vue` 的生成卡密弹窗新增“月卡 / 年卡”计费周期选择，并显示即将生成的有效期和三类额度；`admin/src/views/package/package.vue` 在套餐列表操作区新增“发行年卡密”快捷入口，会跳转到卡密管理并预选当前套餐与年卡周期。影响范围：仅后台套餐卡密发行体验，不改变套餐配置字段或已有卡密数据。回滚方式：恢复两个后台页面并重新构建同步 `admin/dist`。
 - 本地验证通过：已执行 `./admin/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./admin/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`；构建仅有既有 Browserslist/chunk warning。
+- 已完成 GitHub 与服务器同步：提交 `5592bb0 feat: support annual member card secrets` 已推送到 `origin/main`；`service/dist` 与 `admin/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`。`9520` 主服务已从 PID `3008741` 精确切换到 PID `3061585`，`38000` 学术服务保持 `4048524/2995907` 未重启；线上 `https://lens.yutoai.net/?v=202604220100` 返回 `HTTP 200`，服务器后台资源已确认包含“发行年卡密 / 年卡”，服务端 `dist/main.js` 已确认套餐卡密生成走 `getPackageBillingOffer(pkg, billingCycle)`。
 
 ## 0.0.75 (2026-04-22)
 - 研究结果头部对齐修复：`chat/src/views/chat/components/Message/Text/index.vue` 已修正第一个 `workspace-record__meta-chip` 的伪元素布局，避免隐藏圆点仍占用 flex gap，导致“附件 1”比“生成 1 份可下载结果。”右缩。影响范围：仅消息头部元信息排版，不改变下载结果、文件展示、生成正文或接口逻辑。回滚方式：恢复该伪元素样式后重新构建同步 `chat/dist`。
