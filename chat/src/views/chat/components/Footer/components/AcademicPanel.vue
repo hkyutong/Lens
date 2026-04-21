@@ -666,7 +666,6 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
             </option>
           </select>
         </div>
-        <label>{{ props.pluginArgsLabel || t('lens.academicPanel.customInstructionLabel') }}</label>
         <textarea
           v-model="pluginArgs"
           :disabled="!isPluginArgsEnabled"

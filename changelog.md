@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.71 (2026-04-21)
+- 控制面板减噪：`chat/src/views/chat/components/Footer/components/AcademicPanel.vue` 已删除高级设置中补充输入框上方的独立“补充要求”标题，保留输入框 placeholder 与“只有在需要约束术语、输出格式或翻译策略时再填写。”提示说明，避免表单层级过重。
+- 影响范围：仅能力设置面板的显示文案结构，不影响补充要求输入、清洗、提交或编排逻辑。回滚方式：恢复该 textarea 上方的 label 后重新构建并同步 `chat/dist`。
+
 ## 0.0.70 (2026-04-21)
 - 编排耗时排查：线上最近一次三步多能力编排总耗时约 `264s`，第一步插件阶段约 `196s`，第二步基础能力约 `58s`，第三步约 `10s`；主要原因是编排链路按步骤串行执行，且第一步插件内部包含资料处理与上游模型等待，耗时不只取决于最终输出模型速度。
 - 编排进度可视化：`service/src/modules/academic/academic.service.ts` 的 workflow heartbeat 现在会附带安全的 `progressText`，按步骤显示“正在接收论文资料 / 正在切分论文正文 / 正在分析问题、方法和实验结果 / 正在汇总结果”等阶段说明；`chat/src/views/chat/components/Message/Text/index.vue` 让“深度思考中”长条优先展示当前编排步骤说明，并在编排详情中展示运行中步骤的阶段文本。
