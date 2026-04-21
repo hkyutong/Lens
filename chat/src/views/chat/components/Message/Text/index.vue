@@ -2234,15 +2234,11 @@ const recordTitle = computed(() => {
   return ''
 })
 const recordStatus = computed(() => {
-  if (props.loading) return '进行中'
   return ''
 })
 const recordSummary = computed(() => {
   if (props.isUserMessage) return ''
 
-  if (props.loading) {
-    return '正在整理分析、引用和可交付结果。'
-  }
   if (props.usingNetwork && searchResult.value.length) {
     return `引用 ${searchResult.value.length} 个网页来源。`
   }
@@ -2788,7 +2784,7 @@ function openSingleImagePreview(src: string) {
             {{ recordStatus }}
           </span>
         </div>
-        <p v-if="recordSummary" class="workspace-record__summary">{{ recordSummary }}</p>
+        <p v-if="recordSummary && !loading" class="workspace-record__summary">{{ recordSummary }}</p>
         <div v-if="recordMeta.length" class="workspace-record__meta">
           <span v-for="item in recordMeta" :key="item" class="workspace-record__meta-chip">
             {{ item }}
