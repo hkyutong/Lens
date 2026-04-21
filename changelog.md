@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.79 (2026-04-22)
+- 用户必读排版优化：`chat/src/components/Settings/NoticeDialog.vue` 针对 Lens 套餐规则公告新增结构化展示，不再把套餐规则作为原始 Markdown 大标题和长列表直接渲染；当前展示改为顶部说明、Plus/Pro/Max 三列能力对比、计费与有效期、任务执行说明四个清晰区域。影响范围：仅设置页“用户必读”公告的前端展示排版；不改变公告数据库内容、套餐权限、后端校验或计费逻辑。回滚方式：恢复 `NoticeDialog.vue` 到上一版并重新构建同步 `chat/dist`。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；前端构建仅有既有 Vite 动静态导入 warning。
+- 已完成 GitHub 与服务器同步：提交 `e287009 refactor: improve usage notice layout` 已推送到 `origin/main`；最新 `chat/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，同步前已备份 `public/chat` 到 `backups/public-chat-before-usage-notice-layout-20260422025347.tar.gz`。本轮未重启服务，`9520` 保持 PID `3220959`，`38000` 保持 `4048524/2995907`；线上 `https://lens.yutoai.net/?v=202604220254` 返回 `HTTP 200`，服务器前端产物已确认包含 `usage-notice__plans` 结构化版式。
+
 ## 0.0.78 (2026-04-22)
 - 用户必读内容替换：`chat/src/components/Settings/NoticeDialog.vue` 不再使用初始化时解构出的旧 `noticeInfo`，改为响应式读取全局公告内容，并在公告为空时回退到新的套餐规则说明；新增 `chat/src/constants/usageNotice.ts` 作为前端默认“用户必读”内容。影响范围：设置弹窗“使用必读/用户必读”展示内容；不改变用户协议、隐私政策或登录协议弹窗。回滚方式：恢复 `NoticeDialog.vue` 和默认内容常量后重新构建同步 `chat/dist`。
 - 后端默认公告替换：新增 `service/src/common/constants/usageNotice.constant.ts`，`DatabaseService.createBaseSiteConfig` 的新环境默认公告改为套餐使用规则，并补齐默认 `noticeTitle=用户必读`；原初始化公告中的老登录说明不再作为默认内容。影响范围：新部署或初始化场景的公告默认值；不改变现有用户、套餐、支付或会员数据结构。回滚方式：恢复 `DatabaseService` 默认 `noticeInfo` 后重新构建同步 `service/dist`。
