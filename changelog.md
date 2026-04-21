@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.65 (2026-04-21)
+- 协议入口纠正：Lens 登录弹窗中的《服务协议》《隐私政策》不再指向本地 `/legal/terms.html` 与 `/legal/privacy.html`，改为统一加载 YutoAI 主站协议 `https://yutoai.net/terms/` 与 `https://yutoai.net/privacy-policy/`；新增 `chat/src/constants/legalLinks.ts` 统一维护链接，避免邮箱登录和微信登录分叉。
+- 删除 Lens 本地法律页：已移除 `chat/public/legal/terms.html` 与 `chat/public/legal/privacy.html`，同步清理 `chat/index.html`、`chat/public/llms.txt`、`chat/public/llms-full.txt`、`chat/public/seo/research-workspace.html`、`chat/public/robots.txt` 与 `service/src/modules/spa/spa.controller.ts` 中的本地 `/legal/*.html` 入口和 sitemap 条目。
+- 本地验证通过：`https://yutoai.net/terms/` 与 `https://yutoai.net/privacy-policy/` 均返回 `HTTP 200`，响应头未发现禁止 iframe 嵌入的 `X-Frame-Options` 或 `frame-ancestors`；已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`。影响范围：登录弹窗协议 iframe、公开 SEO 文档、robots/sitemap 和前端/服务端构建产物。回滚方式：恢复本次提交并重新同步 `chat/dist` 与 `service/dist`，如确需恢复本地法律页需重新添加两份静态 HTML。
+
 ## 0.0.64 (2026-04-21)
 - 同步链路排查：确认 GitHub `origin/main` 与本地 HEAD 同为 `e084744 docs: record legal policy deployment`，但本地存在 19 个未提交前端/SEO/品牌文案改动；服务器 `/www/wwwroot/Lens`、`/www/wwwroot/Lens/AIWebQuickDeploy`、`/www/wwwroot/Lens/academic-4.0` 均不是 Git 仓库，线上运行版本只能通过构建产物、文件时间与内容校验反推。
 - 法律页品牌开头修正：`chat/public/legal/terms.html` 首段改为“本服务协议适用于 YutoAI 提供的 Lens 等相关服务”，`chat/public/legal/privacy.html` 首段改为“本隐私政策说明 YutoAI 在提供 Lens 等相关服务时如何处理个人信息”；保留 Lens 作为 YutoAI 旗下服务自然出现，不把 Lens 单独拆成独立品牌协议。

@@ -38,8 +38,8 @@ YutoAI is suited for:
 
 ## Public documentation
 
-- [Privacy Policy](/legal/privacy.html): Public privacy policy
-- [Terms of Service](/legal/terms.html): Public terms page
+- [Privacy Policy](https://yutoai.net/privacy-policy/): YutoAI unified privacy policy
+- [Terms of Service](https://yutoai.net/terms/): YutoAI unified terms page
 - [Main application](/): Main entry for the YutoAI workspace
 
 ## Public landing pages

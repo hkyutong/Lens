@@ -11,8 +11,6 @@ Allow: /assets/
 Allow: /images/
 Allow: /css/
 Allow: /js/
-Allow: /legal/privacy.html
-Allow: /legal/terms.html
 Allow: /llms.txt
 Allow: /llms-full.txt
 Allow: /sitemap.xml

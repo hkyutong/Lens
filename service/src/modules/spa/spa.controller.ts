@@ -56,8 +56,6 @@ export class SpaController {
     const baseUrl = await this.resolveBaseUrl(req);
     const routes = [
       { path: '/', changefreq: 'daily', priority: '1.0' },
-      { path: '/legal/privacy.html', changefreq: 'monthly', priority: '0.3' },
-      { path: '/legal/terms.html', changefreq: 'monthly', priority: '0.3' },
       { path: '/llms.txt', changefreq: 'weekly', priority: '0.4' },
       { path: '/llms-full.txt', changefreq: 'weekly', priority: '0.4' },
       { path: '/seo/research-workspace.html', changefreq: 'weekly', priority: '0.8' },

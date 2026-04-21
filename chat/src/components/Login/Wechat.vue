@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ResData } from '@/api/types'
 import { fetchGetQRCodeAPI, fetchGetQRSceneStrAPI, fetchLoginBySceneStrAPI } from '@/api/user'
+import { YUTOAI_LEGAL_LINKS } from '@/constants/legalLinks'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore } from '@/store'
@@ -24,8 +25,8 @@ const agreedToPolicies = ref(false)
 const showPolicyModal = ref(false)
 const policyTitle = ref('')
 const policyUrl = ref('')
-const termsUrl = '/legal/terms.html'
-const privacyUrl = '/legal/privacy.html'
+const termsUrl = YUTOAI_LEGAL_LINKS.terms
+const privacyUrl = YUTOAI_LEGAL_LINKS.privacy
 
 function openPolicy(title: string, url: string) {
   policyTitle.value = title
