@@ -121,6 +121,7 @@ interface Props {
   usingDeepThinking?: boolean
   usingMcpTool?: boolean
   reasoningText?: string
+  thinkingPreview?: string
   fileAnalysisProgress?: number
   useFileSearch?: boolean
   taskData?: any
@@ -2339,8 +2340,27 @@ const workflowLiveProgressText = computed(() => {
   return `正在执行：${stageName}${progress}`
 })
 
+const normalizeThinkingPreview = (value: string) => {
+  const normalized = String(value || '').trim()
+  if (!normalized) return ''
+  const safeMessage = sanitizeUserFacingErrorMessage(normalized, 0, '')
+  if (safeMessage && safeMessage !== normalized) return safeMessage
+  const lines = normalized
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(Boolean)
+  const latest = lines[lines.length - 1] || normalized
+  return latest.length > 96 ? `${latest.slice(0, 96)}...` : latest
+}
+
+const liveThinkingPreview = computed(() => normalizeThinkingPreview(props.thinkingPreview || ''))
+const reasoningTextPreview = computed(() => normalizeThinkingPreview(props.reasoningText || ''))
 const reasoningPreview = computed(
-  () => workflowLiveProgressText.value || reasoningTips[reasoningTipIndex.value]
+  () =>
+    workflowLiveProgressText.value ||
+    liveThinkingPreview.value ||
+    reasoningTextPreview.value ||
+    reasoningTips[reasoningTipIndex.value]
 )
 
 const workflowSummaryLabel = computed(() => {
@@ -2951,7 +2971,7 @@ function openSingleImagePreview(src: string) {
         ]"
       >
         <TwoEllipses theme="outline" size="18" class="flex icon" />
-        <span class="label">{{ text || !loading ? '已深度思考' : '深度思考中' }}</span>
+        <span class="label">{{ loading ? '深度思考中' : '已深度思考' }}</span>
         <LoadingOne
           v-if="
             (loading && usingDeepThinking && !hasReasoning) || (!text && loading && hasReasoning)

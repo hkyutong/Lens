@@ -1366,6 +1366,7 @@ const onConversation = async ({
       // 重新生成/编辑采用同条回复覆盖，不新建 assistant 气泡。
       content: '',
       reasoningText: '',
+      thinkingPreview: '',
       model: useModel,
       modelName: useModelName,
       modelType: useModelType,
@@ -1508,6 +1509,7 @@ const onConversation = async ({
   let displayedText = ''
   let fullReasoningText = ''
   let displayedReasoningText = ''
+  let thinkingPreview = ''
   let networkSearchResult = ''
   let tool_calls = ''
   let promptReference = ''
@@ -1584,6 +1586,7 @@ const onConversation = async ({
       chatId: assistantLogId ? Number(assistantLogId) : undefined,
       content: displayedText,
       reasoningText: displayedReasoningText,
+      thinkingPreview,
       mcpToolUse,
       networkSearchResult,
       fileVectorResult,
@@ -1722,6 +1725,33 @@ const onConversation = async ({
           : JSON.stringify(jsonObj.tool_calls)
     }
     if (jsonObj?.promptReference) promptReference = String(jsonObj.promptReference)
+    const incomingThinkingPreview = extractTextChunk(
+      jsonObj?.thinkingPreview ?? jsonObj?.progressText
+    )
+    if (incomingThinkingPreview) {
+      thinkingPreview = normalizeIncomingText(incomingThinkingPreview, { trim: true }).slice(0, 120)
+      patchCurrentAssistant({
+        chatId: assistantLogId ? Number(assistantLogId) : undefined,
+        content: displayedText,
+        reasoningText: displayedReasoningText,
+        thinkingPreview,
+        mcpToolUse,
+        networkSearchResult,
+        fileVectorResult,
+        tool_calls,
+        promptReference,
+        nodeType,
+        stepName,
+        workflowProgress,
+        taskData,
+        isWorkflowMessage: isWorkflowConversation,
+        loading: true,
+        error: false,
+        status: 1,
+        modelType: useModelType,
+        modelName: useModelName,
+      })
+    }
 
     // 学术后端在“中间流内容被最终结果覆盖”时会发送 resetContent。
     // 这里必须清空已拼接内容，否则会把旧中间态和最终态混在一起，破坏 Markdown 表格结构。
@@ -1788,6 +1818,7 @@ const onConversation = async ({
           chatId: assistantLogId ? Number(assistantLogId) : undefined,
           content: displayedText,
           reasoningText: displayedReasoningText,
+          thinkingPreview,
           mcpToolUse,
           networkSearchResult,
           fileVectorResult,
@@ -2159,6 +2190,7 @@ const onConversation = async ({
       chatId: assistantLogId ? Number(assistantLogId) : undefined,
       content: displayedText,
       reasoningText: displayedReasoningText,
+      thinkingPreview,
       mcpToolUse,
       networkSearchResult,
       fileVectorResult,
@@ -2522,6 +2554,7 @@ provide('tryParseJson', tryParseJson)
                                     :chatId="entry.item.chatId"
                                     :content="entry.item.content"
                                     :reasoningText="entry.item.reasoningText"
+                                    :thinkingPreview="entry.item.thinkingPreview"
                                     :model="entry.item.model"
                                     :modelType="entry.item.modelType"
                                     :modelName="entry.item.modelName"

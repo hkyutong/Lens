@@ -1758,6 +1758,7 @@ export class AcademicService {
   private async collectAcademicStreamState(
     payload: Record<string, any>,
     signal: AbortSignal,
+    onThinkingPreview?: (preview: string, state: AcademicStreamState) => void,
   ): Promise<AcademicStreamState> {
     const state: AcademicStreamState = {
       fullContent: '',
@@ -1808,6 +1809,8 @@ export class AcademicService {
             const safeLine = this.sanitizeAcademicStreamLine(item);
             if (!safeLine) continue;
             this.consumeAcademicLine(safeLine, state, true);
+            const thinkingPreview = this.buildAcademicThinkingPreview(safeLine, state);
+            if (thinkingPreview) onThinkingPreview?.(thinkingPreview, state);
           }
         }
         index = buffer.indexOf('\n');
@@ -1830,6 +1833,8 @@ export class AcademicService {
           const safeTail = this.sanitizeAcademicStreamLine(item);
           if (!safeTail) continue;
           this.consumeAcademicLine(safeTail, state, false);
+          const thinkingPreview = this.buildAcademicThinkingPreview(safeTail, state);
+          if (thinkingPreview) onThinkingPreview?.(thinkingPreview, state);
         }
       }
     }
@@ -2847,6 +2852,24 @@ export class AcademicService {
       let maxDurationTimer: NodeJS.Timeout | null = null;
       let idleTimedOut = false;
       let pendingSerializedLine = '';
+      let lastThinkingPreview = '';
+      let lastThinkingPreviewAt = 0;
+      const emitThinkingPreview = (preview: string) => {
+        const safePreview = String(preview || '').trim();
+        if (!safePreview || responseCompleted || res.writableEnded || res.writableFinished) return;
+        const now = Date.now();
+        if (safePreview === lastThinkingPreview) return;
+        if (now - lastThinkingPreviewAt < 1200 && !/[。！？.!?]$/.test(safePreview)) return;
+        lastThinkingPreview = safePreview;
+        lastThinkingPreviewAt = now;
+        res.write(
+          `${JSON.stringify({
+            thinkingPreview: safePreview,
+            requestId,
+            chatId: String(assistantLogId || ''),
+          })}\n`,
+        );
+      };
       const resetIdleTimer = () => {
         if (!(idleTimeoutMs > 0)) return;
         if (idleTimer) clearTimeout(idleTimer);
@@ -2906,6 +2929,7 @@ export class AcademicService {
               const safeLine = this.sanitizeAcademicStreamLine(item);
               if (!safeLine) continue;
               this.consumeAcademicLine(safeLine, state, true);
+              emitThinkingPreview(this.buildAcademicThinkingPreview(safeLine, state));
               if (this.shouldKeepAcademicStreamAlive(safeLine)) {
                 resetIdleTimer();
               }
@@ -2947,6 +2971,7 @@ export class AcademicService {
                 const safeTail = this.sanitizeAcademicStreamLine(item);
                 if (!safeTail) continue;
                 this.consumeAcademicLine(safeTail, state, false);
+                emitThinkingPreview(this.buildAcademicThinkingPreview(safeTail, state));
                 const outboundTail = this.ensureAcademicNdjsonLine(safeTail, assistantLogId);
                 if (outboundTail) {
                   res.write(`${outboundTail}\n`);
@@ -2986,6 +3011,7 @@ export class AcademicService {
               const retryState = await this.collectAcademicStreamState(
                 academicPayload,
                 controller.signal,
+                preview => emitThinkingPreview(preview),
               );
               const retryOutput = this.pickBestAcademicOutput(retryState);
               let retryContent = await buildDisplayContent(retryOutput, !retryState.streamError);
@@ -4119,10 +4145,61 @@ export class AcademicService {
           );
         }
 
+        let lastStageThinkingPreview = '';
+        let lastStageThinkingPreviewAt = 0;
+        const emitWorkflowThinkingPreview = (preview: string) => {
+          const safePreview = String(preview || '').trim();
+          if (!safePreview || controller.signal.aborted || res.writableEnded || res.writableFinished)
+            return;
+          const now = Date.now();
+          if (safePreview === lastStageThinkingPreview) return;
+          if (now - lastStageThinkingPreviewAt < 1200 && !/[。！？.!?]$/.test(safePreview)) return;
+          lastStageThinkingPreview = safePreview;
+          lastStageThinkingPreviewAt = now;
+          const progressText = `第 ${step.index}/${Math.max(
+            taskData.totalStages,
+            1,
+          )} 步 ${step.displayName}：${safePreview}`;
+          taskData = this.patchAcademicWorkflowTaskData(
+            taskData,
+            step.index,
+            {
+              status: 'running',
+              progressText,
+            },
+            {
+              status: 'running',
+              currentStage: step.index,
+            },
+          );
+          this.emitAcademicWorkflowEvent(
+            res,
+            {
+              workflowStageChunk: true,
+              stepName: step.displayName,
+              progress: this.computeWorkflowStageHeartbeatProgress(
+                step.index,
+                taskData.totalStages,
+                workflowHeartbeatTick,
+              ),
+              progressText,
+              thinkingPreview: safePreview,
+              nodeType: 'workflow',
+            },
+            requestId,
+            taskData,
+            assistantLogId,
+          );
+        };
+
         startWorkflowHeartbeat();
         let state: AcademicStreamState;
         try {
-          state = await this.collectAcademicStreamState(academicPayload, controller.signal);
+          state = await this.collectAcademicStreamState(
+            academicPayload,
+            controller.signal,
+            emitWorkflowThinkingPreview,
+          );
         } finally {
           stopWorkflowHeartbeat();
         }
@@ -4150,6 +4227,7 @@ export class AcademicService {
                 retryState = await this.collectAcademicStreamState(
                   academicPayload,
                   controller.signal,
+                  emitWorkflowThinkingPreview,
                 );
               } finally {
                 stopWorkflowHeartbeat();
@@ -6145,6 +6223,39 @@ export class AcademicService {
     if (this.isLikelyAcademicJsonResidue(normalized)) return '';
     if (this.shouldDropAcademicNoise(normalized)) return '';
     return normalized;
+  }
+
+  private buildAcademicThinkingPreview(rawLine: any, state?: AcademicStreamState) {
+    const candidates = [
+      this.normalizeAcademicOutboundChunk(rawLine),
+      this.extractAcademicPayloadText(rawLine),
+      state?.fullReasoning,
+      state?.fullContent,
+    ];
+    const candidate = candidates.find(item => String(item || '').trim());
+    if (!candidate) return '';
+
+    const safeText = this.sanitizeAcademicDeltaText(
+      this.redactFilePaths(String(candidate || '')),
+    ).trim();
+    if (!safeText) return '';
+    if (this.shouldDropAcademicNoise(safeText)) return '';
+    if (this.isAcademicTraceNoise(safeText)) return '';
+    if (this.isAcademicNetworkErrorSnippet(safeText)) return '';
+    if (this.isLikelyAcademicJsonResidue(safeText)) return '';
+
+    const latestMeaningful = safeText
+      .split(/\n+/)
+      .map(line => line.trim())
+      .filter(line => line && !this.shouldDropAcademicNoise(line))
+      .reverse()
+      .find(line => /[\p{L}\p{N}]/u.test(line));
+    if (!latestMeaningful || latestMeaningful.length < 4) return '';
+
+    return this.truncateAcademicWorkflowPreview(
+      latestMeaningful.replace(/\s+/g, ' ').trim(),
+      96,
+    );
   }
 
   private collectAcademicOutboundChunk(value: any, opts: { keepHeartbeat?: boolean } = {}) {

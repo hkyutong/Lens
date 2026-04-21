@@ -39,6 +39,7 @@ interface Props {
   usingDeepThinking?: boolean
   usingMcpTool?: boolean
   reasoningText?: string
+  thinkingPreview?: string
   taskId?: string
   isWorkflowMessage?: boolean
   nodeType?: string
@@ -246,6 +247,7 @@ onUnmounted(() => {
       :usingDeepThinking="usingDeepThinking"
       :usingMcpTool="usingMcpTool"
       :reasoningText="reasoningText"
+      :thinkingPreview="thinkingPreview"
       :isWorkflowMessage="isWorkflowMessage"
       :taskData="taskData"
       :stepName="stepName"
