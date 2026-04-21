@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.75 (2026-04-22)
+- 研究结果头部对齐修复：`chat/src/views/chat/components/Message/Text/index.vue` 已修正第一个 `workspace-record__meta-chip` 的伪元素布局，避免隐藏圆点仍占用 flex gap，导致“附件 1”比“生成 1 份可下载结果。”右缩。影响范围：仅消息头部元信息排版，不改变下载结果、文件展示、生成正文或接口逻辑。回滚方式：恢复该伪元素样式后重新构建同步 `chat/dist`。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仅有既有 Vite 动静态导入 warning。
+
 ## 0.0.74 (2026-04-22)
 - 学术长任务进度接入：`service/src/modules/academic/academic.service.ts` 新增安全 `thinkingPreview` 提炼链路，会从普通学术任务和多能力编排调用学术后端时收到的流式片段中提取、脱敏、降噪、截断后推给前端。多能力编排仍保留 `progressText/taskData`，并把真实流片段同步写入当前步骤进度。影响范围：仅用户等待期间的进度展示，不改变最终正文生成、文件结果、扣费、模型调用顺序或数据库结构。回滚方式：移除 `thinkingPreview` 推送和前端消费逻辑后重新构建同步 `chat/dist` 与 `service/dist`。
 - 前端深度思考条真实化：`chat/src/views/chat/chatBase.vue`、`Message/index.vue`、`Message/Text/index.vue` 和 `chat.d.ts` 已补齐 `thinkingPreview` 透传；“深度思考中”长条优先显示编排进度，其次显示学术后端实时预览，再兜底显示模型 reasoning 或轮播文案。加载期间标签固定为“深度思考中”，避免长任务正文未完成时误显示“已深度思考”。

@@ -3417,6 +3417,7 @@ pre.fold-leave-to {
 
 .workspace-record__meta-chip:first-child::before {
   content: '';
+  display: none;
 }
 
 .workspace-record__download-chip,
