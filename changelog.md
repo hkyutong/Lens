@@ -4,6 +4,7 @@
 - 学术长任务进度接入：`service/src/modules/academic/academic.service.ts` 新增安全 `thinkingPreview` 提炼链路，会从普通学术任务和多能力编排调用学术后端时收到的流式片段中提取、脱敏、降噪、截断后推给前端。多能力编排仍保留 `progressText/taskData`，并把真实流片段同步写入当前步骤进度。影响范围：仅用户等待期间的进度展示，不改变最终正文生成、文件结果、扣费、模型调用顺序或数据库结构。回滚方式：移除 `thinkingPreview` 推送和前端消费逻辑后重新构建同步 `chat/dist` 与 `service/dist`。
 - 前端深度思考条真实化：`chat/src/views/chat/chatBase.vue`、`Message/index.vue`、`Message/Text/index.vue` 和 `chat.d.ts` 已补齐 `thinkingPreview` 透传；“深度思考中”长条优先显示编排进度，其次显示学术后端实时预览，再兜底显示模型 reasoning 或轮播文案。加载期间标签固定为“深度思考中”，避免长任务正文未完成时误显示“已深度思考”。
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`；构建仅有既有 Vite 动静态导入 warning。
+- 已完成 GitHub 与服务器同步：提交 `de90b1f feat: stream academic thinking previews` 已推送到 `origin/main`；`chat/dist` 与 `service/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`。`9520` 主服务已精确切换为 PID `3008741`，`38000` 学术服务保持原监听进程 `4048524/2995907` 未重启；线上 `https://lens.yutoai.net/?v=202604220030` 返回 `HTTP 200`，服务器 `dist/main.js` 已确认包含 `thinkingPreview` 推送逻辑。
 
 ## 0.0.73 (2026-04-22)
 - 积分命名收口：`chat` 中文可见文案把“顶级模型额度”改为“顶级积分”，并在会员中心兼容线上旧 `drawMjName` 配置值；后端数据库初始化默认值同步改为“顶级积分”。影响范围：用户端积分名称展示与新环境默认配置，不改变积分扣减、套餐额度或会员逻辑。回滚方式：恢复本次中文语言包、会员中心兼容逻辑和默认配置改动后重新构建同步。
