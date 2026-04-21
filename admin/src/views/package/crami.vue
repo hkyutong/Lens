@@ -11,6 +11,7 @@ meta:
   import type { FormInstance, FormRules } from 'element-plus';
   import { ElMessage } from 'element-plus';
   import { computed, onMounted, reactive, ref } from 'vue';
+  import { useRoute } from 'vue-router';
 
   interface UserItem {
     id: number;
@@ -20,7 +21,23 @@ meta:
   interface PkgItem {
     id: number;
     name: string;
+    days?: number;
+    billingOptions?: {
+      monthly?: BillingOption;
+      annual?: BillingOption;
+    };
   }
+
+  interface BillingOption {
+    billingCycle: 'monthly' | 'annual';
+    days: number;
+    model3Count: number;
+    model4Count: number;
+    drawMjCount: number;
+    price: number;
+  }
+
+  type BillingCycle = 'monthly' | 'annual';
 
   const formRef = ref<FormInstance>();
   const total = ref(0);
@@ -33,6 +50,7 @@ meta:
   const loading = ref(false);
   const selects = ref([]);
   const selectCramiList = ref<any[]>([]);
+  const route = useRoute();
 
   const form = reactive({
     count: 1,
@@ -40,6 +58,7 @@ meta:
     model3Count: 0,
     model4Count: 0,
     packageId: undefined as number | undefined,
+    billingCycle: 'monthly' as BillingCycle,
   });
 
   const formInline = reactive({
@@ -65,6 +84,15 @@ meta:
   });
 
   const tableData = ref([]);
+
+  const selectedPackage = computed(() =>
+    packageList.value.find((item) => Number(item.id) === Number(form.packageId))
+  );
+
+  const selectedBilling = computed<BillingOption | undefined>(() => {
+    if (!selectedPackage.value) return undefined;
+    return selectedPackage.value.billingOptions?.[form.billingCycle];
+  });
 
   async function queryAllCramiList() {
     try {
@@ -92,6 +120,8 @@ meta:
 
   function openCreateCramiDialog() {
     queryAllPackageList();
+    customCrami.value = 0;
+    form.billingCycle = 'monthly';
     visible.value = true;
   }
 
@@ -110,6 +140,8 @@ meta:
 
   function handleClose(formEl: FormInstance | undefined) {
     formEl?.resetFields();
+    customCrami.value = 0;
+    form.billingCycle = 'monthly';
   }
 
   function handlerReset(formEl: FormInstance | undefined) {
@@ -177,8 +209,19 @@ meta:
     return tableData.value.some((item: any) => item.email);
   });
 
+  async function openCreateDialogFromQuery() {
+    const packageId = Number(route.query.packageId || 0);
+    if (!packageId) return;
+    await queryAllPackageList();
+    customCrami.value = 0;
+    form.packageId = packageId;
+    form.billingCycle = route.query.billingCycle === 'annual' ? 'annual' : 'monthly';
+    visible.value = true;
+  }
+
   onMounted(() => {
     queryAllCramiList();
+    openCreateDialogFromQuery();
   });
 </script>
 
@@ -354,6 +397,25 @@ meta:
             />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="!customCrami" label="计费周期" prop="billingCycle">
+          <el-radio-group v-model="form.billingCycle">
+            <el-radio-button label="monthly">月卡</el-radio-button>
+            <el-radio-button label="annual">年卡</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-alert
+          v-if="!customCrami && selectedBilling"
+          class="mb-4"
+          :closable="false"
+          type="info"
+          show-icon
+        >
+          <template #title>
+            将生成 {{ selectedBilling.days > 0 ? `${selectedBilling.days} 天` : '永久' }}有效期，
+            普通 {{ selectedBilling.model3Count }} / 高级 {{ selectedBilling.model4Count }} /
+            顶级 {{ selectedBilling.drawMjCount }} 的{{ form.billingCycle === 'annual' ? '年卡' : '月卡' }}。
+          </template>
+        </el-alert>
         <div v-if="customCrami">
           <el-form-item label="基础额度" prop="model3Count">
             <el-input

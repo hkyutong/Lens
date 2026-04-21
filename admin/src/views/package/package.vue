@@ -11,8 +11,10 @@ meta:
   import type { FormInstance, FormRules, UploadProps } from 'element-plus';
   import { ElMessage } from 'element-plus';
   import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+  import { useRouter } from 'vue-router';
 
   const formRef = ref<FormInstance>();
+  const router = useRouter();
   const total = ref(0);
   const visible = ref(false);
   const loading = ref(false);
@@ -228,6 +230,16 @@ meta:
     });
   }
 
+  function openAnnualCrami(row: Package) {
+    router.push({
+      path: '/package/crami',
+      query: {
+        packageId: String(row.id || ''),
+        billingCycle: 'annual',
+      },
+    });
+  }
+
   function handlerCloseDialog(formEl: FormInstance | undefined) {
     activePackageId.value = 0;
     formEl?.resetFields();
@@ -398,8 +410,11 @@ meta:
             {{ utcToShanghaiTime(scope.row.createdAt, 'YYYY-MM-DD hh:mm:ss') }}
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="200">
+        <el-table-column fixed="right" label="操作" width="260">
           <template #default="scope">
+            <el-button link type="success" size="small" @click="openAnnualCrami(scope.row)">
+              发行年卡密
+            </el-button>
             <el-button link type="primary" size="small" @click="handleUpdatePackage(scope.row)">
               修改套餐
             </el-button>

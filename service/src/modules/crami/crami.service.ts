@@ -12,7 +12,7 @@ import { BatchDelCramiDto } from './dto/batchDelCrami.dto';
 import { CreatCramiDto } from './dto/createCrami.dto';
 import { CreatePackageDto } from './dto/createPackage.dto';
 import { DeletePackageDto } from './dto/deletePackage.dto';
-import { withPackageBillingOptions } from './package-pricing.util';
+import { getPackageBillingOffer, withPackageBillingOptions } from './package-pricing.util';
 import { QuerAllCramiDto } from './dto/queryAllCrami.dto';
 import { QuerAllPackageDto } from './dto/queryAllPackage.dto';
 import { UseCramiDto } from './dto/useCrami.dto';
@@ -152,7 +152,7 @@ export class CramiService {
 
   /* 生成卡密 */
   async createCrami(body: CreatCramiDto) {
-    const { packageId, count = 1 } = body;
+    const { packageId, count = 1, billingCycle } = body;
     /* 创建有套餐的卡密 */
     if (packageId) {
       const pkg = await this.cramiPackageEntity.findOne({
@@ -164,14 +164,14 @@ export class CramiService {
           HttpStatus.BAD_REQUEST,
         );
       }
-      const { days = -1, model3Count = 0, model4Count = 0, drawMjCount = 0, appCats = '' } = pkg;
+      const billingOffer = getPackageBillingOffer(pkg, billingCycle);
       const baseCrami = {
         packageId,
-        days,
-        model3Count,
-        model4Count,
-        drawMjCount,
-        appCats,
+        days: billingOffer.days,
+        model3Count: billingOffer.model3Count,
+        model4Count: billingOffer.model4Count,
+        drawMjCount: billingOffer.drawMjCount,
+        appCats: billingOffer.appCats,
       };
       return await this.generateCrami(baseCrami, count);
     }

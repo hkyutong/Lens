@@ -1,4 +1,4 @@
-import { IsOptional, IsNumber, Max, Min } from 'class-validator';
+import { IsIn, IsOptional, IsNumber, Max, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatCramiDto {
@@ -13,6 +13,15 @@ export class CreatCramiDto {
   @Min(1, { message: '单次创建卡密的张数数量不能少于1张' })
   @IsOptional()
   count: number;
+
+  @ApiProperty({
+    example: 'annual',
+    description: '套餐卡密计费周期：monthly | annual',
+    required: false,
+  })
+  @IsIn(['monthly', 'annual'], { message: '计费周期只能是 monthly 或 annual' })
+  @IsOptional()
+  billingCycle?: string;
 
   @ApiProperty({ example: 0, description: '卡密携带模型3额度' })
   @IsNumber({}, { message: '卡密携带的余额必须是number' })
