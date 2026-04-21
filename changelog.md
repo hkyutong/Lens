@@ -1,5 +1,12 @@
 # 更新日志
 
+## 0.0.78 (2026-04-22)
+- 用户必读内容替换：`chat/src/components/Settings/NoticeDialog.vue` 不再使用初始化时解构出的旧 `noticeInfo`，改为响应式读取全局公告内容，并在公告为空时回退到新的套餐规则说明；新增 `chat/src/constants/usageNotice.ts` 作为前端默认“用户必读”内容。影响范围：设置弹窗“使用必读/用户必读”展示内容；不改变用户协议、隐私政策或登录协议弹窗。回滚方式：恢复 `NoticeDialog.vue` 和默认内容常量后重新构建同步 `chat/dist`。
+- 后端默认公告替换：新增 `service/src/common/constants/usageNotice.constant.ts`，`DatabaseService.createBaseSiteConfig` 的新环境默认公告改为套餐使用规则，并补齐默认 `noticeTitle=用户必读`；原初始化公告中的老登录说明不再作为默认内容。影响范围：新部署或初始化场景的公告默认值；不改变现有用户、套餐、支付或会员数据结构。回滚方式：恢复 `DatabaseService` 默认 `noticeInfo` 后重新构建同步 `service/dist`。
+- 线上公告配置已更新：同步前已备份 `public/chat` 与 `service/dist` 到服务器 `backups/public-chat-before-usage-notice-20260422022427.tar.gz`、`backups/service-dist-before-usage-notice-20260422022427.tar.gz`；更新数据库前已备份旧公告配置到 `backups/config-notice-before-usage-notice-20260421182721.json`，并在发现 `configKey` 非唯一导致重复行后，再备份到 `backups/config-notice-duplicates-before-normalize-20260421182820.json`，随后将所有 `noticeInfo / noticeTitle` 行统一更新为新套餐规则。影响范围：仅 `config` 表中的公告标题与公告正文。回滚方式：从上述 JSON 备份恢复对应 `config` 行。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`；前端构建仅有既有 Vite 动静态导入 warning。
+- 已完成 GitHub 与服务器同步：提交 `d3e3e03 feat: publish plan usage notice` 已推送到 `origin/main`；`chat/dist` 与 `service/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`。`9520` 主服务已从 PID `3208282` 切换到 PID `3220959`，`38000` 学术服务保持 `4048524/2995907` 未重启；线上 `https://lens.yutoai.net/?v=202604220230` 返回 `HTTP 200`，`/api/config/queryFront` 已确认返回“Lens 用户必读 / 套餐使用规则”，且不再返回旧“Lens 昱镜”内容。
+
 ## 0.0.77 (2026-04-22)
 - 学术会员分层限制落地：新增 `chat/src/utils/academicPlanAccess.ts` 统一前端套餐能力判断；前端学术面板和首页入口会根据用户套餐过滤可用单能力，Plus/非会员只保留轻量单能力，Pro 可使用 PDF/Word/LaTeX 等进阶能力并支持最多 2 步能力编排，Max 支持全部能力和最多 3 步编排。影响范围：学术能力入口展示、快捷入口、编排模板和编排步骤上限；不改变套餐购买、卡密兑换、积分扣费或文件上传逻辑。回滚方式：回退本次前端权限过滤文件与面板改动并重新构建同步 `chat/dist`。
 - 后端硬校验补齐：`service/src/modules/userBalance/userBalance.service.ts` 的余额接口新增 `isMember / packageName / packageWeight`，用于稳定区分 Plus/Pro/Max；`service/src/modules/academic/academic.service.ts` 在普通学术任务和多能力编排执行前做服务端套餐校验，避免绕过前端直接调用 Pro/Max 能力。影响范围：`/api/academic/chat-process` 与 `/api/academic/workflow-process` 的越权请求会返回升级提示；不改变学术服务端口、模型配置、扣费顺序或数据库结构。回滚方式：恢复本次服务端校验与余额返回字段后重新构建同步 `service/dist` 并重启 `9520`。
