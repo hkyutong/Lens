@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.68 (2026-04-21)
+- 会员中心额度信息继续收敛：`chat/src/components/Settings/MemberCenter.vue` 中普通积分、高级积分、顶级模型额度和会员状态不再使用独立灰线圆角框，改为白色卡面上的横向信息行；名称在左、数值和单位在右，并使用 `whitespace-nowrap` 防止“积分”或“到期”被拆成两行。
+- 影响范围：仅会员中心额度信息展示样式，不涉及积分、签到或会员状态业务逻辑。回滚方式：恢复本次对 `MemberCenter.vue` 的信息行 class 调整并重新构建、同步 `chat/dist`。
+
 ## 0.0.67 (2026-04-21)
 - 会员中心视觉细节调整：`chat/src/components/Settings/MemberCenter.vue` 中“签到赠送”、普通积分、高级积分、顶级模型额度和会员状态信息行不再使用灰色 `surface-panel` 背景，改回跟随原有白色 `surface-card` 背景，仅保留边框、圆角和排版层级。
 - 影响范围：仅会员中心签到和额度信息展示样式，不涉及签到、积分、会员到期时间等业务数据或接口逻辑。回滚方式：将上述信息行背景从 `surface-card` 恢复为 `surface-panel` 后重新构建并同步 `chat/dist`。

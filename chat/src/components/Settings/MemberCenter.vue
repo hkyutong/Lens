@@ -879,14 +879,14 @@ watch(
           </div>
 
           <!-- 余额信息 -->
-          <div class="space-y-3">
+          <div class="space-y-4">
             <!-- 普通积分 -->
             <div
               v-if="!isHideModel3Point"
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
+              class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="w-28 text-[var(--text-sub)]">{{ model3Name }}</div>
-              <div class="text-lg font-bold text-[var(--text-main)]">
+              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">{{ model3Name }}</div>
+              <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel3Count > 999999
                     ? '无限额度'
@@ -903,10 +903,10 @@ watch(
             <!-- 高级模型积分 -->
             <div
               v-if="!isHideModel4Point"
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
+              class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="w-28 text-[var(--text-sub)]">{{ model4Name }}</div>
-              <div class="text-lg font-bold text-[var(--text-main)]">
+              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">{{ model4Name }}</div>
+              <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel4Count > 99999
                     ? '无限额度'
@@ -923,10 +923,10 @@ watch(
             <!-- 顶级模型额度 -->
             <div
               v-if="!isHideDrawMjPoint"
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
+              class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="w-28 text-[var(--text-sub)]">{{ drawMjName }}</div>
-              <div class="text-lg font-bold text-[var(--text-main)]">
+              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">{{ drawMjName }}</div>
+              <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumDrawMjCount > 99999
                     ? '无限额度'
@@ -942,11 +942,11 @@ watch(
 
             <!-- 会员到期时间 -->
             <div
-              class="flex items-center rounded-[18px] border border-[var(--paper-border)] bg-[var(--surface-card)] px-4 py-3"
+              class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="w-28 text-[var(--text-sub)]">会员状态</div>
+              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">会员状态</div>
               <div
-                class="text-lg font-bold"
+                class="whitespace-nowrap text-lg font-bold"
                 :class="isMember ? 'text-[var(--text-main)]' : 'text-[var(--text-sub)]'"
               >
                 {{ userBalance.expirationTime ? `${userBalance.expirationTime} 到期` : '非会员' }}
