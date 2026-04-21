@@ -47,7 +47,7 @@ meta:
       {
         required: true,
         trigger: 'blur',
-        message: '请填写每日限制的特殊额度积分',
+        message: '请填写每日限制的顶级额度',
       },
     ],
     signInStatus: [{ required: true, trigger: 'blur', message: '请选择是否开启签到奖励' }],
@@ -203,7 +203,7 @@ meta:
         </el-row>
         <el-row>
           <el-col :xs="24" :md="20" :lg="15" :xl="12">
-            <el-form-item label="注册赠送特殊额度" prop="registerSendDrawMjCount">
+            <el-form-item label="注册赠送顶级额度" prop="registerSendDrawMjCount">
               <el-input
                 v-model="formInline.registerSendDrawMjCount"
                 placeholder="首次注册赠送MJ额度"
@@ -260,7 +260,7 @@ meta:
         </el-row>
         <el-row>
           <el-col :xs="24" :md="20" :lg="15" :xl="12">
-            <el-form-item label="优先赠送特殊额度" prop="firstRegisterSendDrawMjCount">
+            <el-form-item label="优先赠送顶级额度" prop="firstRegisterSendDrawMjCount">
               <el-input
                 v-model="formInline.firstRegisterSendDrawMjCount"
                 placeholder="优先注册用户额外赠送MJ额度"
@@ -311,11 +311,11 @@ meta:
         </el-row>
         <el-row>
           <el-col :xs="24" :md="20" :lg="15" :xl="12">
-            <el-form-item label="赠送特殊额度" prop="signInMjDrawToken">
+            <el-form-item label="赠送顶级额度" prop="signInMjDrawToken">
               <el-input
                 v-model="formInline.signInMjDrawToken"
                 type="number"
-                placeholder="请填写签到赠送特殊额度"
+                placeholder="请填写签到赠送顶级额度"
                 clearable
               />
             </el-form-item>
@@ -350,11 +350,11 @@ meta:
         </el-row>
         <el-row>
           <el-col :xs="24" :md="20" :lg="15" :xl="12">
-            <el-form-item label="顶级模型额度" prop="visitorMJNum">
+            <el-form-item label="顶级额度" prop="visitorMJNum">
               <el-input
                 v-model="formInline.visitorMJNum"
                 type="number"
-                placeholder="请填写每日限制的特殊额度积分"
+                placeholder="请填写每日限制的顶级额度"
                 clearable
               />
             </el-form-item>

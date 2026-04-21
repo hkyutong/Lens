@@ -28,7 +28,10 @@ const model3Name = computed(() => authStore.globalConfig.model3Name || t('goods.
 const model4Name = computed(
   () => authStore.globalConfig.model4Name || t('goods.advancedModelQuota')
 )
-const drawMjName = computed(() => authStore.globalConfig.drawMjName || t('goods.drawingQuota'))
+const drawMjName = computed(() => {
+  const configuredName = authStore.globalConfig.drawMjName
+  return configuredName === '顶级模型额度' ? '顶级积分' : configuredName || t('goods.drawingQuota')
+})
 const isHideModel3Point = computed(() => Number(authStore.globalConfig.isHideModel3Point) === 1)
 const isHideModel4Point = computed(() => Number(authStore.globalConfig.isHideModel4Point) === 1)
 const isHideDrawMjPoint = computed(() => Number(authStore.globalConfig.isHideDrawMjPoint) === 1)
@@ -920,7 +923,7 @@ watch(
               </div>
             </div>
 
-            <!-- 顶级模型额度 -->
+            <!-- 顶级积分 -->
             <div
               v-if="!isHideDrawMjPoint"
               class="flex items-center justify-between gap-4 py-1.5"

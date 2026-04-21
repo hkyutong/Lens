@@ -90,7 +90,7 @@ meta:
   const rules = reactive<FormRules>({
     model3Count: [{ required: true, message: '请填写调整的基础额度', trigger: 'blur' }],
     model4Count: [{ required: true, message: '请填写调整的高级额度', trigger: 'blur' }],
-    drawMjCount: [{ required: true, message: '请填写调整的顶级模型额度', trigger: 'blur' }],
+    drawMjCount: [{ required: true, message: '请填写调整的顶级额度', trigger: 'blur' }],
   });
 
   const tableData = ref<UserItem[]>([]);
@@ -260,7 +260,7 @@ meta:
         />
         <el-table-column
           prop="balanceInfo.drawMjCount"
-          label="顶级模型额度"
+          label="顶级额度"
           width="120"
           align="center"
         />
@@ -294,7 +294,7 @@ meta:
         />
         <el-table-column
           prop="balanceInfo.memberDrawMjCount"
-          label="顶级模型额度[会员]"
+          label="顶级额度[会员]"
           width="120"
           align="center"
         />
@@ -328,7 +328,7 @@ meta:
         </el-table-column>
         <el-table-column
           prop="balanceInfo.useDrawMjToken"
-          label="已用顶级模型额度"
+          label="已用顶级额度"
           width="160"
           align="center"
         >
@@ -432,7 +432,7 @@ meta:
             />
           </div>
         </el-form-item>
-        <el-form-item label="顶级模型额度" prop="modelLimits">
+        <el-form-item label="顶级额度" prop="modelLimits">
           <div class="input-with-text">
             <el-input-number
               v-model="formCrami.drawMjCount"

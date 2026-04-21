@@ -391,7 +391,7 @@ meta:
         </el-table-column>
         <el-table-column prop="model3Count" label="基础额度" width="100" />
         <el-table-column prop="model4Count" label="高级额度" width="100" />
-        <el-table-column prop="drawMjCount" label="特殊额度" width="100" />
+        <el-table-column prop="drawMjCount" label="顶级额度" width="100" />
         <el-table-column prop="des" label="套餐描述" width="300" />
         <el-table-column prop="createdAt" label="创建时间" width="200">
           <template #default="scope">
@@ -567,11 +567,11 @@ meta:
                 placeholder="高级模型积分"
               />
             </el-form-item>
-            <el-form-item label="顶级模型额度" prop="drawMjCount">
+            <el-form-item label="顶级额度" prop="drawMjCount">
               <el-input
                 v-model.number="formPackage.drawMjCount"
                 type="number"
-                placeholder="顶级模型额度"
+                placeholder="顶级额度"
               />
             </el-form-item>
           </el-col>

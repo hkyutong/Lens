@@ -533,7 +533,7 @@ export const MODELSMAPLIST = {
 export const DEDUCTTYPELIST = [
   { value: 1, label: '普通积分' },
   { value: 2, label: '高级积分' },
-  { value: 3, label: '顶级模型额度' },
+  { value: 3, label: '顶级额度' },
 ];
 
 /* 绘画类型选项列表 */

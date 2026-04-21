@@ -177,7 +177,7 @@ export class DatabaseService implements OnModuleInit {
         { configKey: 'isVerifyEmail', configVal: '1', public: 1, encrypt: 0 },
         { configKey: 'model3Name', configVal: '普通积分', public: 1, encrypt: 0 },
         { configKey: 'model4Name', configVal: '高级积分', public: 1, encrypt: 0 },
-        { configKey: 'drawMjName', configVal: '顶级模型额度', public: 1, encrypt: 0 },
+        { configKey: 'drawMjName', configVal: '顶级积分', public: 1, encrypt: 0 },
         {
           configKey: 'drawingStyles',
           configVal:

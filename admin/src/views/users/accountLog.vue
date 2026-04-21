@@ -68,7 +68,7 @@ meta:
   const rules = reactive<FormRules>({
     model3Count: [{ required: true, message: '请填写赠送基础额度', trigger: 'blur' }],
     model4Count: [{ required: true, message: '请填写赠送高级额度', trigger: 'blur' }],
-    drawMjCount: [{ required: true, message: '请填写赠送顶级模型额度', trigger: 'blur' }],
+    drawMjCount: [{ required: true, message: '请填写赠送顶级额度', trigger: 'blur' }],
   });
 
   const userList = ref();
@@ -183,7 +183,7 @@ meta:
         </el-table-column>
         <el-table-column prop="model3Count" label="基础额度" width="120" align="center" />
         <el-table-column prop="model4Count" label="高级额度" width="120" align="center" />
-        <el-table-column prop="drawMjCount" label="顶级模型额度" width="120" align="center" />
+        <el-table-column prop="drawMjCount" label="顶级额度" width="120" align="center" />
         <el-table-column label="额度有效期" width="170" align="center">
           <template #default="scope">
             <el-tag type="success">

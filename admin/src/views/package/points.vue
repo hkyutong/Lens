@@ -31,7 +31,7 @@ meta:
   const rules = ref<FormRules>({
     model3Name: [{ required: true, message: '请输入普通积分名称', trigger: 'blur' }],
     model4Name: [{ required: true, message: '请输入高级积分名称', trigger: 'blur' }],
-    drawMjName: [{ required: true, message: '请输入顶级模型额度名称', trigger: 'blur' }],
+    drawMjName: [{ required: true, message: '请输入顶级额度名称', trigger: 'blur' }],
   });
   const formRef = ref<FormInstance>();
 
@@ -287,7 +287,7 @@ meta:
         </el-row>
         <el-row>
           <el-col :xs="24" :md="20" :lg="15" :xl="12">
-            <el-form-item label="隐藏顶级模型额度" prop="isHideDrawMjPoint">
+            <el-form-item label="隐藏顶级额度" prop="isHideDrawMjPoint">
               <el-switch
                 v-model="formInline.isHideDrawMjPoint"
                 active-value="1"
@@ -298,8 +298,8 @@ meta:
         </el-row>
         <el-row>
           <el-col :xs="24" :md="20" :lg="15" :xl="12">
-            <el-form-item label="顶级模型额度名称" prop="drawMjName">
-              <el-input v-model="formInline.drawMjName" placeholder="顶级模型额度名称" clearable />
+            <el-form-item label="顶级额度名称" prop="drawMjName">
+              <el-input v-model="formInline.drawMjName" placeholder="顶级额度名称" clearable />
             </el-form-item>
           </el-col>
         </el-row>

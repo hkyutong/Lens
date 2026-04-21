@@ -633,7 +633,7 @@ meta:
                   ? '普通积分'
                   : scope.row.deductType === 2
                     ? '高级积分'
-                    : '顶级模型额度'
+                    : '顶级额度'
               }}
             </el-tag>
           </template>

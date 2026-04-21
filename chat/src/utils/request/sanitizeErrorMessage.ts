@@ -45,14 +45,23 @@ const containsSensitiveDetail = (message: string) =>
 
 const isTimeoutMessage = (message: string) => TIMEOUT_PATTERNS.some(pattern => pattern.test(message))
 
+const stripErrorPrefix = (message: string) =>
+  message
+    .replace(
+      /^(?:error|typeerror|referenceerror|rangeerror|syntaxerror|httpexception)\s*:\s*/i,
+      ''
+    )
+    .trim()
+
 export function sanitizeUserFacingErrorMessage(
   rawMessage: string,
   statusCode = 0,
   fallback = '请求失败，请稍后重试'
 ) {
-  const message = String(rawMessage || '').trim()
+  const message = stripErrorPrefix(String(rawMessage || '').trim())
   if (!message) return fallbackByStatus(statusCode, fallback)
 
+  if (/订单存在/.test(message)) return '订单已存在，请勿重复提交'
   if (/积分不足|选购套餐|升级套餐/i.test(message)) return message
   if (/历史(?:用户消息|回复).*(不存在|已失效)/.test(message)) {
     return '当前会话状态已更新，请刷新页面后重试'

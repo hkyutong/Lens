@@ -1,4 +1,4 @@
-import { createOrderId } from '@/common/utils';
+import { createOrderId, sanitizeClientErrorMessage } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
@@ -48,10 +48,16 @@ export class OrderService {
       };
     } catch (error) {
       if (error.status === 401) {
-        throw new HttpException(error.message, HttpStatus.UNAUTHORIZED);
+        throw new HttpException(
+          sanitizeClientErrorMessage(error.message, HttpStatus.UNAUTHORIZED),
+          HttpStatus.UNAUTHORIZED,
+        );
       }
 
-      throw new HttpException(error.message || '购买失败!', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        sanitizeClientErrorMessage(error.message || '', HttpStatus.BAD_REQUEST, '购买失败!'),
+        HttpStatus.BAD_REQUEST,
+      );
     }
   }
 

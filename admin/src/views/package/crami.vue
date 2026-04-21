@@ -287,7 +287,7 @@ meta:
         <el-table-column v-if="hasEmail" prop="email" label="使用人邮箱" width="180" />
         <el-table-column prop="model3Count" label="基础额度" />
         <el-table-column prop="model4Count" label="高级额度" />
-        <el-table-column prop="drawMjCount" label="特殊额度" />
+        <el-table-column prop="drawMjCount" label="顶级额度" />
         <el-table-column prop="days" label="有效天数">
           <template #default="scope">
             {{ scope.row.days > 0 ? `${scope.row.days}天` : '永久' }}
@@ -369,11 +369,11 @@ meta:
               placeholder="卡密携带高级额度"
             />
           </el-form-item>
-          <el-form-item label="特殊额度" prop="drawMjCount">
+          <el-form-item label="顶级额度" prop="drawMjCount">
             <el-input
               v-model.number="form.drawMjCount"
               type="number"
-              placeholder="卡密携带顶级模型额度"
+              placeholder="卡密携带顶级额度"
             />
           </el-form-item>
         </div>

@@ -1,5 +1,11 @@
 # 更新日志
 
+## 0.0.73 (2026-04-22)
+- 积分命名收口：`chat` 中文可见文案把“顶级模型额度”改为“顶级积分”，并在会员中心兼容线上旧 `drawMjName` 配置值；后端数据库初始化默认值同步改为“顶级积分”。影响范围：用户端积分名称展示与新环境默认配置，不改变积分扣减、套餐额度或会员逻辑。回滚方式：恢复本次中文语言包、会员中心兼容逻辑和默认配置改动后重新构建同步。
+- 后台额度命名收口：`admin` 中“特殊额度”相关表格、表单、校验与 placeholder 改为“顶级额度”，用于套餐、卡密和注册/签到配置页。影响范围：仅后台文案，不改变字段名、接口参数或数据库结构。回滚方式：恢复本次后台文案改动后重新构建同步 `admin/dist`。
+- 生产错误清洗：`service/src/common/utils/sanitizeClientErrorMessage.ts` 与 `chat/src/utils/request/sanitizeErrorMessage.ts` 新增异常前缀剥离，`OrderService.buy` 不再把捕获到的原始 `error.message` 直接抛给前端；“Error: 订单存在!” 会显示为“订单已存在，请勿重复提交”。影响范围：订单购买失败提示和通用请求错误清洗，不改变支付创建、查询或扣费逻辑。回滚方式：恢复清洗器和订单接口 catch 分支后重新构建同步 `chat/dist` 与 `service/dist`。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`./admin/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production`、`./admin/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`；构建仅有既有 Vite chunk/import 警告和 Browserslist 数据提示。
+
 ## 0.0.72 (2026-04-21)
 - 编排准备态兜底：针对用户截图中“能力编排进度 0% 但深度思考长条仍显示通用轮播文案”的问题，`service/src/modules/academic/academic.service.ts` 现在会在文件转交/编排准备阶段立即写入并推送第一条 workflow 事件，把首个步骤标记为 `running`，并显示“正在接收上传资料 / 正在准备编排任务”等安全阶段说明。
 - 前端长条兜底：`chat/src/views/chat/components/Message/Text/index.vue` 的 `workflowLiveProgressText` 不再依赖必须已有完整步骤列表；只要当前消息是能力编排且仍在 loading，就优先显示“正在接收上传资料，准备能力编排”或“正在准备能力编排”，避免用户只看到泛化“正在理解用户的想法”。
