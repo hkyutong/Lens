@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.83 (2026-04-22)
+- 支付确认页价格展示继续统一为美元：`chat/src/components/Settings/MemberPayment.vue` 不再在商品支付页展示人民币 `￥`，顶部“需要支付”、右侧“折合每月”、年付“按月购买”和“节省”均改为读取后端 `displayPrice / displayMonthlyEquivalentPrice / displayOriginalTotal / displaySaveAmount` 并显示 `$ ... USD`。影响范围：仅支付确认页的价格展示文案；订单创建仍只传 `goodsId / payType / billingCycle`，真实订单金额、支付通道结算和会员到账仍由后端人民币 `price` 计费快照决定。回滚方式：恢复 `MemberPayment.vue` 到上一版并重新构建同步 `chat/dist`。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仅有既有 Vite 动静态导入 warning。
+
 ## 0.0.82 (2026-04-22)
 - 套餐价格模型纠偏：会员套餐不再用同一个 `price` 同时承担前台美元展示和付款金额；后端 `crami_package` 新增 `usdPrice` 字段作为前台会员页美元展示价，原 `price` 保持人民币付款价。影响范围：套餐查询、会员页展示、支付确认页、后台套餐管理和订单计费快照；不改变会员到账、卡密兑换、学术权限和支付回调链路。回滚方式：回退本次代码并从服务器 `backups/crami_package-before-usd-price-20260422160331.sql` 恢复 `crami_package` 表，再重新构建同步。
 - 前台显示与付款分离：`chat/src/components/Settings/MemberCenter.vue` 的 Plus / Pro / Max 官方卡片展示美元 `displayPrice`，因此 Plus/Pro/Max 月付显示分别为 `$6 / $20 / $30`；`chat/src/components/Settings/MemberPayment.vue` 支付确认页始终显示人民币 `price`，因此付款仍为 `￥45 / ￥140 / ￥210`。年付同样分别用美元展示字段和人民币结算字段计算折扣，不再出现 `$45` 这种把人民币错当美元展示的问题。
