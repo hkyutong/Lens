@@ -61,6 +61,8 @@ export const useGlobalStore = defineStore('global-store', {
         days: 0,
       },
       billingCycle: 'monthly',
+      displayCurrency: 'CNY',
+      displayCurrencySymbol: '¥',
       billing: {
         billingCycle: 'monthly',
         billingMonths: 1,

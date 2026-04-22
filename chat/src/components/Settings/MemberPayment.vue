@@ -189,6 +189,7 @@ const queryOrderStatus = async () => {
 
 const orderInfo = computed(() => useGlobal?.orderInfo)
 const billingInfo = computed(() => orderInfo.value?.billing)
+const displayCurrencySymbol = computed(() => orderInfo.value?.displayCurrencySymbol || '¥')
 const url_qrcode = ref('')
 const qrCodeloading = ref(true)
 const redirectloading = ref(true)
@@ -330,7 +331,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="mt-1 flex items-baseline gap-2">
                 <span class="text-3xl font-semibold tracking-tight text-[var(--text-main)]">
-                  ￥{{ formatCurrency(billingInfo?.price || 0) }}
+                  {{ displayCurrencySymbol }}{{ formatCurrency(billingInfo?.price || 0) }}
                 </span>
                 <span class="text-sm text-[var(--text-sub)]">
                   {{ orderInfo.billingCycle === 'annual' ? '/年' : '/月' }}
@@ -364,19 +365,19 @@ onBeforeUnmount(() => {
             <div class="flex justify-between gap-4">
               <span class="font-medium">折合每月</span>
               <span class="text-[var(--text-main)]"
-                >￥{{ formatCurrency(billingInfo?.monthlyEquivalentPrice || 0) }}/月</span
+                >{{ displayCurrencySymbol }}{{ formatCurrency(billingInfo?.monthlyEquivalentPrice || 0) }}/月</span
               >
             </div>
             <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
               <span class="font-medium">按月购买</span>
               <span class="line-through text-[var(--ink-faint)]">
-                ￥{{ formatCurrency(billingInfo?.originalTotal || 0) }}/年
+                {{ displayCurrencySymbol }}{{ formatCurrency(billingInfo?.originalTotal || 0) }}/年
               </span>
             </div>
             <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
               <span class="font-medium">节省</span>
               <span class="font-semibold text-emerald-600 dark:text-emerald-300">
-                ￥{{ formatCurrency(billingInfo?.saveAmount || 0) }}
+                {{ displayCurrencySymbol }}{{ formatCurrency(billingInfo?.saveAmount || 0) }}
               </span>
             </div>
           </div>

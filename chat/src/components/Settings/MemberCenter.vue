@@ -87,7 +87,6 @@ interface Props {
 interface PlanPreset {
   planKey: 'plus' | 'pro' | 'max'
   displayName: string
-  monthlyUsd: number
 }
 
 const OFFICIAL_PLAN_ALIASES: Record<PlanPreset['planKey'], string[]> = {
@@ -151,7 +150,6 @@ function getPlusPreset(): PlanPreset {
   return {
     planKey: 'plus',
     displayName: t('lens.member.plus'),
-    monthlyUsd: 6,
   }
 }
 
@@ -159,7 +157,6 @@ function getProfessionalPreset(): PlanPreset {
   return {
     planKey: 'pro',
     displayName: t('lens.member.pro'),
-    monthlyUsd: 20,
   }
 }
 
@@ -167,7 +164,6 @@ function getMaxPreset(): PlanPreset {
   return {
     planKey: 'max',
     displayName: t('lens.member.max'),
-    monthlyUsd: 30,
   }
 }
 
@@ -221,6 +217,7 @@ function getDisplayBilling(pkg: Pkg) {
 function buildOrderInfo(pkg: Pkg) {
   const billing = getDisplayBilling(pkg)
   const preset = getPlanPreset(pkg)
+  const priceMeta = getDisplayPriceMeta(pkg)
   return {
     pkgInfo: {
       ...pkg,
@@ -228,6 +225,8 @@ function buildOrderInfo(pkg: Pkg) {
     },
     billingCycle: billing.billingCycle,
     billing,
+    displayCurrency: priceMeta.currency,
+    displayCurrencySymbol: priceMeta.symbol,
   }
 }
 
@@ -265,25 +264,29 @@ function getPlanFeatureLabels(pkg: Pkg) {
 }
 
 function getDisplayPriceValue(pkg: Pkg) {
-  const preset = getPlanPreset(pkg)
-  if (!preset) return formatCurrency(getDisplayBilling(pkg).price)
+  return formatCurrency(roundDisplayPrice(getDisplayBilling(pkg).price))
+}
 
-  if (billingCycle.value === 'annual') {
-    const annualDiscountRate = Number(getDisplayBilling(pkg).discountRate || 0)
-    return formatCurrency(
-      roundDisplayPrice(preset.monthlyUsd * 12 * (1 - annualDiscountRate / 100))
-    )
+function getDisplayPriceMeta(pkg: Pkg) {
+  if (getPlanPreset(pkg)) {
+    return {
+      symbol: '$',
+      currency: 'USD',
+    }
   }
 
-  return formatCurrency(preset.monthlyUsd)
+  return {
+    symbol: '¥',
+    currency: 'CNY',
+  }
 }
 
 function getDisplayPricePrefix(pkg: Pkg) {
-  return getPlanPreset(pkg) ? '$' : '¥'
+  return getDisplayPriceMeta(pkg).symbol
 }
 
 function getDisplayPriceCurrencyLabel(pkg: Pkg) {
-  return getPlanPreset(pkg) ? 'USD /' : 'CNY /'
+  return `${getDisplayPriceMeta(pkg).currency} /`
 }
 
 function getDisplayPricePeriodLabel() {

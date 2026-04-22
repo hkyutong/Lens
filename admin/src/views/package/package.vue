@@ -387,7 +387,7 @@ meta:
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="price" label="套餐价格" width="100" align="center" />
+        <el-table-column prop="price" label="套餐价格" width="120" align="center" />
         <el-table-column prop="weight" label="套餐等级" width="100" align="center" />
         <el-table-column prop="status" label="套餐状态" width="100">
           <template #default="scope">
@@ -483,7 +483,7 @@ meta:
             <el-form-item label="设置套餐价格" prop="price">
               <el-input
                 v-model.number="formPackage.price"
-                placeholder="请填写套餐价格(￥)最多两位小数"
+                placeholder="官方套餐前台按 USD 展示；自定义套餐按 CNY 展示"
                 type="number"
               />
             </el-form-item>
