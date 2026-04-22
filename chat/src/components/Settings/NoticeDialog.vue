@@ -5,11 +5,13 @@ import { LENS_USAGE_NOTICE } from '@/constants/usageNotice'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const darkMode = computed(() => appStore.theme === 'dark')
 const { isMobile } = useBasicLayout()
+const { t } = useI18n()
 
 interface Props {
   visible: boolean
@@ -26,51 +28,51 @@ const isLensPlanNotice = computed(() => {
 const usagePlans = [
   {
     name: 'Plus',
-    summary: '轻量学术读写',
-    workflow: '不支持能力编排',
-    available: [
-      '总结论文、Arxiv 摘要、Arxiv 英文摘要',
-      '中文润色、英文润色、中英互译',
-      '绘制脑图、代码解释、参考文献转 BibTeX',
+    summaryKey: 'lens.usageNotice.plusSummary',
+    workflowKey: 'lens.usageNotice.plusWorkflow',
+    availableKeys: [
+      'lens.usageNotice.plusAvailable1',
+      'lens.usageNotice.plusAvailable2',
+      'lens.usageNotice.plusAvailable3',
     ],
-    limited: '不含 PDF 深读、PDF 批量总结、Word 批量总结和 LaTeX 进阶工具。',
+    noteKey: 'lens.usageNotice.plusNote',
   },
   {
     name: 'Pro',
-    summary: '高频论文阅读与文稿处理',
-    workflow: '最多 2 步编排',
-    available: [
-      '包含 Plus 全部能力',
-      'PDF 深读、PDF 批量总结、Word 批量总结',
-      'LaTeX 摘要、精准翻译、英文润色、中文润色、高亮纠错',
+    summaryKey: 'lens.usageNotice.proSummary',
+    workflowKey: 'lens.usageNotice.proWorkflow',
+    availableKeys: [
+      'lens.usageNotice.proAvailable1',
+      'lens.usageNotice.proAvailable2',
+      'lens.usageNotice.proAvailable3',
     ],
-    limited: '适合“PDF 深读 → 英文润色”这类常规研究流程。',
+    noteKey: 'lens.usageNotice.proNote',
   },
   {
     name: 'Max',
-    summary: '重度科研与完整研究链路',
-    workflow: '最多 3 步编排',
-    available: [
-      '包含 Pro 全部能力',
-      '可使用 Lens 当前开放的全部学术能力',
-      '支持“论文速读 → 中文润色 → 绘制脑图”等完整链路',
+    summaryKey: 'lens.usageNotice.maxSummary',
+    workflowKey: 'lens.usageNotice.maxWorkflow',
+    availableKeys: [
+      'lens.usageNotice.maxAvailable1',
+      'lens.usageNotice.maxAvailable2',
+      'lens.usageNotice.maxAvailable3',
     ],
-    limited: '适合长论文、多文件和复杂研究任务。',
+    noteKey: 'lens.usageNotice.maxNote',
   },
 ]
 
 const billingRules = [
-  '月付套餐和月卡密按 30 天有效期发放对应额度。',
-  '年付套餐和年卡密按 365 天有效期发放 12 个月额度。',
-  '普通积分、高级积分、顶级积分会按任务选择的模型和系统显示扣除。',
-  '会员到期后会员权益停止生效，需要续费或兑换新的会员卡密。',
+  'lens.usageNotice.billingRule1',
+  'lens.usageNotice.billingRule2',
+  'lens.usageNotice.billingRule3',
+  'lens.usageNotice.billingRule4',
 ]
 
 const taskRules = [
-  '多能力编排是串行执行，前一步完成后才会进入下一步。',
-  'PDF、Word、LaTeX、长论文和上游模型较慢时，整体耗时会更长。',
-  '请不要上传密钥、证件、合同、客户资料、账号密码或其他敏感内容。',
-  'AI 输出可能存在错误，重要结论、引用和实验信息请自行核验。',
+  'lens.usageNotice.taskRule1',
+  'lens.usageNotice.taskRule2',
+  'lens.usageNotice.taskRule3',
+  'lens.usageNotice.taskRule4',
 ]
 
 function openDrawerAfter() {
@@ -107,17 +109,16 @@ onMounted(() => {
       <div
         class="border-b border-[var(--border-color)] pb-2 text-base font-semibold text-[var(--text-main)]"
       >
-        {{ globalConfig.noticeTitle || '使用必读' }}
+        {{ isLensPlanNotice ? t('lens.usageNotice.title') : globalConfig.noticeTitle || t('lens.settings.notice') }}
       </div>
 
       <div class="overflow-y-auto" :class="{ 'max-h-[calc(70vh-120px)]': !isMobile }">
         <div v-if="isLensPlanNotice" class="usage-notice">
           <section class="usage-notice__intro">
-            <span class="usage-notice__eyebrow">套餐规则</span>
-            <h2>先确认你的套餐能做什么</h2>
+            <span class="usage-notice__eyebrow">{{ t('lens.usageNotice.eyebrow') }}</span>
+            <h2>{{ t('lens.usageNotice.heroTitle') }}</h2>
             <p>
-              Lens 按 Plus、Pro、Max 三档开放学术能力。会员有效期内可使用对应能力，
-              每次任务仍会按所选模型和任务类型消耗积分。
+              {{ t('lens.usageNotice.heroDesc') }}
             </p>
           </section>
 
@@ -126,28 +127,28 @@ onMounted(() => {
               <div class="usage-notice__plan-head">
                 <div>
                   <span class="usage-notice__plan-name">{{ plan.name }}</span>
-                  <p>{{ plan.summary }}</p>
+                  <p>{{ t(plan.summaryKey) }}</p>
                 </div>
-                <strong>{{ plan.workflow }}</strong>
+                <strong>{{ t(plan.workflowKey) }}</strong>
               </div>
               <ul>
-                <li v-for="item in plan.available" :key="item">{{ item }}</li>
+                <li v-for="item in plan.availableKeys" :key="item">{{ t(item) }}</li>
               </ul>
-              <p class="usage-notice__plan-note">{{ plan.limited }}</p>
+              <p class="usage-notice__plan-note">{{ t(plan.noteKey) }}</p>
             </article>
           </section>
 
           <section class="usage-notice__rule-grid">
             <div class="usage-notice__rule-block">
-              <h3>计费与有效期</h3>
+              <h3>{{ t('lens.usageNotice.billingTitle') }}</h3>
               <ol>
-                <li v-for="item in billingRules" :key="item">{{ item }}</li>
+                <li v-for="item in billingRules" :key="item">{{ t(item) }}</li>
               </ol>
             </div>
             <div class="usage-notice__rule-block">
-              <h3>任务执行说明</h3>
+              <h3>{{ t('lens.usageNotice.taskTitle') }}</h3>
               <ol>
-                <li v-for="item in taskRules" :key="item">{{ item }}</li>
+                <li v-for="item in taskRules" :key="item">{{ t(item) }}</li>
               </ol>
             </div>
           </section>
