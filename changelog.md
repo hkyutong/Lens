@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.0.80 (2026-04-22)
+- 用户必读多语言修复：`chat/src/components/Settings/NoticeDialog.vue` 的套餐规则结构化展示已改为通过 `vue-i18n` 读取语言包，不再在组件内硬编码中文套餐说明；`zh-CN / en-US / zh-TW / ja-JP / ko-KR` 已补齐 `lens.usageNotice` 文案。影响范围：仅设置页“用户必读”结构化套餐规则展示；不改变线上公告数据库内容、套餐限制、后端校验、计费逻辑或 Markdown 兜底公告渲染。回滚方式：恢复 `NoticeDialog.vue` 和对应语言包变更后重新构建同步 `chat/dist`。
+- 本地验证通过：已执行 5 个语言包 JSON 解析校验、`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；前端构建仅有既有 Vite 动静态导入 warning。
+- 已完成 GitHub 与服务器同步：提交 `61a4de4 fix: localize usage notice` 已推送到 `origin/main`；最新 `chat/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。同步前已备份 `public/chat` 到 `backups/public-chat-before-usage-notice-i18n-20260422150915.tar.gz`，压缩包方式部署前再次备份到 `backups/public-chat-before-usage-notice-i18n-tar-20260422151517.tar.gz`；本轮未重启服务，`9520` 保持 PID `3220959`，`38000` 保持 `4048524/2995907`。线上 `https://lens.yutoai.net/?v=202604221515` 返回 `HTTP 200`，服务器前端产物已确认包含英文用户必读文案，部署过程中产生的 AppleDouble `._*` 元数据文件已清理为 0。
+
 ## 0.0.79 (2026-04-22)
 - 用户必读排版优化：`chat/src/components/Settings/NoticeDialog.vue` 针对 Lens 套餐规则公告新增结构化展示，不再把套餐规则作为原始 Markdown 大标题和长列表直接渲染；当前展示改为顶部说明、Plus/Pro/Max 三列能力对比、计费与有效期、任务执行说明四个清晰区域。影响范围：仅设置页“用户必读”公告的前端展示排版；不改变公告数据库内容、套餐权限、后端校验或计费逻辑。回滚方式：恢复 `NoticeDialog.vue` 到上一版并重新构建同步 `chat/dist`。
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；前端构建仅有既有 Vite 动静态导入 warning。
