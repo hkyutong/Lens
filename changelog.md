@@ -3,6 +3,7 @@
 ## 0.0.83 (2026-04-22)
 - 支付确认页价格展示继续统一为美元：`chat/src/components/Settings/MemberPayment.vue` 不再在商品支付页展示人民币 `￥`，顶部“需要支付”、右侧“折合每月”、年付“按月购买”和“节省”均改为读取后端 `displayPrice / displayMonthlyEquivalentPrice / displayOriginalTotal / displaySaveAmount` 并显示 `$ ... USD`。影响范围：仅支付确认页的价格展示文案；订单创建仍只传 `goodsId / payType / billingCycle`，真实订单金额、支付通道结算和会员到账仍由后端人民币 `price` 计费快照决定。回滚方式：恢复 `MemberPayment.vue` 到上一版并重新构建同步 `chat/dist`。
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仅有既有 Vite 动静态导入 warning。
+- 已完成 GitHub 与服务器同步：提交 `d167e7f fix: show usd price on payment page` 已推送到 `origin/main`；最新 `chat/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。同步前已备份 `public/chat` 到 `backups/public-chat-before-usd-payment-20260422162508.tar.gz`；本轮未重启 `9520` 或 `38000`，主服务保持 PID `503151`。线上 `https://lens.yutoai.net/?v=20260422162508` 与后台入口均返回 `HTTP 200`，服务器前端产物已确认包含 `USD/月` 与 `USD/年` 展示文案，AppleDouble `._*` 元数据文件为 0。
 
 ## 0.0.82 (2026-04-22)
 - 套餐价格模型纠偏：会员套餐不再用同一个 `price` 同时承担前台美元展示和付款金额；后端 `crami_package` 新增 `usdPrice` 字段作为前台会员页美元展示价，原 `price` 保持人民币付款价。影响范围：套餐查询、会员页展示、支付确认页、后台套餐管理和订单计费快照；不改变会员到账、卡密兑换、学术权限和支付回调链路。回滚方式：回退本次代码并从服务器 `backups/crami_package-before-usd-price-20260422160331.sql` 恢复 `crami_package` 表，再重新构建同步。
