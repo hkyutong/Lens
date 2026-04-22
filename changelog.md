@@ -1,5 +1,12 @@
 # 更新日志
 
+## 0.0.81 (2026-04-22)
+- 会员套餐美元展示价改为后台可调：`chat/src/components/Settings/MemberCenter.vue` 已移除官方 Plus / Pro / Max 的 `$6 / $20 / $30` 前端硬编码，会员卡片展示价现在统一读取后台套餐 `price` 与后端返回的 `billingOptions`，官方套餐继续显示 `USD`，自定义套餐继续显示 `CNY`。影响范围：仅会员套餐展示价与支付确认页展示币种；不改变套餐表结构、支付接口、订单创建参数或会员到账逻辑。回滚方式：恢复本次 `MemberCenter.vue`、`MemberPayment.vue` 与全局订单信息字段变更后重新构建同步 `chat/dist`。
+- 支付确认页币种一致：`chat/src/components/Settings/MemberPayment.vue` 会读取订单上下文中的 `displayCurrencySymbol`，官方套餐从会员卡片进入支付时继续显示 `$`，避免会员页美元价和支付页人民币符号不一致；默认空订单仍回退 `¥`。
+- 后台套餐价格提示收口：`admin/src/views/package/package.vue` 的套餐价格输入提示已说明“官方套餐前台按 USD 展示；自定义套餐按 CNY 展示”，避免后台误以为该字段只服务人民币展示。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`./admin/node_modules/.bin/vue-tsc --noEmit`、`./chat/node_modules/.bin/vite build --mode=production` 与 `./admin/node_modules/.bin/vite build --mode=production`；构建仅有既有 Vite chunk warning 与 Browserslist 提示。
+- 已完成 GitHub 与服务器同步：提交 `8eb2395 fix: use admin price for plan display` 已推送到 `origin/main`；最新 `chat/dist` 与 `admin/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat` 与 `/www/wwwroot/Lens/AIWebQuickDeploy/public/admin`。同步前已备份 `public/chat` 到 `backups/public-chat-before-admin-price-20260422153900.tar.gz`，备份 `public/admin` 到 `backups/public-admin-before-admin-price-20260422153900.tar.gz`；本轮未重启服务，`9520` 保持 PID `3220959`，`38000` 保持 `4048524/2995907`。线上 `https://lens.yutoai.net/?v=202604221540` 与 `https://lens.yutoai.net/alice3306/?v=202604221540` 均返回 `HTTP 200`，服务器已确认 `public/chat` 包含 `displayCurrencySymbol`，`public/admin` 包含新的 USD 提示，AppleDouble `._*` 元数据文件为 0。
+
 ## 0.0.80 (2026-04-22)
 - 用户必读多语言修复：`chat/src/components/Settings/NoticeDialog.vue` 的套餐规则结构化展示已改为通过 `vue-i18n` 读取语言包，不再在组件内硬编码中文套餐说明；`zh-CN / en-US / zh-TW / ja-JP / ko-KR` 已补齐 `lens.usageNotice` 文案。影响范围：仅设置页“用户必读”结构化套餐规则展示；不改变线上公告数据库内容、套餐限制、后端校验、计费逻辑或 Markdown 兜底公告渲染。回滚方式：恢复 `NoticeDialog.vue` 和对应语言包变更后重新构建同步 `chat/dist`。
 - 本地验证通过：已执行 5 个语言包 JSON 解析校验、`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；前端构建仅有既有 Vite 动静态导入 warning。
