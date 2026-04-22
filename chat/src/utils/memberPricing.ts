@@ -4,6 +4,7 @@ type PackageLike = {
   name?: string
   weight?: number | string
   price?: number | string
+  usdPrice?: number | string
   days?: number | string
   model3Count?: number | string
   model4Count?: number | string
@@ -68,6 +69,8 @@ export function createBillingOption(
   const billingMonths = billingCycle === 'annual' ? 12 : 1
   const basePrice = roundPrice(toNumber(pkg.price))
   const originalTotal = roundPrice(basePrice * billingMonths)
+  const baseDisplayPrice = roundPrice(toNumber(pkg.usdPrice))
+  const displayOriginalTotal = roundPrice(baseDisplayPrice * billingMonths)
   const annualDiscountRate =
     toNumber(pkg.annualDiscountRate) || resolveAnnualDiscountRate(pkg) || defaultAnnualDiscountRate
   const price =
@@ -78,6 +81,10 @@ export function createBillingOption(
     billingCycle === 'annual' && originalTotal > 0
       ? roundPrice(((originalTotal - price) / originalTotal) * 100)
       : 0
+  const displayPrice =
+    billingCycle === 'annual'
+      ? roundPrice(displayOriginalTotal * (1 - annualDiscountRate / 100))
+      : baseDisplayPrice
 
   return {
     billingCycle,
@@ -89,6 +96,11 @@ export function createBillingOption(
     discountRate,
     saveAmount: roundPrice(originalTotal - price),
     monthlyEquivalentPrice: roundPrice(price / billingMonths),
+    displayPrice,
+    displayOriginalPrice: baseDisplayPrice,
+    displayOriginalTotal,
+    displaySaveAmount: roundPrice(displayOriginalTotal - displayPrice),
+    displayMonthlyEquivalentPrice: roundPrice(displayPrice / billingMonths),
     days: billingCycle === 'annual' ? resolveAnnualDays(toNumber(pkg.days)) : toNumber(pkg.days),
     model3Count: scaleQuota(pkg.model3Count, billingMonths),
     model4Count: scaleQuota(pkg.model4Count, billingMonths),

@@ -38,6 +38,13 @@ export class CreatePackageDto {
   @Transform(({ value }) => parseFloat(value))
   price: number;
 
+  @ApiProperty({ example: 6, default: 0, description: '套餐美元展示价，用于前台会员页展示' })
+  @IsOptional()
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined ? 0 : parseFloat(value),
+  )
+  usdPrice?: number;
+
   @ApiProperty({ example: 100, description: '套餐排序、数字越大越靠前' })
   @IsOptional()
   order?: number;

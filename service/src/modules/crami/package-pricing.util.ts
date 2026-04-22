@@ -10,6 +10,11 @@ export interface PackageBillingOffer {
   discountRate: number;
   saveAmount: number;
   monthlyEquivalentPrice: number;
+  displayPrice: number;
+  displayOriginalPrice: number;
+  displayOriginalTotal: number;
+  displaySaveAmount: number;
+  displayMonthlyEquivalentPrice: number;
   days: number;
   model3Count: number;
   model4Count: number;
@@ -74,9 +79,15 @@ export function getPackageBillingOffer(pkg: any, billingCycle?: string): Package
   const billingMonths = cycle === 'annual' ? ANNUAL_MONTHS : 1;
   const basePrice = roundPrice(toNumber(pkg?.price));
   const originalTotal = roundPrice(basePrice * billingMonths);
+  const baseDisplayPrice = roundPrice(toNumber(pkg?.usdPrice));
+  const displayOriginalTotal = roundPrice(baseDisplayPrice * billingMonths);
   const annualDiscountRate = resolveAnnualDiscountRate(pkg);
   const price =
     cycle === 'annual' ? roundPrice(originalTotal * (1 - annualDiscountRate / 100)) : basePrice;
+  const displayPrice =
+    cycle === 'annual'
+      ? roundPrice(displayOriginalTotal * (1 - annualDiscountRate / 100))
+      : baseDisplayPrice;
   const discountRate =
     cycle === 'annual' && originalTotal > 0
       ? roundPrice(((originalTotal - price) / originalTotal) * 100)
@@ -94,6 +105,11 @@ export function getPackageBillingOffer(pkg: any, billingCycle?: string): Package
     discountRate,
     saveAmount: roundPrice(originalTotal - price),
     monthlyEquivalentPrice: roundPrice(price / billingMonths),
+    displayPrice,
+    displayOriginalPrice: baseDisplayPrice,
+    displayOriginalTotal,
+    displaySaveAmount: roundPrice(displayOriginalTotal - displayPrice),
+    displayMonthlyEquivalentPrice: roundPrice(displayPrice / billingMonths),
     days,
     model3Count: scaleQuota(pkg?.model3Count, quotaFactor),
     model4Count: scaleQuota(pkg?.model4Count, quotaFactor),

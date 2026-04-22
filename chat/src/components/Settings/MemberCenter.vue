@@ -115,6 +115,7 @@ interface Pkg {
   coverImg: string
   des: string
   price: number
+  usdPrice?: number
   model3Count: number
   model4Count: number
   drawMjCount: number
@@ -217,7 +218,6 @@ function getDisplayBilling(pkg: Pkg) {
 function buildOrderInfo(pkg: Pkg) {
   const billing = getDisplayBilling(pkg)
   const preset = getPlanPreset(pkg)
-  const priceMeta = getDisplayPriceMeta(pkg)
   return {
     pkgInfo: {
       ...pkg,
@@ -225,8 +225,6 @@ function buildOrderInfo(pkg: Pkg) {
     },
     billingCycle: billing.billingCycle,
     billing,
-    displayCurrency: priceMeta.currency,
-    displayCurrencySymbol: priceMeta.symbol,
   }
 }
 
@@ -264,7 +262,13 @@ function getPlanFeatureLabels(pkg: Pkg) {
 }
 
 function getDisplayPriceValue(pkg: Pkg) {
-  return formatCurrency(roundDisplayPrice(getDisplayBilling(pkg).price))
+  const billing = getDisplayBilling(pkg)
+  if (getPlanPreset(pkg)) {
+    const displayPrice = Number(billing.displayPrice || 0)
+    return formatCurrency(roundDisplayPrice(displayPrice))
+  }
+
+  return formatCurrency(roundDisplayPrice(billing.price))
 }
 
 function getDisplayPriceMeta(pkg: Pkg) {

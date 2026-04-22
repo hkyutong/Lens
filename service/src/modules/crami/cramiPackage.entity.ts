@@ -12,8 +12,18 @@ export class CramiPackageEntity extends BaseEntity {
   @Column({ comment: '套餐封面图片', nullable: true })
   coverImg: string;
 
-  @Column({ comment: '套餐价格￥', type: 'decimal', scale: 2, precision: 10 })
+  @Column({ comment: '套餐人民币付款价￥', type: 'decimal', scale: 2, precision: 10 })
   price: number;
+
+  @Column({
+    comment: '套餐美元展示价$',
+    type: 'decimal',
+    scale: 2,
+    precision: 10,
+    nullable: true,
+    default: 0,
+  })
+  usdPrice: number;
 
   @Column({ comment: '套餐排序、数字越大越靠前', default: 100 })
   order: number;

@@ -10,6 +10,11 @@ export interface BillingOption {
   discountRate: number
   saveAmount: number
   monthlyEquivalentPrice: number
+  displayPrice?: number
+  displayOriginalPrice?: number
+  displayOriginalTotal?: number
+  displaySaveAmount?: number
+  displayMonthlyEquivalentPrice?: number
   days: number
   model3Count: number
   model4Count: number

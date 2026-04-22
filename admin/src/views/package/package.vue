@@ -34,6 +34,7 @@ meta:
     des?: string | null;
     coverImg?: string | null;
     price?: number | null;
+    usdPrice?: number | null;
     order?: number | null;
     status?: number | null;
     weight?: number | null;
@@ -53,6 +54,7 @@ meta:
     des: null,
     coverImg: null,
     price: null,
+    usdPrice: null,
     order: null,
     status: 0,
     weight: null,
@@ -75,7 +77,8 @@ meta:
         trigger: 'blur',
       },
     ],
-    price: [{ required: true, message: '请填写套餐价格', trigger: 'blur' }],
+    price: [{ required: true, message: '请填写人民币付款价', trigger: 'blur' }],
+    usdPrice: [{ required: false, message: '请填写美元展示价', trigger: 'blur' }],
     order: [{ required: true, message: '请填写套餐排序', trigger: 'blur' }],
     status: [{ required: true, message: '请选择套餐开启状态', trigger: 'change' }],
     days: [{ required: true, message: '请填写套餐有效期天数', trigger: 'blur' }],
@@ -387,7 +390,14 @@ meta:
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="price" label="套餐价格" width="120" align="center" />
+        <el-table-column prop="usdPrice" label="美元展示价" width="120" align="center">
+          <template #default="scope">
+            {{ scope.row.usdPrice ? `$${scope.row.usdPrice}` : '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="price" label="人民币付款价" width="120" align="center">
+          <template #default="scope"> ¥{{ scope.row.price }} </template>
+        </el-table-column>
         <el-table-column prop="weight" label="套餐等级" width="100" align="center" />
         <el-table-column prop="status" label="套餐状态" width="100">
           <template #default="scope">
@@ -480,15 +490,24 @@ meta:
             </el-form-item>
           </el-col>
           <el-col :span="11">
-            <el-form-item label="设置套餐价格" prop="price">
+            <el-form-item label="美元展示价" prop="usdPrice">
               <el-input
-                v-model.number="formPackage.price"
-                placeholder="官方套餐前台按 USD 展示；自定义套餐按 CNY 展示"
+                v-model.number="formPackage.usdPrice"
+                placeholder="前台会员页展示，例如 Plus 填 6"
                 type="number"
               />
             </el-form-item>
           </el-col>
           <el-col :span="11" :offset="2">
+            <el-form-item label="人民币付款价" prop="price">
+              <el-input
+                v-model.number="formPackage.price"
+                placeholder="实际创建订单和支付金额，例如填 45"
+                type="number"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="11">
             <el-form-item label="套餐有效时间" prop="days">
               <el-input
                 v-model.number="formPackage.days"
@@ -497,7 +516,7 @@ meta:
               />
             </el-form-item>
           </el-col>
-          <el-col :span="11">
+          <el-col :span="11" :offset="2">
             <el-form-item label="App分类" prop="appCats">
               <div class="category-selector">
                 <!-- 已选择的分类 -->

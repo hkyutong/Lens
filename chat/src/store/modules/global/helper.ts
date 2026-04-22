@@ -26,8 +26,6 @@ export interface OrderInfo {
   }
   billingCycle: BillingCycle
   billing: BillingOption
-  displayCurrency?: string
-  displayCurrencySymbol?: string
 }
 
 export interface GlobalState {
