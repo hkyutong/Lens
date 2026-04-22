@@ -1,5 +1,12 @@
 # 更新日志
 
+## 0.0.82 (2026-04-22)
+- 套餐价格模型纠偏：会员套餐不再用同一个 `price` 同时承担前台美元展示和付款金额；后端 `crami_package` 新增 `usdPrice` 字段作为前台会员页美元展示价，原 `price` 保持人民币付款价。影响范围：套餐查询、会员页展示、支付确认页、后台套餐管理和订单计费快照；不改变会员到账、卡密兑换、学术权限和支付回调链路。回滚方式：回退本次代码并从服务器 `backups/crami_package-before-usd-price-20260422160331.sql` 恢复 `crami_package` 表，再重新构建同步。
+- 前台显示与付款分离：`chat/src/components/Settings/MemberCenter.vue` 的 Plus / Pro / Max 官方卡片展示美元 `displayPrice`，因此 Plus/Pro/Max 月付显示分别为 `$6 / $20 / $30`；`chat/src/components/Settings/MemberPayment.vue` 支付确认页始终显示人民币 `price`，因此付款仍为 `￥45 / ￥140 / ￥210`。年付同样分别用美元展示字段和人民币结算字段计算折扣，不再出现 `$45` 这种把人民币错当美元展示的问题。
+- 后台套餐管理补齐双价格：`admin/src/views/package/package.vue` 的套餐列表和编辑弹窗新增“美元展示价”和“人民币付款价”两个独立字段，后台可分别配置前台展示美元价与实际支付人民币价。`service/src/modules/crami/dto/createPackage.dto.ts`、`crami.service.ts`、`cramiPackage.entity.ts` 和 `package-pricing.util.ts` 已同步支持 `usdPrice` 与 `displayPrice` 计费快照。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit`、`./admin/node_modules/.bin/vue-tsc --noEmit`、`pnpm -C service exec tsc -p tsconfig.json --noEmit`、`./chat/node_modules/.bin/vite build --mode=production`、`./admin/node_modules/.bin/vite build --mode=production` 与 `pnpm -C service run build:test`；构建仅有既有 Vite chunk/import warning 和 Browserslist 提示。
+- 已完成 GitHub 与服务器同步：提交 `69e6640 fix: split usd display and cny payment prices` 已推送到 `origin/main`；`chat/dist`、`admin/dist`、`service/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy`。同步前已备份 `public/chat`、`public/admin`、`dist` 与 `crami_package`，备份路径为 `backups/public-chat-before-split-price-20260422160331.tar.gz`、`backups/public-admin-before-split-price-20260422160331.tar.gz`、`backups/service-dist-before-split-price-20260422160331.tar.gz`、`backups/crami_package-before-usd-price-20260422160331.sql`；数据库迁移后已初始化 `Plus=6 / Pro=20 / Max=30` 的 `usdPrice`。`9520` 主服务已从 PID `3220959` 切换到 PID `503151`，`38000` 学术服务未重启；线上 `https://lens.yutoai.net/?v=20260422160331` 与 `https://lens.yutoai.net/alice3306/?v=20260422160331` 均返回 `HTTP 200`，接口已确认返回 `price=45/140/210` 与 `usdPrice=6/20/30`，AppleDouble `._*` 元数据文件为 0。
+
 ## 0.0.81 (2026-04-22)
 - 会员套餐美元展示价改为后台可调：`chat/src/components/Settings/MemberCenter.vue` 已移除官方 Plus / Pro / Max 的 `$6 / $20 / $30` 前端硬编码，会员卡片展示价现在统一读取后台套餐 `price` 与后端返回的 `billingOptions`，官方套餐继续显示 `USD`，自定义套餐继续显示 `CNY`。影响范围：仅会员套餐展示价与支付确认页展示币种；不改变套餐表结构、支付接口、订单创建参数或会员到账逻辑。回滚方式：恢复本次 `MemberCenter.vue`、`MemberPayment.vue` 与全局订单信息字段变更后重新构建同步 `chat/dist`。
 - 支付确认页币种一致：`chat/src/components/Settings/MemberPayment.vue` 会读取订单上下文中的 `displayCurrencySymbol`，官方套餐从会员卡片进入支付时继续显示 `$`，避免会员页美元价和支付页人民币符号不一致；默认空订单仍回退 `¥`。
