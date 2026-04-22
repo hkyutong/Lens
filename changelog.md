@@ -1,5 +1,11 @@
 # 更新日志
 
+## 0.0.84 (2026-04-22)
+- 全员赠送一个月 Pro 会员：按用户要求直接在 Lens 线上数据库为全部未删除账号发放 Pro 会员权益。执行前只读确认 `users` 未删除账号共 346 个，角色分布为 `super=1 / user=1 / viewer=343 / views=1`；Pro 套餐为 `id=18 / weight=20 / days=30 / 3600普通积分 / 360高级积分 / 25顶级额度`。影响范围：仅服务器数据库 `user_balances` 与 `account_log`；不修改代码、配置、静态资源、上传文件、日志、Nginx、PM2 或学术服务。
+- 发放规则：所有未删除用户均叠加 Pro 套餐对应的会员额度；普通/历史套餐/Plus/无套餐用户设置为 `packageId=18` 并获得从当前时间起至少 30 天的 Pro 会员；如果未来存在有效 Max 等更高等级用户，规则为保留高等级套餐并延长一个月，避免降级。本次线上实际结果为 346 个用户全部变为 `packageId=18`，新增 346 条 `account_log` 管理员赠送记录。
+- 备份与回滚：执行前已备份 `users / user_balances / account_log / crami_package` 到服务器 `backups/all-users-before-pro-gift-20260422233758.sql`。回滚方式：在确认影响范围后从该 SQL 恢复上述表，或针对本次 `uid` 前缀 `pro-gift-` 的 `account_log` 与 `2026-04-22 23:38` 附近的 `user_balances` 更新做定向恢复。
+- 结果验证：赠送后 `user_balances` 中 346 个未删除用户均为 `packageId=18`，赠送日志 346 条；会员最早到期时间为 `2026-05-22 23:38:00`，最晚到期时间为 `2026-06-10 16:54:44`。线上 `https://lens.yutoai.net/?v=progift20260422233758` 与后台入口均返回 `HTTP 200`；本轮未重启 `9520` 或 `38000`，未启动 Playwright/Chromium，收尾无 SSH/SCP/Chromium/Playwright 残留进程。
+
 ## 0.0.83 (2026-04-22)
 - 支付确认页价格展示继续统一为美元：`chat/src/components/Settings/MemberPayment.vue` 不再在商品支付页展示人民币 `￥`，顶部“需要支付”、右侧“折合每月”、年付“按月购买”和“节省”均改为读取后端 `displayPrice / displayMonthlyEquivalentPrice / displayOriginalTotal / displaySaveAmount` 并显示 `$ ... USD`。影响范围：仅支付确认页的价格展示文案；订单创建仍只传 `goodsId / payType / billingCycle`，真实订单金额、支付通道结算和会员到账仍由后端人民币 `price` 计费快照决定。回滚方式：恢复 `MemberPayment.vue` 到上一版并重新构建同步 `chat/dist`。
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仅有既有 Vite 动静态导入 warning。
