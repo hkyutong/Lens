@@ -5,6 +5,8 @@
 - 统一公开 SEO 绝对 URL：`chat/index.html`、`chat/public/llms.txt`、`chat/public/llms-full.txt` 与全部 `chat/public/seo/*.html` 的 canonical、Open Graph URL、图片 URL 与 LLM 文档链接已改为 `https://lens.yutoai.net/...` 绝对地址，避免 Google/Bing/AI 抓取器解析相对路径失败。影响范围：仅公开 SEO 元信息和 AI 文档入口；不改变真实用户界面交互逻辑。回滚方式：恢复上述静态文件到本次改动前版本并重新构建同步。
 - Lens 品牌语义补齐：首页与专题 SEO 落地页的 title、description、FAQ 文案和 JSON-LD 结构化数据已统一成 `Lens by YutoAI / Lens 学术工作台` 口径，增强 Lens 子域名独立收录与品牌识别。影响范围：仅公开元信息、静态落地页文本与结构化数据。回滚方式：恢复 `chat/index.html` 与 `chat/public/seo/*.html` 到上一版并重新构建。
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仅有既有 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。`chat/dist/index.html`、`chat/dist/sitemap.xml`、`chat/dist/robots.txt` 与全部 `chat/dist/seo/*.html` 已确认包含绝对 canonical/OG URL 与静态 sitemap 内容。
+- 已完成 GitHub 与服务器同步：提交 `4713cb0 feat: tighten lens seo discovery` 已推送到 `origin/main`；`chat/dist` 已零停机同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。同步前已在服务器创建备份 `backups/public-chat-before-seo-20260424231731.tar.gz`；本轮未重启 `9520` 或 `38000`，当前监听进程仍为 `503151` 与 `4048524/2995907`。
+- 已完成最小范围 Cloudflare 缓存刷新：按 URL 级别清理了首页、`index.html`、`sitemap.xml`、`robots.txt`、`llms*.txt` 和 6 个 `/seo/*.html`；线上回查确认 `https://lens.yutoai.net/` 默认 URL 已切到新 title/canonical/og，`https://lens.yutoai.net/sitemap.xml` 已返回 `application/xml` 与新静态内容。`robots.txt` 默认 URL 仍短暂命中旧缓存，但带查询参数已返回新版本且远端源文件已同步，预计按当前缓存策略自然更新。
 
 ## 0.0.84 (2026-04-22)
 - 全员赠送一个月 Pro 会员：按用户要求直接在 Lens 线上数据库为全部未删除账号发放 Pro 会员权益。执行前只读确认 `users` 未删除账号共 346 个，角色分布为 `super=1 / user=1 / viewer=343 / views=1`；Pro 套餐为 `id=18 / weight=20 / days=30 / 3600普通积分 / 360高级积分 / 25顶级额度`。影响范围：仅服务器数据库 `user_balances` 与 `account_log`；不修改代码、配置、静态资源、上传文件、日志、Nginx、PM2 或学术服务。
