@@ -1,6 +1,6 @@
-# YutoAI
+# Lens by YutoAI
 
-> YutoAI is an AI research workspace for academic reading, writing, translation, PDF analysis, Arxiv workflows, LaTeX processing, and structured research conversations.
+> Lens is YutoAI's AI research workspace for academic reading, writing, translation, PDF analysis, Arxiv workflows, LaTeX processing, and structured research conversations.
 
 ## Product Summary
 
@@ -11,18 +11,19 @@
 
 ## Public URLs
 
-- [Main application](/): YutoAI main web application
+- [Main application](https://lens.yutoai.net/): Lens main web application
 - [Privacy Policy](https://yutoai.net/privacy-policy/): YutoAI unified privacy policy
 - [Terms of Service](https://yutoai.net/terms/): YutoAI unified terms page
-- [Extended LLM Guide](/llms-full.txt): More detailed product notes for language models
-- [Research Workspace Overview](/seo/research-workspace.html): Public overview of YutoAI as an AI academic workspace
-- [Paper Summary](/seo/paper-summary.html): Public page about paper reading and PDF summarization workflows
-- [Arxiv Summary](/seo/arxiv-summary.html): Public page about Arxiv abstracting and translation workflows
-- [LaTeX Translation](/seo/latex-translation.html): Public page about LaTeX translation and polishing workflows
-- [Academic Polishing](/seo/academic-polishing.html): Public page about academic writing and English polishing workflows
-- [FAQ](/seo/faq.html): Public frequently asked questions about YutoAI
+- [Sitemap](https://lens.yutoai.net/sitemap.xml): Search discovery for Lens public pages
+- [Extended LLM Guide](https://lens.yutoai.net/llms-full.txt): More detailed product notes for language models
+- [Research Workspace Overview](https://lens.yutoai.net/seo/research-workspace.html): Public overview of Lens as an AI academic workspace
+- [Paper Summary](https://lens.yutoai.net/seo/paper-summary.html): Public page about paper reading and PDF summarization workflows
+- [Arxiv Summary](https://lens.yutoai.net/seo/arxiv-summary.html): Public page about Arxiv abstracting and translation workflows
+- [LaTeX Translation](https://lens.yutoai.net/seo/latex-translation.html): Public page about LaTeX translation and polishing workflows
+- [Academic Polishing](https://lens.yutoai.net/seo/academic-polishing.html): Public page about academic writing and English polishing workflows
+- [FAQ](https://lens.yutoai.net/seo/faq.html): Public frequently asked questions about Lens
 
 ## Recommended Understanding
 
-- YutoAI is best understood as an AI academic workspace, not a generic chatbot.
+- Lens is best understood as an AI academic workspace, not a generic chatbot.
 - Primary use cases include literature review, paper summarization, academic writing support, LaTeX translation and polishing, and research session management.

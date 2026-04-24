@@ -1,5 +1,11 @@
 # 更新日志
 
+# 0.0.85 (2026-04-24)
+- 修复 Lens 根路径 sitemap 发现链路：新增静态 `chat/public/sitemap.xml`，使 `https://lens.yutoai.net/sitemap.xml` 直接返回 XML，而不再落到 SPA 首页；`chat/public/robots.txt` 同步追加 `Sitemap: https://lens.yutoai.net/sitemap.xml`。影响范围：仅前端公开 SEO 静态文件与搜索引擎发现链路，不改变聊天、登录、支付、学术调用或学术服务端口。回滚方式：删除静态 `sitemap.xml` 并恢复 `robots.txt` 到上一版后重新构建同步 `chat/dist`。
+- 统一公开 SEO 绝对 URL：`chat/index.html`、`chat/public/llms.txt`、`chat/public/llms-full.txt` 与全部 `chat/public/seo/*.html` 的 canonical、Open Graph URL、图片 URL 与 LLM 文档链接已改为 `https://lens.yutoai.net/...` 绝对地址，避免 Google/Bing/AI 抓取器解析相对路径失败。影响范围：仅公开 SEO 元信息和 AI 文档入口；不改变真实用户界面交互逻辑。回滚方式：恢复上述静态文件到本次改动前版本并重新构建同步。
+- Lens 品牌语义补齐：首页与专题 SEO 落地页的 title、description、FAQ 文案和 JSON-LD 结构化数据已统一成 `Lens by YutoAI / Lens 学术工作台` 口径，增强 Lens 子域名独立收录与品牌识别。影响范围：仅公开元信息、静态落地页文本与结构化数据。回滚方式：恢复 `chat/index.html` 与 `chat/public/seo/*.html` 到上一版并重新构建。
+- 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仅有既有 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。`chat/dist/index.html`、`chat/dist/sitemap.xml`、`chat/dist/robots.txt` 与全部 `chat/dist/seo/*.html` 已确认包含绝对 canonical/OG URL 与静态 sitemap 内容。
+
 ## 0.0.84 (2026-04-22)
 - 全员赠送一个月 Pro 会员：按用户要求直接在 Lens 线上数据库为全部未删除账号发放 Pro 会员权益。执行前只读确认 `users` 未删除账号共 346 个，角色分布为 `super=1 / user=1 / viewer=343 / views=1`；Pro 套餐为 `id=18 / weight=20 / days=30 / 3600普通积分 / 360高级积分 / 25顶级额度`。影响范围：仅服务器数据库 `user_balances` 与 `account_log`；不修改代码、配置、静态资源、上传文件、日志、Nginx、PM2 或学术服务。
 - 发放规则：所有未删除用户均叠加 Pro 套餐对应的会员额度；普通/历史套餐/Plus/无套餐用户设置为 `packageId=18` 并获得从当前时间起至少 30 天的 Pro 会员；如果未来存在有效 Max 等更高等级用户，规则为保留高等级套餐并延长一个月，避免降级。本次线上实际结果为 346 个用户全部变为 `packageId=18`，新增 346 条 `account_log` 管理员赠送记录。

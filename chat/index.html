@@ -14,14 +14,14 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>YutoAI - AI 科研工作台</title>
+    <title>Lens | YutoAI AI 学术工作台</title>
     <meta
       name="description"
-      content="YutoAI 是面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织的 AI 学术工作台。"
+      content="Lens 是 YutoAI 旗下的 AI 学术工作台，面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织。"
     />
     <meta
       name="keywords"
-      content="AI SEO, 学术AI, AI科研工作台, 论文速读, PDF理解, Arxiv摘要, LaTeX翻译, 英文润色, BibTeX, YutoAI"
+      content="Lens, YutoAI, AI SEO, 学术AI, AI科研工作台, 论文速读, PDF理解, Arxiv摘要, LaTeX翻译, 英文润色, BibTeX"
     />
     <meta
       name="robots"
@@ -34,28 +34,33 @@
     <meta name="application-name" content="YutoAI" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="zh_CN" />
-    <meta property="og:site_name" content="YutoAI" />
-    <meta property="og:title" content="YutoAI - AI 科研工作台" />
+    <meta property="og:site_name" content="Lens by YutoAI" />
+    <meta property="og:title" content="Lens | YutoAI AI 学术工作台" />
     <meta
       property="og:description"
       content="把论文速读、PDF 理解、Arxiv 摘要、LaTeX 处理和学术润色放在同一个 AI 研究工作区中。"
     />
-    <meta property="og:url" content="/" />
-    <meta property="og:image" content="/logo.png" />
+    <meta property="og:url" content="https://lens.yutoai.net/" />
+    <meta property="og:image" content="https://lens.yutoai.net/logo.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="YutoAI - AI 科研工作台" />
+    <meta name="twitter:title" content="Lens | YutoAI AI 学术工作台" />
     <meta
       name="twitter:description"
       content="把论文速读、PDF 理解、Arxiv 摘要、LaTeX 处理和学术润色放在同一个 AI 研究工作区中。"
     />
-    <meta name="twitter:image" content="/logo.png" />
-    <link rel="canonical" href="/" />
-    <link rel="alternate" type="text/plain" href="/llms.txt" title="LLMs.txt for YutoAI" />
+    <meta name="twitter:image" content="https://lens.yutoai.net/logo.png" />
+    <link rel="canonical" href="https://lens.yutoai.net/" />
     <link
       rel="alternate"
       type="text/plain"
-      href="/llms-full.txt"
-      title="Extended LLM Guide for YutoAI"
+      href="https://lens.yutoai.net/llms.txt"
+      title="LLMs.txt for Lens by YutoAI"
+    />
+    <link
+      rel="alternate"
+      type="text/plain"
+      href="https://lens.yutoai.net/llms-full.txt"
+      title="Extended LLM Guide for Lens by YutoAI"
     />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -74,17 +79,23 @@
         {
           "@context": "https://schema.org",
           "@type": "WebSite",
-          "name": "YutoAI",
-          "description": "YutoAI 是面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织的 AI 学术工作台。",
+          "name": "Lens by YutoAI",
+          "url": "https://lens.yutoai.net/",
+          "description": "Lens 是 YutoAI 旗下的 AI 学术工作台，面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织。",
           "inLanguage": "zh-CN"
         },
         {
           "@context": "https://schema.org",
           "@type": "SoftwareApplication",
-          "name": "YutoAI",
+          "name": "Lens",
+          "url": "https://lens.yutoai.net/",
+          "publisher": {
+            "@type": "Organization",
+            "name": "YutoAI"
+          },
           "applicationCategory": "ResearchApplication",
           "operatingSystem": "Web",
-          "description": "YutoAI 支持论文速读、PDF 深度理解、Arxiv 摘要、LaTeX 翻译、英文润色和研究会话管理。",
+          "description": "Lens 支持论文速读、PDF 深度理解、Arxiv 摘要、LaTeX 翻译、英文润色和研究会话管理。",
           "featureList": [
             "论文速读与 PDF 深度理解",
             "Arxiv 摘要与学术翻译",
@@ -119,15 +130,6 @@
           el.textContent = msg
         } catch (e) {}
       }
-      ;(function () {
-        try {
-          var canonical = document.querySelector('link[rel="canonical"]')
-          var currentUrl = window.location.origin + window.location.pathname
-          if (canonical) canonical.setAttribute('href', currentUrl)
-          var ogUrl = document.querySelector('meta[property="og:url"]')
-          if (ogUrl) ogUrl.setAttribute('content', currentUrl)
-        } catch (e) {}
-      })()
       window.addEventListener('error', function (e) {
         window.__APP_BOOT_ERROR__(String(e && e.message ? e.message : e))
       })

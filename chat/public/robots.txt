@@ -45,3 +45,5 @@ Allow: /
 Disallow: /api/
 Disallow: /auth/
 Disallow: /admin/
+
+Sitemap: https://lens.yutoai.net/sitemap.xml
