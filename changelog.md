@@ -1,5 +1,12 @@
 # 更新日志
 
+# 0.0.86 (2026-05-08)
+- 只读排查 `https://lens.yutoai.net/` 无法打开问题：公网经 Cloudflare 返回 `HTTP 502`，公共 DNS 解析到 Cloudflare 正常；直连源站 `45.136.15.87` 的 HTTPS 也由源站 Nginx 返回 `502`，说明问题在源站反代上游而不是 GitHub、前端静态资源或 Cloudflare DNS。
+- 服务器只读确认：Nginx 正常监听 `80/443`，学术后端 `38000` 正常返回，`/www/server/panel/vhost/nginx/node_Lens.conf` 将 `lens.yutoai.net` 反代到 `127.0.0.1:9520`，但当前 `9520` 未监听且本机 curl 返回 connection refused。
+- 服务器 PM2 状态：root PM2 仅有 `lens-academic` 在线，www PM2 无 Lens 主应用；`/www/wwwroot/Lens/AIWebQuickDeploy/pm2.conf.json` 存在 Lens 主应用配置但当前未托管运行。推断直接原因是 Lens 主 Node 应用进程退出或未自启，导致 Nginx 上游不可用。
+- 用户明确授权修复后，已在 `/www/wwwroot/Lens/AIWebQuickDeploy` 使用现有 `pm2.conf.json` 以 `www` 用户启动 Lens 主应用，并执行 `pm2 save` 写入 `/home/www/.pm2/dump.pm2`。当前 `www` PM2 中 `Lens` 进程在线，版本 `4.3.0`，PID `187862`，`9520` 已恢复监听；root PM2 中 `lens-academic` 仍保持 PID `1307221` 在线，本轮未重启学术后端、未改 Nginx、未改代码、未改数据库、未清 Cloudflare 缓存。
+- 恢复验证：服务器本机 `http://127.0.0.1:9520/` 返回 `HTTP 200`；公网 `https://lens.yutoai.net/` 返回 `HTTP 200`，内容类型 `text/html; charset=UTF-8`。直接原因已解除。后续风险是需要确认服务器开机自启是否会恢复 `www` 用户 PM2 dump；当前至少已避免继续依赖一次性 SSH/setsid 会话。
+
 # 0.0.85 (2026-04-24)
 - 修复 Lens 根路径 sitemap 发现链路：新增静态 `chat/public/sitemap.xml`，使 `https://lens.yutoai.net/sitemap.xml` 直接返回 XML，而不再落到 SPA 首页；`chat/public/robots.txt` 同步追加 `Sitemap: https://lens.yutoai.net/sitemap.xml`。影响范围：仅前端公开 SEO 静态文件与搜索引擎发现链路，不改变聊天、登录、支付、学术调用或学术服务端口。回滚方式：删除静态 `sitemap.xml` 并恢复 `robots.txt` 到上一版后重新构建同步 `chat/dist`。
 - 统一公开 SEO 绝对 URL：`chat/index.html`、`chat/public/llms.txt`、`chat/public/llms-full.txt` 与全部 `chat/public/seo/*.html` 的 canonical、Open Graph URL、图片 URL 与 LLM 文档链接已改为 `https://lens.yutoai.net/...` 绝对地址，避免 Google/Bing/AI 抓取器解析相对路径失败。影响范围：仅公开 SEO 元信息和 AI 文档入口；不改变真实用户界面交互逻辑。回滚方式：恢复上述静态文件到本次改动前版本并重新构建同步。
