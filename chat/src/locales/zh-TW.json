@@ -245,6 +245,7 @@
       "starterArxivSummaryPrompt": "請根據 Arxiv 論文內容，總結核心問題、方法路線、實驗結果和可以繼續深入的問題。",
       "workflowActiveHint": "目前能力已經就緒，補充資料或任務後即可開始。",
       "workflowSectionDesc": "",
+      "tutorialGuide": "Lens 使用教學",
       "workflowTemplateAction": "使用這條鏈路"
     },
     "footer": {

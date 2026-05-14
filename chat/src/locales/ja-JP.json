@@ -145,6 +145,7 @@
       "starterArxivSummaryPrompt": "この arXiv 論文について、中心課題、方法、結果、さらに掘り下げるべき問いを整理してください。",
       "workflowActiveHint": "現在の機能は準備できています。資料やタスクを補足すればすぐ開始できます。",
       "workflowSectionDesc": "",
+      "tutorialGuide": "Lens 使い方ガイド",
       "workflowTemplateAction": "この流れを使う"
     },
     "footer": {

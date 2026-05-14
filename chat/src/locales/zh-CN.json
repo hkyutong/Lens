@@ -727,6 +727,7 @@
       "starterArxivSummaryPrompt": "请根据 Arxiv 论文内容，总结核心问题、方法路线、实验结果和可以继续深入的问题。",
       "workflowActiveHint": "当前能力已经就绪，补充资料或任务后即可开始。",
       "workflowSectionDesc": "",
+      "tutorialGuide": "Lens 使用教程",
       "workflowTemplateAction": "使用这条链路"
     },
     "footer": {

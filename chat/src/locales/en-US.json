@@ -738,6 +738,7 @@
       "starterArxivSummaryPrompt": "Based on this arXiv paper, summarize the core problem, method path, results, and the best follow-up questions to explore.",
       "workflowActiveHint": "Your current capability is ready. Add materials or task context to begin.",
       "workflowSectionDesc": "",
+      "tutorialGuide": "Lens Guide",
       "workflowTemplateAction": "Use this pipeline"
     },
     "footer": {

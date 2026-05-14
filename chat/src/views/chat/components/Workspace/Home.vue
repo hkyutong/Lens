@@ -250,11 +250,21 @@ const startCustomWorkflow = async () => {
   chatStore.setPrompt('')
   await focusComposer()
 }
+
+const openLensGuide = () => {
+  window.open('https://docs.yutoai.net/lens/', '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <template>
   <section class="workspace-home">
     <div class="workspace-home__shell">
+      <div class="workspace-home__guide">
+        <button type="button" class="workspace-home__guide-link" @click="openLensGuide">
+          {{ t('lens.workspace.tutorialGuide') }}
+          <span aria-hidden="true">↗</span>
+        </button>
+      </div>
       <div class="workspace-home__board">
         <div class="workspace-home__track-list">
           <section
@@ -333,9 +343,35 @@ const startCustomWorkflow = async () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 6px;
   padding-top: 2px;
   animation: workspace-home-enter 320ms ease;
+}
+
+.workspace-home__guide {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.workspace-home__guide-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  transition:
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.workspace-home__guide-link:hover {
+  color: var(--text-main);
+  transform: translateY(-1px);
 }
 
 .workspace-home__board {
@@ -504,8 +540,12 @@ const startCustomWorkflow = async () => {
 
 @media (max-width: 640px) {
   .workspace-home__shell {
-    gap: 16px;
+    gap: 12px;
     padding-top: 2px;
+  }
+
+  .workspace-home__guide {
+    justify-content: flex-start;
   }
 
   .workspace-home__board {

@@ -744,6 +744,65 @@ export class ChatService {
     return `${summary}\n${content || ''}`.trim();
   }
 
+  private extractImageUrls(imageUrl: string) {
+    if (!imageUrl) return [] as string[];
+
+    const readUrl = (item: any) => {
+      if (!item) return '';
+      if (typeof item === 'string') return item.trim();
+      if (typeof item === 'object') {
+        return String(item.url || item.imageUrl || item.path || '').trim();
+      }
+      return '';
+    };
+
+    try {
+      const parsed = JSON.parse(imageUrl);
+      const urls = Array.isArray(parsed) ? parsed.map(readUrl) : [readUrl(parsed)];
+      return Array.from(new Set(urls.filter(Boolean)));
+    } catch (_error) {
+      return Array.from(
+        new Set(
+          String(imageUrl)
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean),
+        ),
+      );
+    }
+  }
+
+  private async prependGlobalImageSummary(
+    content: string,
+    imageUrl: string,
+    isConvertToBase64?: string,
+  ) {
+    const urls = this.extractImageUrls(imageUrl).slice(0, 6);
+    if (!urls.length) return content || '';
+
+    const descriptions: string[] = [];
+    for (const [index, url] of urls.entries()) {
+      try {
+        const inputUrl = isConvertToBase64 === '1' ? await convertUrlToBase64(url) : url;
+        const description = await this.openAIChatService.chatFree(
+          '请客观、准确地解析这张图片。输出图片中的主要对象、文字、图表、界面信息、可见关系和与用户后续提问相关的关键信息。不要编造看不见的内容。',
+          '你是图片解析助手。只描述图片中可见内容，遇到不确定信息要说明不确定。',
+          undefined,
+          inputUrl,
+        );
+        const safeDescription = this.redactSensitivePathText(String(description || '').trim());
+        if (safeDescription) {
+          descriptions.push(`图片 ${index + 1}：${safeDescription}`);
+        }
+      } catch (error) {
+        Logger.warn(`全局图片解析失败: ${error?.message || error}`, 'ChatService');
+      }
+    }
+
+    if (!descriptions.length) return content || '';
+    return `已解析上传图片：\n${descriptions.join('\n\n')}\n\n${content || ''}`.trim();
+  }
+
   async buildMessageFromParentMessageId(options: any, chatLogService) {
     const startTime = Date.now();
 
@@ -800,7 +859,13 @@ export class ChatService {
             }
 
             // 2. 处理图片内容
-            if (isImageUpload === 2 && record.imageUrl) {
+            if (isImageUpload === 3 && record.imageUrl) {
+              content = await this.prependGlobalImageSummary(
+                content,
+                record.imageUrl,
+                isConvertToBase64,
+              );
+            } else if (isImageUpload === 2 && record.imageUrl) {
               // GPT-Vision 格式处理 (特殊格式)
               hasSpecialFormat = true;
               const imageContent = await Promise.all(

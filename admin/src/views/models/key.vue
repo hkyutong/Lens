@@ -461,10 +461,6 @@ meta:
     });
   }
 
-  function showDevOnlyMessage() {
-    ElMessage({ type: 'warning', message: '此功能仅开发版支持！' });
-  }
-
   const beforeAvatarUpload: UploadProps['beforeUpload'] = (rawFile) => {
     const allowedTypes = [
       'image/png',
@@ -1048,13 +1044,13 @@ meta:
             <el-radio :label="0"> 不使用 </el-radio>
             <el-radio :label="1"> 逆向格式 </el-radio>
             <el-radio :label="2"> GPT Vision </el-radio>
-            <el-radio :label="3" :disabled="true" @click="showDevOnlyMessage"> 全局解析 </el-radio>
+            <el-radio :label="3"> 全局解析 </el-radio>
           </el-radio-group>
           <el-tooltip class="box-item" effect="dark" placement="right">
             <template #content>
               <div style="width: 250px">
                 选择是否开启图片解析及其格式，逆向格式【直接附带链接，仅支持逆向渠道】，GPT
-                Vision【GPT Vision 的识图格式】，全局解析【支持所有格式的图片解析，仅开发版支持】
+                Vision【GPT Vision 的识图格式】，全局解析【先用全局视觉模型解析图片，再把图片内容交给当前模型】
               </div>
             </template>
             <el-icon class="ml-3 cursor-pointer">

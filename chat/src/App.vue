@@ -29,7 +29,7 @@ const showWatermark = computed(() => Number(authStore.globalConfig?.showWatermar
 const clearCacheEnabled = computed(() => Number(authStore.globalConfig?.clearCacheEnabled) === 1)
 const siteName = computed(() => authStore.globalConfig?.siteName || 'YutoAI')
 const siteUrl = computed(() => authStore.globalConfig?.siteUrl || '')
-const brandSeoTitle = 'YutoAI - AI 科研工作台'
+const brandSeoTitle = 'Lens - YutoAI 科研工作台'
 const siteDescription = computed(
   () =>
     authStore.globalConfig?.homeWelcomeContent ||

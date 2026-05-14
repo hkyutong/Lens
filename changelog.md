@@ -1,5 +1,16 @@
 # 更新日志
 
+# 0.0.89 (2026-05-14)
+- 图片全局解析正式启用：`admin/src/views/models/key.vue` 中图片解析的 `全局解析` 选项已解除禁用，提示文案改为“先用全局视觉模型解析图片，再把图片内容交给当前模型”；`service/src/modules/chat/chat.service.ts` 新增全局图片摘要前置逻辑，会提取上传图片、调用全局视觉模型生成安全摘要，再把摘要注入当前模型输入。影响范围：图片上传后的聊天输入构造；不改变逆向格式、GPT Vision、文件解析、扣费、套餐或学术服务。回滚方式：恢复本次 admin 与 chat service 改动，重新构建并同步 `public/admin` 与 `dist`。
+- 首页新增 Lens 教程入口：`chat/src/views/chat/components/Workspace/Home.vue` 在首页主能力区上方增加低噪音文本导航，打开 `https://docs.yutoai.net/lens/`；五套语言包新增教程文案。影响范围：仅首页导航展示；不改变能力入口、上传、编排或业务接口。回滚方式：移除该按钮和语言包 key 后重新构建同步 `public/chat`。
+- 浏览器标题延续修正：`chat/src/App.vue` 的运行时 SEO 标题保持 `Lens - YutoAI 科研工作台`，让标签页、Open Graph title 和 Twitter title 都以 Lens 为主语。
+- 本地验证通过：已执行五套 locale JSON 解析、`chat ./node_modules/.bin/vue-tsc --noEmit`、`admin ./node_modules/.bin/vue-tsc --noEmit`、`service ./node_modules/.bin/tsc -p tsconfig.json --noEmit`、`service ./node_modules/.bin/nest build`、`chat ./node_modules/.bin/vite build --mode=production`、`admin ./node_modules/.bin/vite build --mode=production`；构建仅保留既有 Vite/Browserslist/chunk warning。
+- 已完成服务器同步：同步前备份 `public/chat`、`public/admin` 与 `dist` 到 `/www/wwwroot/Lens/AIWebQuickDeploy/backups/public-chat-before-global-image-20260514135843.tar.gz`、`public-admin-before-global-image-20260514135843.tar.gz`、`service-dist-before-global-image-20260514135843.tar.gz`；随后同步最新 `chat/dist`、`admin/dist`、`service/dist` 并 reload `www` 用户下 `Lens` PM2 到 PID `2560554`，`lens-academic` 仍为 PID `1307221` 未重启。服务器本机 `127.0.0.1:9520` 与公网 `https://lens.yutoai.net/` 均返回 `HTTP 200`，公网当前脚本 `js/index-d5cf264c.js` 返回 `application/javascript` 并包含 `Lens - YutoAI 科研工作台` 与 `Lens 使用教程` 标记。
+
+# 0.0.88 (2026-05-14)
+- 浏览器标签品牌顺序修正：`chat/src/App.vue` 的运行时 SEO 标题从 `YutoAI - AI 科研工作台` 改为 `Lens - YutoAI 科研工作台`，让标签页、Open Graph title 和 Twitter title 都以 Lens 为主语。影响范围：仅前端标题与分享标题展示；不改变后台 `siteName` 配置、业务逻辑、支付、套餐、学术接口或服务器进程。回滚方式：恢复该常量后重新构建并同步 `chat/dist`。
+- 本地验证通过：已执行 `chat ./node_modules/.bin/vue-tsc --noEmit` 与 `chat ./node_modules/.bin/vite build --mode=production`；构建仅保留既有 Vite 动静态导入 warning。
+
 # 0.0.87 (2026-05-14)
 - 中文套餐名改造：`Plus / Pro / Max` 的中文展示与线上商品名统一为“学生版 / 教授版 / 至尊版”。影响范围包括会员中心套餐卡片、设置页用户必读、后台套餐管理提示、学术能力权限错误文案和前后端套餐识别逻辑；内部权限仍按原套餐权重和 `plus/pro/max` 层级工作，并兼容 `Plus / Pro / Max`、旧中文名和繁体写法。回滚方式：恢复本次代码并把 `crami_package.id IN (17,18,19)` 的 `name` 从备份恢复为原值。
 - 价格与权限保持不变：线上 `crami_package` 只更新 `name` 字段，`price=45/140/210` 人民币付款价、`usdPrice=7/20/30` 美元展示价、`weight=10/20/30` 权限权重均未改变；学术权限边界仍是学生版轻量能力、教授版最多 2 步编排、至尊版最多 3 步编排。
