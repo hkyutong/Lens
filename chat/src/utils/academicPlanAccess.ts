@@ -24,9 +24,11 @@ export const resolveAcademicPlanTier = (balance: any): AcademicPlanTier => {
   if (weight >= 10) return 'plus'
 
   const packageName = normalizeAcademicAccessName(balance?.packageName)
-  if (packageName.includes('max')) return 'max'
-  if (packageName.includes('pro')) return 'pro'
-  if (packageName.includes('plus')) return 'plus'
+  if (packageName.includes('max') || packageName.includes('至尊版')) return 'max'
+  if (packageName.includes('pro') || packageName.includes('教授版')) return 'pro'
+  if (packageName.includes('plus') || packageName.includes('学生版') || packageName.includes('學生版')) {
+    return 'plus'
+  }
 
   return 'plus'
 }

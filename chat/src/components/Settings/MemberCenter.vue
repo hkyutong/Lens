@@ -90,9 +90,9 @@ interface PlanPreset {
 }
 
 const OFFICIAL_PLAN_ALIASES: Record<PlanPreset['planKey'], string[]> = {
-  plus: ['plus', '轻用版', 'go'],
-  pro: ['pro', '专业版'],
-  max: ['max', '旗舰版'],
+  plus: ['plus', '轻用版', '学生版', '學生版', 'go'],
+  pro: ['pro', '专业版', '專業版', '教授版'],
+  max: ['max', '旗舰版', '旗艦版', '至尊版'],
 }
 
 type PlanFeatureKey =

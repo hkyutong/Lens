@@ -22,12 +22,16 @@ const globalConfig = computed(() => authStore.globalConfig)
 const noticeContent = computed(() => globalConfig.value.noticeInfo || LENS_USAGE_NOTICE)
 const isLensPlanNotice = computed(() => {
   const content = noticeContent.value || ''
-  return content.includes('套餐使用规则') && content.includes('Plus') && content.includes('Pro') && content.includes('Max')
+  const hasPlanNames =
+    (content.includes('Plus') && content.includes('Pro') && content.includes('Max')) ||
+    (content.includes('学生版') && content.includes('教授版') && content.includes('至尊版'))
+  return content.includes('套餐使用规则') && hasPlanNames
 })
 
 const usagePlans = [
   {
-    name: 'Plus',
+    key: 'plus',
+    nameKey: 'lens.member.plus',
     summaryKey: 'lens.usageNotice.plusSummary',
     workflowKey: 'lens.usageNotice.plusWorkflow',
     availableKeys: [
@@ -38,7 +42,8 @@ const usagePlans = [
     noteKey: 'lens.usageNotice.plusNote',
   },
   {
-    name: 'Pro',
+    key: 'pro',
+    nameKey: 'lens.member.pro',
     summaryKey: 'lens.usageNotice.proSummary',
     workflowKey: 'lens.usageNotice.proWorkflow',
     availableKeys: [
@@ -49,7 +54,8 @@ const usagePlans = [
     noteKey: 'lens.usageNotice.proNote',
   },
   {
-    name: 'Max',
+    key: 'max',
+    nameKey: 'lens.member.max',
     summaryKey: 'lens.usageNotice.maxSummary',
     workflowKey: 'lens.usageNotice.maxWorkflow',
     availableKeys: [
@@ -123,10 +129,10 @@ onMounted(() => {
           </section>
 
           <section class="usage-notice__plans" aria-label="套餐能力对比">
-            <article v-for="plan in usagePlans" :key="plan.name" class="usage-notice__plan">
+            <article v-for="plan in usagePlans" :key="plan.key" class="usage-notice__plan">
               <div class="usage-notice__plan-head">
                 <div>
-                  <span class="usage-notice__plan-name">{{ plan.name }}</span>
+                  <span class="usage-notice__plan-name">{{ t(plan.nameKey) }}</span>
                   <p>{{ t(plan.summaryKey) }}</p>
                 </div>
                 <strong>{{ t(plan.workflowKey) }}</strong>

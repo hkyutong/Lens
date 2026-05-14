@@ -493,7 +493,7 @@ meta:
             <el-form-item label="美元展示价" prop="usdPrice">
               <el-input
                 v-model.number="formPackage.usdPrice"
-                placeholder="前台会员页展示，例如 Plus 填 6"
+                placeholder="前台会员页展示，例如学生版填 6"
                 type="number"
               />
             </el-form-item>

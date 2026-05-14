@@ -1,5 +1,11 @@
 # 更新日志
 
+# 0.0.87 (2026-05-14)
+- 中文套餐名改造：`Plus / Pro / Max` 的中文展示与线上商品名统一为“学生版 / 教授版 / 至尊版”。影响范围包括会员中心套餐卡片、设置页用户必读、后台套餐管理提示、学术能力权限错误文案和前后端套餐识别逻辑；内部权限仍按原套餐权重和 `plus/pro/max` 层级工作，并兼容 `Plus / Pro / Max`、旧中文名和繁体写法。回滚方式：恢复本次代码并把 `crami_package.id IN (17,18,19)` 的 `name` 从备份恢复为原值。
+- 价格与权限保持不变：线上 `crami_package` 只更新 `name` 字段，`price=45/140/210` 人民币付款价、`usdPrice=7/20/30` 美元展示价、`weight=10/20/30` 权限权重均未改变；学术权限边界仍是学生版轻量能力、教授版最多 2 步编排、至尊版最多 3 步编排。
+- 本地验证通过：已执行中文/繁体语言包 JSON 解析、`chat ./node_modules/.bin/vue-tsc --noEmit`、`admin ./node_modules/.bin/vue-tsc --noEmit`、`service ./node_modules/.bin/tsc -p tsconfig.json --noEmit`、`service ./node_modules/.bin/nest build`、`chat ./node_modules/.bin/vite build --mode=production`、`admin ./node_modules/.bin/vite build --mode=production`；构建仅保留既有 Vite/Browserslist/chunk warning。
+- 已完成服务器同步：同步前备份 `public/chat`、`public/admin`、`dist` 与 `crami_package` 到 `/www/wwwroot/Lens/AIWebQuickDeploy/backups/*before-plan-rename-20260514130610*`；随后同步最新 `chat/dist`、`admin/dist`、`service/dist` 并更新 `crami_package` 三条套餐名。`www` 用户下 `Lens` PM2 已 reload 为 PID `2464064`，`lens-academic` 仍为 PID `1307221` 未重启；`127.0.0.1:9520` 与 `https://lens.yutoai.net/` 均返回 `HTTP 200`，套餐接口已返回“至尊版 / 教授版 / 学生版”。
+
 # 0.0.86 (2026-05-08)
 - 只读排查 `https://lens.yutoai.net/` 无法打开问题：公网经 Cloudflare 返回 `HTTP 502`，公共 DNS 解析到 Cloudflare 正常；直连源站 `45.136.15.87` 的 HTTPS 也由源站 Nginx 返回 `502`，说明问题在源站反代上游而不是 GitHub、前端静态资源或 Cloudflare DNS。
 - 服务器只读确认：Nginx 正常监听 `80/443`，学术后端 `38000` 正常返回，`/www/server/panel/vhost/nginx/node_Lens.conf` 将 `lens.yutoai.net` 反代到 `127.0.0.1:9520`，但当前 `9520` 未监听且本机 curl 返回 connection refused。

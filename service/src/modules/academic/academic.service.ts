@@ -320,7 +320,7 @@ export class AcademicService {
     const workflowStepLimit = this.getAcademicWorkflowStepLimit(balance);
     if (workflowStepLimit <= 0) {
       throw new HttpException(
-        '多能力编排仅限 Pro 及以上套餐使用，请升级套餐后使用',
+        '多能力编排仅限教授版及以上套餐使用，请升级套餐后使用',
         HttpStatus.PAYMENT_REQUIRED,
       );
     }
@@ -341,9 +341,9 @@ export class AcademicService {
     if (weight >= 10) return 'plus';
 
     const packageName = this.normalizePluginName(String(balance?.packageName || ''));
-    if (packageName.includes('max')) return 'max';
-    if (packageName.includes('pro')) return 'pro';
-    if (packageName.includes('plus')) return 'plus';
+    if (packageName.includes('max') || packageName.includes('至尊版')) return 'max';
+    if (packageName.includes('pro') || packageName.includes('教授版')) return 'pro';
+    if (packageName.includes('plus') || packageName.includes('学生版') || packageName.includes('學生版')) return 'plus';
     return 'plus';
   }
 
@@ -430,7 +430,7 @@ export class AcademicService {
     const stepLimit = this.getAcademicWorkflowStepLimit(balance);
     if (steps.length > stepLimit) {
       throw new HttpException(
-        `当前套餐最多支持 ${stepLimit} 步能力编排，请升级 Max 后使用更多步骤`,
+        `当前套餐最多支持 ${stepLimit} 步能力编排，请升级至尊版后使用更多步骤`,
         HttpStatus.PAYMENT_REQUIRED,
       );
     }
