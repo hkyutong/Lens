@@ -289,6 +289,10 @@ assert.match(workspaceHomeSource, /:aria-pressed="isStarterActive\(item\)"/)
 assert.match(workspaceHomeSource, /t\('lens\.workspace\.importedFilesLabel'\)/)
 assert.match(
   workspaceHomeSource,
+  /\.academic-home__task-grid \{[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/
+)
+assert.match(
+  workspaceHomeSource,
   /@media \(max-width: 800px\)[\s\S]*\.academic-home__task-grid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/
 )
 assert.match(workspaceHomeSource, /\.academic-home__task-grid button span \{\s*display: none;/)

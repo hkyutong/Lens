@@ -2250,15 +2250,28 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                       id="scrollRef"
                       ref="scrollRef"
                       class="relative h-full overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar"
+                      :class="{
+                        'workspace-scroll--home': !isMobile && !renderDataSources.length,
+                      }"
                       style="background-color: transparent; position: relative; z-index: 5"
                       @scroll="handleWorkspaceScroll"
                     >
                       <div
                         id="image-wrapper"
                         class="w-full h-full pb-8"
-                        :class="[isMobile ? 'px-3 py-3' : 'px-6 py-6']"
+                        :class="[
+                          isMobile ? 'px-3 py-3' : 'px-6 py-6',
+                          { 'workspace-home-frame': !isMobile && !renderDataSources.length },
+                        ]"
                       >
-                        <div class="mx-auto w-full max-w-[920px]">
+                        <div
+                          class="mx-auto w-full"
+                          :class="
+                            !isMobile && !renderDataSources.length
+                              ? 'h-full max-w-[1048px]'
+                              : 'max-w-[920px]'
+                          "
+                        >
                           <div
                             v-if="workspaceServiceState === 'unavailable'"
                             class="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100"
@@ -2299,7 +2312,7 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                           </div>
 
                           <template v-if="!renderDataSources.length">
-                            <div class="workspace-surface">
+                            <div class="workspace-surface h-full">
                               <ResearchStart @import="handleImportFiles" />
                             </div>
                           </template>
@@ -2596,6 +2609,18 @@ provide('onOpenImagePreviewer', openImagePreviewer)
   overflow-y: auto;
   padding: 16px;
   scrollbar-gutter: auto;
+}
+
+@media (min-width: 801px) and (min-height: 680px) {
+  .workspace-scroll--home {
+    overflow-y: hidden !important;
+    scrollbar-gutter: auto;
+  }
+
+  .workspace-home-frame {
+    padding-top: 20px !important;
+    padding-bottom: 20px !important;
+  }
 }
 
 @media (max-width: 1180px) {

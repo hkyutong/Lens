@@ -235,9 +235,10 @@ async function startCustomWorkflow() {
         type="button"
         class="academic-home__workflow"
         :class="{ locked: !canUseWorkflowTemplate(template) }"
+        :title="`${template.title}: ${getWorkflowStepLabels(template).join(' · ')}`"
         @click="applyWorkflowTemplate(template)"
       >
-        {{ template.title }}: {{ getWorkflowStepLabels(template).join(' · ') }}
+        {{ template.title }}
       </button>
       <button type="button" class="academic-home__workflow" @click="startCustomWorkflow">
         {{ t('lens.workspace.customWorkflow') }}
@@ -251,35 +252,36 @@ async function startCustomWorkflow() {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 32px;
-  min-height: min(620px, calc(100vh - 230px));
-  max-width: 820px;
+  gap: 16px;
+  min-height: 0;
+  height: 100%;
+  max-width: 1048px;
   margin: 0 auto;
-  padding: clamp(48px, 8vh, 96px) 0 64px;
+  padding: 0;
   color: var(--text-main);
 }
 .academic-home__intro h1 {
   max-width: 620px;
   margin: 0;
   color: var(--text-main);
-  font-size: clamp(32px, 4vw, 46px);
+  font-size: clamp(30px, 3vw, 38px);
   font-weight: 650;
   letter-spacing: -0.035em;
   line-height: 1.08;
 }
 .academic-home__intro > p:last-child {
   max-width: 580px;
-  margin: 16px 0 0;
+  margin: 8px 0 0;
   color: var(--text-sub);
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.45;
 }
 .academic-home__tasks > header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .academic-home__tasks > header strong {
   font-size: 15px;
@@ -291,7 +293,7 @@ async function startCustomWorkflow() {
 }
 .academic-home__task-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--paper-border);
@@ -304,8 +306,8 @@ async function startCustomWorkflow() {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 4px 12px;
-  min-height: 104px;
-  padding: 18px;
+  min-height: 78px;
+  padding: 13px 14px;
   border: 0;
   border-radius: 0;
   background: var(--surface-card);
@@ -327,14 +329,18 @@ async function startCustomWorkflow() {
 .academic-home__task-grid button strong {
   grid-column: 1;
   grid-row: 1;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
 }
 .academic-home__task-grid button span {
   grid-column: 1 / -1;
   color: var(--text-sub);
-  font-size: 13px;
-  line-height: 1.5;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .academic-home__files {
   display: flex;
@@ -368,10 +374,10 @@ async function startCustomWorkflow() {
   white-space: nowrap;
 }
 .academic-home__actions {
-  display: inline-flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .academic-home__import,
 .academic-home__direct,
@@ -409,8 +415,20 @@ async function startCustomWorkflow() {
   outline: 2px solid var(--academic-blue);
   outline-offset: 2px;
 }
+
+@media (min-width: 801px) and (max-width: 1180px) {
+  .academic-home__task-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .academic-home__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 800px) {
   .academic-home {
+    height: auto;
     min-height: 0;
     padding: 20px 0 28px;
     gap: 18px;
