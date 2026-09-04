@@ -29,13 +29,6 @@ const {
   markAcademicResultAborted,
   reduceAcademicResult,
 } = loadTypeScriptModule('src/domain/research/result.ts')
-const {
-  HOME_FEATURED_RESEARCH_TASK_IDS,
-  RESEARCH_STARTER_LANES,
-  RESEARCH_STARTER_TASKS,
-} = loadTypeScriptModule(
-  'src/domain/research/starter.ts'
-)
 const { normalizeExternalSourceUrl, parseAcademicSources } = loadTypeScriptModule(
   'src/domain/research/sources.ts'
 )
@@ -47,7 +40,10 @@ const { canUseAcademicCore, canUseAcademicPlugin, resolveAcademicPlanTier } = lo
 )
 
 const researchWorkspaceSource = fs.readFileSync(
-  path.resolve(new URL('..', import.meta.url).pathname, 'src/views/workbench/ResearchWorkspace.vue'),
+  path.resolve(
+    new URL('..', import.meta.url).pathname,
+    'src/views/workbench/ResearchWorkspace.vue'
+  ),
   'utf8'
 )
 const appSource = fs.readFileSync(
@@ -285,17 +281,22 @@ assert.match(academicRegressionSource, /path === '\/share\/create'/)
 assert.match(academicRegressionSource, /state\.shareRequests/)
 assert.match(academicRegressionSource, /state\.shareCreateRequests/)
 assert.match(academicRegressionSource, /sandbox', 'allow-same-origin'/)
-assert.match(workspaceHomeSource, /:aria-pressed="isStarterActive\(item\)"/)
 assert.match(workspaceHomeSource, /t\('lens\.workspace\.importedFilesLabel'\)/)
 assert.match(
   workspaceHomeSource,
-  /\.academic-home__task-grid \{[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/
+  /@media \(max-width: 800px\)[\s\S]*\.academic-home__actions \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/
 )
-assert.match(
+assert.doesNotMatch(
   workspaceHomeSource,
-  /@media \(max-width: 800px\)[\s\S]*\.academic-home__task-grid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/
+  /RESEARCH_STARTER_TASKS|academic-home__task-grid|academic-home__workspace-grid/
 )
-assert.match(workspaceHomeSource, /\.academic-home__task-grid button span \{\s*display: none;/)
+assert.equal(
+  fs.existsSync(
+    path.resolve(new URL('..', import.meta.url).pathname, 'src/domain/research/starter.ts')
+  ),
+  false,
+  'the retired starter dashboard domain must not return'
+)
 assert.match(academicPanelSource, /:aria-pressed="workflowEnabled"/)
 assert.doesNotMatch(
   academicPanelSource,
@@ -657,37 +658,6 @@ streamingResultState = reduceAcademicResult(
   normalizeAcademicStreamEvent({ content: '部分结果' })
 )
 assert.equal(markAcademicResultAborted(streamingResultState).phase, 'aborted')
-
-const starterTaskIds = new Set(RESEARCH_STARTER_TASKS.map(task => task.id))
-assert.equal(starterTaskIds.size, RESEARCH_STARTER_TASKS.length)
-assert.ok(RESEARCH_STARTER_TASKS.some(task => task.id === 'code-explain'))
-assert.ok(
-  RESEARCH_STARTER_TASKS.some(task => task.id === 'literature-review' && task.mode === 'chat')
-)
-for (const taskId of ['multi-paper-compare', 'research-notes', 'teaching-material']) {
-  assert.ok(
-    RESEARCH_STARTER_TASKS.some(task => task.id === taskId && task.mode === 'chat'),
-    `${taskId} must remain a first-class Lens research task`
-  )
-}
-assert.deepEqual(
-  HOME_FEATURED_RESEARCH_TASK_IDS,
-  [
-    'paper-summary',
-    'pdf-deep-read',
-    'arxiv-summary',
-    'multi-paper-compare',
-    'literature-review',
-    'english-polish',
-    'latex-translation',
-    'code-explain',
-    'research-notes',
-    'teaching-material',
-  ]
-)
-for (const lane of RESEARCH_STARTER_LANES) {
-  for (const taskId of lane.taskIds) assert.ok(starterTaskIds.has(taskId))
-}
 
 assert.equal(normalizeExternalSourceUrl('http://127.0.0.1:9520/internal'), '')
 assert.equal(normalizeExternalSourceUrl('https://user:pass@example.com/paper'), '')

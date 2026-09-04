@@ -2605,7 +2605,8 @@ provide('onOpenImagePreviewer', openImagePreviewer)
 
 .lens-shell__capabilities {
   min-height: 0;
-  flex: 1;
+  flex: 0 1 auto;
+  max-height: calc(100% - 210px);
   overflow-y: auto;
   padding: 16px;
   scrollbar-gutter: auto;
