@@ -53,7 +53,7 @@ async function bootstrap() {
 
   // 在开发环境下打印控制台信息
   printYutoAIInfo()
-  printAppInfo('YutoAI', '5.0.1')
+  printAppInfo('Lens by YutoAI', '5.0.1')
 
   authStore.getGlobalConfig().catch(() => {})
 

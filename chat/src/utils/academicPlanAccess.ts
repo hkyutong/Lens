@@ -1,20 +1,44 @@
+import type { AcademicEntity } from '@/utils/academicI18n'
+
 export type AcademicPlanTier = 'free' | 'plus' | 'pro' | 'max'
 
-export const normalizeAcademicAccessName = (value: any) =>
+export interface AcademicBalance {
+  packageId?: number | string
+  packageWeight?: number | string
+  packageName?: string
+  expirationTime?: string | Date
+}
+
+export const normalizeAcademicAccessName = (value: unknown) =>
   String(value || '')
     .trim()
     .replace(/\s+/g, '')
     .toLowerCase()
 
-const extractAcademicLabel = (item: any) =>
-  String(item?.displayName || item?.name || item?.label || item || '').trim()
+const extractAcademicLabel = (item: AcademicEntity | string | null | undefined) => {
+  if (!item) return ''
+  if (typeof item === 'string') return item.trim()
+  return String(item.displayName || item.name || item.label || '').trim()
+}
 
-export const resolveAcademicPlanTier = (balance: any): AcademicPlanTier => {
-  const expirationTime = String(balance?.expirationTime || '').trim()
-  const expiration = expirationTime ? new Date(`${expirationTime}T23:59:59`) : null
+export const resolveAcademicPlanTier = (
+  balance: AcademicBalance | null | undefined
+): AcademicPlanTier => {
+  const rawExpiration = balance?.expirationTime
+  const expirationText = typeof rawExpiration === 'string' ? rawExpiration.trim() : ''
+  const expiration =
+    rawExpiration instanceof Date
+      ? rawExpiration
+      : expirationText
+        ? new Date(
+            /^\d{4}-\d{2}-\d{2}$/.test(expirationText)
+              ? `${expirationText}T23:59:59`
+              : expirationText
+          )
+        : null
   const hasActiveMember =
     Number(balance?.packageId || 0) > 0 &&
-    (!expirationTime || (expiration instanceof Date && expiration.getTime() > Date.now()))
+    (!rawExpiration || (expiration instanceof Date && expiration.getTime() > Date.now()))
 
   if (!hasActiveMember) return 'free'
 
@@ -26,21 +50,28 @@ export const resolveAcademicPlanTier = (balance: any): AcademicPlanTier => {
   const packageName = normalizeAcademicAccessName(balance?.packageName)
   if (packageName.includes('max') || packageName.includes('至尊版')) return 'max'
   if (packageName.includes('pro') || packageName.includes('教授版')) return 'pro'
-  if (packageName.includes('plus') || packageName.includes('学生版') || packageName.includes('學生版')) {
+  if (
+    packageName.includes('plus') ||
+    packageName.includes('学生版') ||
+    packageName.includes('學生版')
+  ) {
     return 'plus'
   }
 
   return 'plus'
 }
 
-export const getAcademicWorkflowStepLimit = (balance: any) => {
+export const getAcademicWorkflowStepLimit = (balance: AcademicBalance | null | undefined) => {
   const tier = resolveAcademicPlanTier(balance)
   if (tier === 'max') return 3
   if (tier === 'pro') return 2
   return 0
 }
 
-export const canUseAcademicCore = (core: any, balance: any) => {
+export const canUseAcademicCore = (
+  core: AcademicEntity | string | null | undefined,
+  balance: AcademicBalance | null | undefined
+) => {
   const tier = resolveAcademicPlanTier(balance)
   const label = normalizeAcademicAccessName(extractAcademicLabel(core))
   if (!label) return false
@@ -57,7 +88,10 @@ export const canUseAcademicCore = (core: any, balance: any) => {
   ].some(name => label.includes(normalizeAcademicAccessName(name)))
 }
 
-export const canUseAcademicPlugin = (plugin: any, balance: any) => {
+export const canUseAcademicPlugin = (
+  plugin: AcademicEntity | string | null | undefined,
+  balance: AcademicBalance | null | undefined
+) => {
   const tier = resolveAcademicPlanTier(balance)
   const label = normalizeAcademicAccessName(extractAcademicLabel(plugin))
   if (!label) return false

@@ -6,11 +6,6 @@ import { getLocalSetting, setLocalSetting } from './helper'
 export const useAppStore = defineStore('app-store', {
   state: (): AppState => getLocalSetting(),
   actions: {
-    setSiderCollapsed(collapsed: boolean) {
-      this.siderCollapsed = collapsed
-      this.recordState()
-    },
-
     setTheme(theme: Theme) {
       const normalizedTheme: Theme = theme === 'dark' || theme === 'auto' ? theme : 'light'
       const resolvedTheme =

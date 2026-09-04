@@ -4,28 +4,48 @@
 // @import 'tailwindcss/utilities';
 
 :root {
-  --bg-body: #ffffff;
-  --bg-sidebar: #f2f2f2;
+  --bg-body: #f5f5f7;
+  --bg-sidebar: rgba(246, 246, 248, 0.86);
   --surface-card: #ffffff;
-  --surface-muted: #f6f6f6;
-  --surface-panel: #fbfbfb;
-  --surface-elevated: rgba(255, 255, 255, 0.96);
+  --surface-muted: #f2f2f7;
+  --surface-panel: #fbfbfd;
+  --surface-elevated: rgba(255, 255, 255, 0.78);
+  --material-regular: rgba(248, 248, 250, 0.76);
+  --material-thick: rgba(250, 250, 252, 0.9);
   --paper-bg: #ffffff;
-  --paper-border: #ececec;
-  --text-main: #080808;
-  --text-sub: #676767;
-  --ink-soft: #424242;
-  --ink-faint: #9b9b9b;
-  --border-color: #ececec;
-  --accent: #080808;
-  --accent-strong: #080808;
-  --accent-soft: rgba(8, 8, 8, 0.06);
-  --shadow-glow: none;
-  --shadow-soft: none;
-  --shadow-panel: none;
-  --modal-overlay: rgba(8, 8, 8, 0.22);
-  --dialog-bg: rgba(255, 255, 255, 0.96);
-  --dialog-shadow: 0 16px 48px rgba(8, 8, 8, 0.08);
+  --paper-border: rgba(60, 60, 67, 0.16);
+  --text-main: #1d1d1f;
+  --text-sub: #6e6e73;
+  --ink-soft: #3a3a3c;
+  --ink-faint: #8e8e93;
+  --border-color: rgba(60, 60, 67, 0.16);
+  --accent: #007aff;
+  --accent-strong: #0066cc;
+  --accent-soft: rgba(0, 122, 255, 0.1);
+  --shadow-glow: 0 16px 48px rgba(0, 0, 0, 0.08);
+  --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-panel: 0 12px 38px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.05);
+  --modal-overlay: rgba(0, 0, 0, 0.28);
+  --dialog-bg: rgba(250, 250, 252, 0.86);
+  --dialog-shadow: 0 24px 80px rgba(0, 0, 0, 0.14);
+  --research-divider: var(--paper-border);
+  --research-label: var(--text-sub);
+  --academic-blue: #007aff;
+  --academic-blue-strong: #0066cc;
+  --academic-blue-light: #64a8ff;
+  --academic-blue-soft: rgba(0, 122, 255, 0.1);
+  --academic-blue-shadow: rgba(0, 122, 255, 0.22);
+  --academic-surface: rgba(0, 122, 255, 0.07);
+  --academic-border: rgba(0, 122, 255, 0.24);
+  --academic-grid: rgba(0, 122, 255, 0.1);
+  --academic-orb: rgba(0, 122, 255, 0.1);
+  --academic-glass: rgba(248, 248, 250, 0.76);
+  --academic-ink: #1d1d1f;
+  --academic-ink-soft: #3a3a3c;
+  --academic-green: #30a46c;
+  --academic-green-soft: rgba(48, 164, 108, 0.14);
+  --focus-ring: rgba(0, 122, 255, 0.32);
 }
 
 html {
@@ -38,7 +58,8 @@ body {
   padding: 0;
   background: var(--bg-body);
   color: var(--text-main);
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'PingFang SC', sans-serif;
   transition:
     background-color 0.22s ease,
     color 0.22s ease;
@@ -60,48 +81,25 @@ html:not(.dark) #app {
   background-color: var(--bg-body);
 }
 
-/* Light-mode shells */
-html:not(.dark) .side-panel {
-  background-color: var(--bg-sidebar);
-  border-right: 1px solid var(--border-color);
-}
-
-html:not(.dark) .side-panel .side-surface {
-  background: var(--bg-sidebar);
-  color: var(--text-main);
-}
-
-/* Dark-mode sidebar seam fix */
-html.dark .side-panel {
-  background-color: var(--bg-sidebar);
-  border-right: 1px solid rgba(148, 163, 184, 0.12) !important;
-}
-
-html.dark .side-panel .side-surface {
-  background: var(--bg-sidebar);
-  border-right: none !important;
-  box-shadow: none !important;
-}
-
-html:not(.dark) .chat-input-card {
+html:not(.dark) .research-command-panel {
   background: #ffffff;
   border-color: var(--paper-border);
-  box-shadow: 0 8px 24px rgba(8, 8, 8, 0.04);
+  box-shadow: 0 8px 24px rgba(30, 61, 98, 0.06);
 }
 
-html:not(.dark) .chat-input-card:hover,
-html:not(.dark) .chat-input-card:focus-within {
+html:not(.dark) .research-command-panel:hover,
+html:not(.dark) .research-command-panel:focus-within {
   border-color: #cdcdcd;
 }
 
-html.dark .chat-input-card {
+html.dark .research-command-panel {
   background: rgba(18, 22, 28, 0.96);
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow: var(--shadow-soft);
 }
 
-html.dark .chat-input-card:hover,
-html.dark .chat-input-card:focus-within {
+html.dark .research-command-panel:hover,
+html.dark .research-command-panel:focus-within {
   border-color: rgba(127, 180, 255, 0.34);
 }
 
@@ -149,8 +147,24 @@ html:not(.dark) .text-gray-500 {
 // }
 
 // 全局焦点样式
-* :focus {
+:focus:not(:focus-visible) {
   outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 自定义滚动条样式 */
@@ -227,89 +241,82 @@ html:not(.dark) .text-gray-500 {
   background-color: rgba(107, 114, 128, 0.9);
 }
 
-.prism-shell {
+.lens-workbench {
   background: var(--bg-body);
   color: var(--text-main);
 }
 
-.prism-shell .btn {
+.lens-workbench .btn {
   box-shadow: none !important;
 }
 
-.prism-shell .workspace-surface {
+.lens-workbench .workspace-surface {
   background: transparent;
   border: none;
   border-radius: 0;
 }
 
-.prism-shell .workspace-document {
+.lens-workbench .workspace-document {
   background: transparent;
   border: none;
   border-radius: 0;
   box-shadow: none;
 }
 
-.prism-shell .side-panel {
-  background-color: var(--bg-sidebar) !important;
-  border-right: 1px solid var(--border-color) !important;
+.lens-workbench .research-command-panel {
+  border-color: var(--paper-border) !important;
+  background: var(--material-thick) !important;
+  box-shadow: var(--shadow-card) !important;
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
 }
 
-.prism-shell .side-panel .side-surface {
-  background: var(--bg-sidebar) !important;
+.research-command-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.2rem 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--paper-border);
   color: var(--text-main);
 }
 
-.prism-shell .chat-input-card {
-  background: var(--surface-card) !important;
-  border-color: var(--paper-border) !important;
-  box-shadow: var(--shadow-soft) !important;
+.research-command-panel__header strong {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
-.prism-shell .btn {
+.research-command-panel__header span {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+}
+
+.lens-workbench .btn {
   box-shadow: none !important;
 }
 
-.prism-shell .research-chip {
+.lens-workbench .research-chip {
   background: var(--surface-muted);
   border-color: transparent;
   color: var(--ink-soft);
 }
 
-.prism-shell .research-chip-active {
+.lens-workbench .research-chip-active {
   background: rgba(8, 8, 8, 0.06);
   border-color: transparent;
   color: var(--accent);
 }
 
-.prism-shell .desktop-research-rail .research-controls {
-  min-height: 100%;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  padding: 0;
-}
-
-.prism-shell .desktop-research-rail {
-  border-left: 1px solid var(--border-color);
-  background: var(--surface-panel);
-}
-
-.prism-shell .desktop-research-rail > div {
-  border-color: transparent !important;
-  background: var(--surface-panel) !important;
-  box-shadow: none !important;
-}
-
-.prism-shell .text-gray-600,
-.prism-shell .text-gray-700,
-.prism-shell .text-gray-800,
-.prism-shell .text-gray-900 {
+.lens-workbench .text-gray-600,
+.lens-workbench .text-gray-700,
+.lens-workbench .text-gray-800,
+.lens-workbench .text-gray-900 {
   color: var(--text-main) !important;
 }
 
-.prism-shell .text-gray-400,
-.prism-shell .text-gray-500 {
+.lens-workbench .text-gray-400,
+.lens-workbench .text-gray-500 {
   color: var(--text-sub) !important;
 }
 

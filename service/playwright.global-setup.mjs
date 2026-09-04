@@ -8,10 +8,10 @@ const serviceDir = __dirname
 const guardScript = path.join(serviceDir, 'scripts/guard_playwright_policy.mjs')
 const sharedBrowsersPath =
   process.env.PLAYWRIGHT_BROWSERS_PATH ||
-  path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright')
+  path.join(os.homedir(), 'Library', 'Application Support', 'PlaywrightChromium')
 
 export default async () => {
-  const rs = spawnSync(process.execPath, [guardScript, '--require-playwright-chromium'], {
+  const rs = spawnSync(process.execPath, [guardScript, '--require-playwright-chromium', '--probe-runtime'], {
     cwd: serviceDir,
     stdio: 'inherit',
     env: {

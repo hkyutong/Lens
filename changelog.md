@@ -1,5 +1,225 @@
 # 更新日志
 
+## 2026-09-01
+
+### 收口研究文件与分享地址边界
+
+- 新增 `chat/src/domain/research/downloads.ts`，统一解析学术结果文件和用户上传文件，兼容 JSON、对象数组及旧版逗号分隔文件地址；文件名统一去除控制字符和路径分隔符，避免结果下载时出现路径注入或多文件丢失。
+- `Message/Text` 改为复用下载领域模块；学术结果外部下载地址仅允许公开 HTTP(S) 主机，拒绝凭据型 URL、本机和内网地址；Blob 下载改为 `finally` 清理 DOM 节点，并延迟释放 object URL，避免浏览器尚未消费链接时提前失效。
+- 分享码解析与分享结果 URL 归一化收口至 `chat/src/domain/research/share.ts`，仅接受 8 位分享码和单一 `shareCode` 查询参数；新增离线契约断言覆盖非法查询参数、凭据型地址和本机地址。
+- 本地验证通过：`chat` 的 `verify:research-contract`、`vue-tsc --noEmit`、`vite build --mode=production`、`service` 的 `build:test`、`git diff --check`；构建仅保留既有动态/静态导入和 Browserslist 警告。
+- `verify:legacy-removal-ready --candidate ../../chat/dist --mirror ./public/chat` 仍返回 `canDelete:false`，原因是缺少删除证据文件且部署镜像入口哈希不一致；没有删除旧 99AI 用户端源码，没有覆盖 `service/public/chat`，没有访问线上环境。
+- 回滚方式：恢复本节新增领域模块、调用方和契约断言即可；不涉及服务器、数据库、支付、账号或外部平台。
+
+### 对齐本地 AcademicGPT 部署镜像
+
+- 使用 `service/scripts/sync_static_release.mjs` 将已通过发布候选门禁的 `chat/dist` 原子同步到本地 `service/public/chat`，共 182 个文件；同步前旧镜像已保存到 `.release-backups/chat-latest`。
+- `chat` 发布候选门禁以 `--mirror ../service/public/chat` 复核通过，候选与本地镜像 `index.html` 哈希一致；静态发布契约测试通过，旧哈希资源保留且无 staging 残留。
+- 删除就绪门禁现在仅因缺少 `.legacy-removal-evidence.json` 拒绝，未执行删除；服务器、数据库、支付和线上静态目录均未触碰。
+- 回滚方式：在本地执行 `npm run rollback:chat-static`，或恢复 `.release-backups/chat-latest`；不涉及线上回滚。
+
+### 固定 Chromium 浏览器回归阻塞复核
+
+- 执行 `npm run test:playwright -- playwright/academic_regression.spec.cjs` 时，固定共享 Chromium 可执行文件存在，但 headless 运行预检以 `SIGABRT` 退出；策略按约束停止，没有回退到本机 Chrome/Edge。
+- 本轮未安装、下载、替换或删除任何浏览器运行时，也未读取 cookie、localStorage、sessionStorage、密码或 token；浏览器 E2E 不计为通过。
+- 静态候选与本地镜像哈希已一致，静态发布契约、真实认证契约、受控写入契约和删除门禁契约仍通过。
+
+### 完整本地发布候选复核
+
+- `chat` 的 `npm run release-check` 通过，包含类型检查、生产构建、研究契约和发布候选门禁；`service` 的 `npm run build:test` 及四组离线契约门禁也通过。
+- 审查 `build.sh` 后确认其默认行为包含依赖安装、部署目录清理、PM2/学术服务启动和端口健康检查；本轮没有执行，避免在未授权时产生安装、进程或外部状态副作用。
+- 复核确认 `chat/dist/index.html` 与 `service/public/chat/index.html` 哈希一致，`service/.release-backups/chat-latest` 仍存在；没有发现 staging、临时文件或 `.DS_Store` 残留。
+
+### 线上只读版本状态复核
+
+- 只读 `HEAD https://lens.yutoai.net/` 曾返回 HTTP 200，但 `Last-Modified` 为 2026-06-16；后续 GET 因当前环境 DNS 解析失败，未读取入口 HTML 或资源内容。
+- 该结果只能证明一次首页请求可达，不能证明线上已部署 AcademicGPT；本轮没有执行线上写入、发布、重启或缓存刷新。
+- 由检查产生的临时文件已确认不存在；不涉及业务文件清理。
+
+### 对齐 QuickDeploy 本地部署包
+
+- 使用 `service/scripts/sync_static_release.mjs` 将 `chat/dist` 原子同步到 `AIWebQuickDeploy/public/chat`，旧入口保存至 `AIWebQuickDeploy/.release-backups/chat-latest`。
+- 候选、`service/public/chat` 和 QuickDeploy 的 `index.html` 哈希均为 `99a1d401…46a4ef0`；两个镜像的发布候选门禁均通过，入口不再引用旧 99AI 页面。
+- 删除就绪门禁仍因缺少 `.legacy-removal-evidence.json` 拒绝；未生成、伪造或绕过观察证据，未删除旧源码，未部署线上。
+
+### 区分活动入口与回滚静态资产
+
+- 审计确认活动源码及新构建入口不含 `AppList`、`AppTips`、应用市场等旧用户端标记；两个本地镜像的活动 `index.html` 也已与候选一致。
+- 镜像目录中仍保留旧哈希 JS 资源，用于旧客户端缓存命中和回滚；这些资源未被新入口引用，当前不作为物理删除完成的证据。
+- 删除旧前端源码和旧静态资源仍须等待真实回归、灰度及至少 24 小时稳定观察，不在本轮执行。
+
+## 2026-08-31
+
+### 整理 Lens 三件套并固化回复收尾规则
+
+- 按项目三件套职责整理 `AGENTS.md`、`STATUS.md`、`CHANGELOG.md` 的记录边界：长期规则写入 `AGENTS.md`，当前交接快照写入 `STATUS.md`，已确认事实追加到 `CHANGELOG.md`。
+- 在 `AGENTS.md` 新增回复收尾规则：每次回复必须说明代码质量是否遵从第一性原理与“无屎山代码”要求、工作树是否干净、垃圾是否清理到位；未检查项必须如实标注，不得推断。
+- 更新 `STATUS.md` 日期为 2026-08-31，并记录本次仅整理文档的范围；未修改业务代码、配置、依赖、构建产物、服务器、数据库或外部平台。
+- 本轮未运行代码测试、未部署、未排障、未执行实时 Git 工作树检查，也未执行垃圾扫描或清理；这些状态保持未知，不能写成“已通过”或“已清理”。
+- 回滚方式：恢复本次对三件套文档的改动即可；不涉及业务代码或线上状态。
+
+### 启动 AcademicGPT 学术前端重构目标
+
+- 用户确认 Lens 前端以 `binary-husky/gpt_academic` 的学术任务流为参考，目标是面向老师和学生提供简单易用的 AcademicGPT 研究工作区；不复制第三方品牌、素材或未授权实现。
+- 已将该重构设为当前目标：公网用户端最终只保留 AcademicGPT 风格界面，继续复用现有 99AI/NestJS 后端、`academic-4.0` 学术服务、账号、会话、文件、计费、分享和 `chat/dist` 部署契约。
+- 已完成阶段 0 的只读架构盘点：确认 `chat` 为现有用户端，`service` 为后端网关，`academic-4.0` 为学术服务；确认当前 `main` 工作树存在未提交和未跟踪改动。
+- 已确定执行约束：先隔离可回滚基线，再建立 API/NDJSON/本地数据迁移契约，先完成登录→新建研究→上传论文→问答→结果→刷新恢复的核心闭环，最后才清理旧 99AI 用户端实现。
+- 已完成首轮只读契约清点：用户端现有调用覆盖认证、普通聊天、会话与分组、学术单能力、工作流、上传下载、余额套餐、订单支付、分享、模型配置、前台配置和微信登录；后续将按保留、迁移、隐藏、废弃建立逐项契约。
+- 已确认 `build.sh` 的部署契约仍以 `chat/dist` 为用户端静态产物，并复制到 `service/public/chat` 与 `AIWebQuickDeploy/public/chat`；新前端不能形成第二套长期部署入口。
+- 本轮尚未修改业务代码、删除文件、构建、部署或切换线上版本。
+- 回滚方式：本轮仅新增目标与状态记录；恢复本次三件套文档改动即可，不涉及业务代码或线上状态。
+
+### 落地学术流增量分帧契约
+
+- 新增 `chat/src/domain/research/ndjson.ts`，提供无业务耦合的 `NdjsonStreamDecoder`，统一处理网络分片、换行边界和尾部残片。
+- `chat/src/views/chat/chatBase.vue` 的学术聊天与科研工作流继续使用原有业务事件解析器，仅替换底层分帧实现；未改变接口地址、请求字段、消息落库字段或部署产物路径。
+- 新增 `chat/src/domain/research/contracts.ts`，集中声明学术聊天、科研工作流请求结构与端点常量；`chat/src/api/academic.ts` 已接入这些类型，减少页面层直接依赖字符串端点和 `any` 请求体。
+- 新增 `chat/src/domain/research/storage.ts`，以 `lens.research.v1` 版本化保存研究工作区偏好；`chat/src/store/modules/chat/helper.ts` 首次读取时从旧 `chatStorage` 迁移相关字段，并继续保留旧键写入以兼容现有会话。
+- `Workspace/Home.vue` 已开始采用 AcademicGPT 研究工作区骨架：增加语义化研究入口标题/说明和线性分区分隔线；light/dark 主题新增研究区视觉令牌，未引入第三方依赖。
+- 空工作区新增“提问”与“导入”两个首要动作：前者聚焦现有 composer，后者复用既有文件选择器与上传链路，未新增平行上传实现。
+- 新增 `chat/src/domain/research/files.ts`，统一解析研究会话文件字段并仅保留文件名用于展示；空工作区和 Footer 共用该解析器，删除已保存文件仍调用原 `updateGroupInfo` 接口。
+- 本轮未修改上传接口协议、文件存储位置或下载权限；未部署或修改服务器。
+- 本地浏览器只读验收确认：空工作区显示“开始研究 / 提问 / 导入”；“提问”按钮聚焦研究输入框；“导入”按钮打开多选文件选择器。未选择或上传文件。由于本地开发服务器未连接后端，用户信息与会话初始化请求返回“服务暂时不可用”，联网核心闭环不计为通过。
+- 测试结束已关闭临时浏览器标签并停止本地开发服务器；未读取浏览器 cookie、localStorage、token 或隐私数据。
+- `chatBase.vue` 新增研究服务初始化状态机：用户信息或会话初始化失败时进入可见的“研究服务暂时不可用”状态，并提供重试动作；错误文案不暴露堆栈、路径或请求标识。
+- 浏览器已验证该失败态真实渲染；重试入口可见。本轮仍未连接真实后端，因此联网登录、上传、学术问答和刷新恢复不计为通过。
+- 失败态改动后再次通过 `vue-tsc --noEmit -p chat/tsconfig.json`、`vite build --mode=production` 与 `git diff --check`；构建仍仅保留既有动态/静态导入 warning。
+- 联调只读检查确认 `chat/.env` 的 API 基址为本机 `127.0.0.1:9520`，当前无该端口监听；尝试用 `INIT_DB_ON_BOOT=false` 启动现有后端时，沙箱禁止 Redis 连接并返回 EPERM，已停止进程。未读取环境变量值、未修改数据库、未修改线上服务。
+- 新增 `chat/src/domain/research/stream.ts`，把学术流字段别名、进度、正文/最终正文、推理和错误统一成单一事件契约，并接入 `chatBase.vue`。
+- 新增 `chat/scripts/verify_research_contract.mjs` 与 `chat/package.json` 的 `verify:research-contract` 脚本；无新增依赖，离线覆盖 NDJSON 分片、尾部残片、字段别名、进度归一化和文件名清洗。
+- `node scripts/verify_research_contract.mjs`、`vue-tsc --noEmit -p tsconfig.json`、`vite build --mode=production` 和 `git diff --check` 均通过；构建仍仅保留既有动态/静态导入 warning。
+- `normalizeAcademicMessageSnapshot` 已接入 chat store 的 `normalizeChatRows`，刷新历史消息时统一恢复文件、推理、检索、向量、工作流和引用字段；离线契约脚本已增加蛇形字段恢复断言。
+- 新增 `chat/src/domain/research/result.ts`，以纯 reducer 统一学术结果生命周期（idle、streaming、completed、failed、aborted）、进度、最终正文和结构化结果标记；`chatBase.vue` 已在流消费、异常与收尾路径接入，正文拼接仍由既有展示层负责。
+- 离线契约脚本已覆盖结果 reducer 的进度、最终正文、完成和中止保护；`verify:research-contract`、`vue-tsc --noEmit -p tsconfig.json`、`vite build --mode=production` 和 `git diff --check` 最新均通过，构建仅保留既有动静态导入 warning。
+- 新增 `chat/src/domain/research/starter.ts`，把研究入口任务、分区和后端能力选择器集中为声明式配置；`Workspace/Home.vue` 仅负责翻译、权限判断和交互编排，并补齐“代码解释”入口，未改变任何后端请求语义。
+- 研究入口任务补充描述文案，帮助老师和学生在选择能力前理解用途；描述复用现有多语言资源，不新增依赖或第二套 UI 链路。
+- `verify_research_contract.mjs` 已增加研究入口配置完整性断言，覆盖任务 ID 唯一性、分区引用完整性与代码解释入口存在性。
+- `AcademicPanel.vue` 已接入研究目标概览：单能力显示当前学术能力，工作流显示步骤标签，未选择时显示下一步提示；该层只读现有 store 状态，不新增请求或权限逻辑。
+- 浏览器真实渲染复核通过：本地未登录页面显示研究服务失败恢复条、研究入口描述、“代码解释”任务和能力面板空状态；未读取 cookie、localStorage、token 或其他隐私数据，测试标签与开发服务器已关闭。
+- 新增 `chat/src/domain/research/sources.ts`，统一检索来源解析与 URL 安全归一化：只保留有标题的 http/https 外部来源，过滤 localhost、内网地址、URL 凭据和无效链接；消息来源列表已复用该解析器并补充 `noopener noreferrer`。
+- 研究契约校验脚本已增加来源安全断言；`verify:research-contract`、`vue-tsc --noEmit -p tsconfig.json`、`vite build --mode=production` 和 `git diff --check` 最新均通过。
+- 已完成公网用户端的旧应用广场入口隔离：`chatBase.vue` 不再渲染或加载 `AppList`，`Header` 不再显示应用广场切换/关闭控件；全局状态、兼容处理和后端能力暂不删除，保留回滚边界。
+- 生产构建已确认用户端不再引入 AppList 动态模块；这只是入口隐藏，不等同于旧实现删除，删除仍受登录、上传、学术任务、支付、分享和灰度观察门槛约束。
+- 浏览器真实渲染复核确认主界面直接进入学术工作区，存在“开始研究”和“当前任务”，不存在“应用广场/应用市场”入口；测试标签和开发服务器已关闭。
+- 研究入口新增“开始文献综述”通用学术对话任务，采用独立 `chat` 模式直接预填综述框架提示；它不依赖插件列表，仍沿用现有 academic chat 请求、会话、计费和历史落库契约。
+- 入口配置和多语言资源已同步更新，契约脚本覆盖任务模式与入口存在性；`verify:research-contract`、`vue-tsc --noEmit -p tsconfig.json`、`vite build --mode=production` 和 `git diff --check` 最新均通过。
+- 浏览器真实渲染复核确认未登录首页显示“开始文献综述”、用途描述和研究输入框；未读取浏览器隐私数据，测试标签和开发服务器已关闭。
+- `Message/Text.vue` 已补充学术结果状态徽标：根据既有 loading/status 字段显示进行中、已完成或失败，失败结果仍保留原重新生成入口；未新增状态真相源、接口字段或扣费逻辑。
+- 状态反馈改动后 `verify:research-contract`、`vue-tsc --noEmit -p tsconfig.json`、`vite build --mode=production` 和 `git diff --check` 最新均通过。
+- 研究入口、能力面板、来源、下载和后续操作已补充统一 `focus-visible` 焦点环；任务选择与单能力/工作流模式增加 `aria-pressed`，消息状态增加 live status，滚动到底部支持 Enter/Space 键。
+- 契约脚本新增 Academic-only 主布局和关键无障碍属性静态断言；最新契约验证、类型检查、生产构建与 diff 校验均通过。
+- 本地 `vue-tsc --noEmit` 与生产 `vite build --mode=production` 均通过；构建仅保留既有 `chat/src/store/modules/chat/index.ts` 动静态导入 warning。
+- 本地直接执行 `chat/node_modules/.bin/vue-tsc --noEmit -p chat/tsconfig.json` 通过；`pnpm -C chat run type-check` 因 pnpm 非交互环境尝试清理 modules 目录而中止，未安装、升级或新增依赖。
+- 本轮未删除旧 99AI 用户端、未修改后端、未构建、未部署、未重启服务或触碰服务器/数据库；工作树仍保留任务开始前已有的未提交与未跟踪改动。
+- 回滚方式：删除新增分帧器并恢复 `chatBase.vue` 原有局部分帧代码；不涉及后端或线上状态。
+
+## 2026-06-22
+
+### Lens SEO/AIO 同日增量周检
+
+- 目标：按自动化要求对 `https://lens.yutoai.net` 做同日增量 SEO/AIO 周检，避免重复生成 2026-06 已上线补丁，只复查公开线上状态、本地静态对应文件和浏览器真实标题。
+- 读取上下文：已读取 `/Users/hkyutong/Work/Projects/YutoAI/AGENTS.md`、Lens `AGENTS.md`、`STATUS.md`、`CHANGELOG.md` 与 `/Users/hkyutong/.codex/automations/lens-seo-aio/STATUS.md`。
+- 线上只读复查继续通过：首页、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/llms-full.txt`、7 个 `/seo/*.html` 均返回 `HTTP 200`；旧本地法律页 `/legal/terms.html` 与 `/legal/privacy.html` 均返回 `HTTP 410`。
+- 发现链路继续通过：`sitemap.xml` 返回 `application/xml`，包含 10 个唯一绝对 Lens URL，不含 `/legal/`，包含 `https://lens.yutoai.net/seo/literature-review.html`；`robots.txt` 声明 sitemap、开放 llms/seo 并阻止 `/api/`；`llms.txt` 与 `llms-full.txt` 覆盖 7 个 SEO 专题页，`llms-full.txt` 未命中旧 `YutoAI combines / YutoAI can work with / YutoAI is suited for` 口径。
+- SEO 语义复查：7 个 SEO 专题页均未误命中 SPA fallback，canonical 与 OG URL 均为 `https://lens.yutoai.net/...` 绝对 URL，均具备 Twitter Card 和 Lens 品牌语义；`research-workspace.html`、`literature-review.html`、`faq.html` 有 JSON-LD，`paper-summary.html`、`arxiv-summary.html`、`latex-translation.html`、`academic-polishing.html` 暂无 JSON-LD，记录为非阻塞增强候选。
+- Chrome 真实浏览器只读验收通过：运行时 `document.title` 为 `Lens - YutoAI 科研工作台`；首页可见 `Lens 使用教程` 入口；线上 JS 资产与本地 `Home.vue` 均确认入口指向 `https://docs.yutoai.net/lens/`；隐藏 SEO 快照为 `aria-hidden="true"`、1x1、overflow hidden，与用户操作界面隔离。已按 Chrome skill 要求 finalization，未保留测试标签页。
+- 本地一致性复查：`chat/public` 与 `chat/dist` 的 robots、sitemap、llms 与 SEO 静态页无差异；`xmllint --noout chat/public/sitemap.xml` 通过；旧本地法律页源文件和构建产物均不存在；公开 SEO 页敏感词扫描未命中内部路径、服务器、密钥、数据库等词。
+- 搜索引擎与 Cloudflare：本轮没有公开索引 URL 或发现文件变化，未再次调用 Google/Bing API；沿用本日状态，Google Search Console 仍待修复本机 OAuth token 后提交 sitemap，Bing Webmaster 上次读回为 `Pending`。Cloudflare 仅通过公开响应头只读观察，线上文件由 Cloudflare 返回，未调用 Cloudflare API、未刷新缓存、未改 DNS/WAF/配置。
+- 本轮改动：仅更新本地 `STATUS.md`、`CHANGELOG.md` 与自动化记忆；未修改 SEO 源文件、未构建、未上传、未部署、未重启服务、未改服务器、未改数据库或业务链路，未修改 `AGENTS.md`。
+- 风险与下一步：Google Search Console token 需要重新授权或修复后再提交 sitemap 并读回；下次周检继续复查 Bing feed 是否从 `Pending` 进入可抓取/成功状态；如要补齐 4 个中文工作流页 JSON-LD，应作为单独最小 SEO 静态补丁处理。
+- 回滚方式：本轮没有业务或线上改动；如需回滚，仅还原本次对 `STATUS.md`、`CHANGELOG.md` 和自动化记忆的记录即可。
+
+### Lens SEO/AIO 周检
+
+- 目标：对 `https://lens.yutoai.net` 执行每周 SEO/AIO 周检，复查公开线上页面、AI 抓取器发现链路、旧法律页删除语义和搜索引擎提交状态。
+- 读取上下文：已读取 `/Users/hkyutong/Work/Projects/YutoAI/AGENTS.md`、Lens `AGENTS.md`、`STATUS.md`、`CHANGELOG.md` 与自动化记忆。
+- 线上只读复查通过：首页、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/llms-full.txt`、7 个 `/seo/*.html` 均返回 `HTTP 200`；旧本地法律页 `/legal/terms.html` 与 `/legal/privacy.html` 均返回 `HTTP 410`。
+- 发现链路通过：`sitemap.xml` 返回 `application/xml`，包含 10 个唯一绝对 Lens URL，不含 `/legal/`，并包含 `https://lens.yutoai.net/seo/literature-review.html`；`robots.txt` 声明 sitemap、开放 llms/seo 并阻止 `/api/`；`llms.txt` 与 `llms-full.txt` 均覆盖 sitemap 中的 SEO 专题页，`llms-full.txt` 已使用 `Lens combines` 主语。
+- SEO 语义通过：6 个旧 SEO 专题页已具备 Twitter Card；`/seo/literature-review.html` 返回静态英文页，标题为 `AI Literature Review Workspace | Lens by YutoAI`，canonical、OG URL、Twitter Card 与 JSON-LD 均存在；SEO 专题页未误命中 SPA fallback。
+- Chrome 真实浏览器只读验收通过：运行时浏览器标题为 `Lens - YutoAI 科研工作台`；首页存在 `Lens 使用教程` 入口，本地源码确认入口打开 `https://docs.yutoai.net/lens/`；隐藏 SEO 快照为 `aria-hidden="true"`、1x1、overflow hidden，与用户操作界面隔离。
+- Bing Webmaster：已最小范围提交 `https://lens.yutoai.net/sitemap.xml`，读回站点为 `https://yutoai.net/`，feed URL 为 `https://lens.yutoai.net/sitemap.xml`，类型 `Sitemap`，状态 `Pending`，`UrlCount=10`。
+- Google Search Console：本机 OAuth token 刷新返回 `400`，本轮未能提交 sitemap；未打印 token、Authorization header、Keychain 原始输出或凭据文件内容。
+- Cloudflare：仅通过公开响应头只读观察，线上文件由 Cloudflare 返回，公开文件多为 `cf-cache-status: DYNAMIC`，`robots.txt` 为 `MISS`；未调用 Cloudflare API、未刷新缓存、未改 DNS/WAF/配置。
+- 本轮改动：仅更新本地 `STATUS.md`、`CHANGELOG.md` 与自动化记忆；未修改 SEO 源文件、未构建、未上传、未部署、未重启服务、未改服务器、未改数据库或业务链路，未修改 `AGENTS.md`。
+- 风险与下一步：Google Search Console token 需要重新授权或修复后再提交 sitemap 并读回；下次周检继续复查 Bing feed 是否从 `Pending` 进入可抓取/成功状态。
+- 回滚方式：本轮没有业务或线上改动；如需回滚，仅还原本次对 `STATUS.md`、`CHANGELOG.md` 和自动化记忆的记录即可。
+
+## 2026-06-21
+
+### 清理旧 Playwright CLI 临时目录
+
+- 目标：清理确认无用的本地 Playwright 临时产物。
+- 判断：`output/playwright/.playwright-cli` 只包含 2026-04 的 Playwright snapshot/截图，体积约 576K，可重建且不含业务数据、源码、配置、密钥或正式产物。
+- 执行：删除 `output/playwright/.playwright-cli`。
+- 验证：根目录复查 `find ... -path '*/.playwright-cli*'` 无残留。
+- 回滚：如需同类证据，重新运行对应 Playwright 检查生成；业务代码无需回滚。
+
+### Chrome Codex 插件优先级规则统一
+
+- 目标：按用户要求把根目录和各项目三件套中的浏览器执行默认面统一为 Chrome Codex 插件，同时保留 Playwright Chrome runtime 的 headless 测试价值。
+- 结果：系统 Google Chrome + Codex Chrome Extension 已复测连通；各项目三件套已写入“优先 Chrome skill / Codex Chrome Extension、Edge 仅备用、Playwright Chrome runtime 用于公开读取/截图/流程测试/无登录态验收”的规则。
+- 影响范围：仅本地三件套 Markdown 规则与状态记录；未修改业务代码、配置、依赖、构建产物、服务器或线上数据。
+- 边界：未读取 cookie、localStorage、sessionStorage、密码、token 或浏览器隐私数据；未发帖、评论、私信、提交表单、上传或付款。
+- 回滚：还原本次对 `AGENTS.md` / `AGENTS.md` / `STATUS.md` / `CHANGELOG.md` 中“Chrome Codex 插件优先级规则统一”相关段落即可。
+
+
+# 0.0.97 (2026-06-18)
+- 完成 Lens 英文 literature-review 公开 SEO/AIO 页受限上线：本地 `chat/public/seo/literature-review.html`、`sitemap.xml`、`llms.txt`、`llms-full.txt` 已构建并最小同步到线上 `public/chat` 对应路径。
+- 本地验证通过：`chat ./node_modules/.bin/vue-tsc --noEmit` 通过；`chat ./node_modules/.bin/vite build --mode=production` 通过，仅保留既有 `chat/src/store/modules/chat/index.ts` 动静态导入 warning；`git diff --check`、`xmllint --noout chat/public/sitemap.xml`、公开文件敏感词扫描均通过。
+- 部署前只读确认：远端 `public/chat` 与 `public/chat/seo` 存在，`/seo/literature-review.html` 同步前命中 SPA fallback，非静态英文页；`9520` 主服务与 `38000` 学术服务在线。
+- 服务器同步范围：已创建备份 `/www/wwwroot/Lens/AIWebQuickDeploy/backups/public-chat-before-literature-review-20260618191618.tar.gz`，随后仅同步 `chat/dist/sitemap.xml`、`chat/dist/llms.txt`、`chat/dist/llms-full.txt`、`chat/dist/seo/literature-review.html`；未重启服务、未改 PM2、未刷新 Cloudflare、未改数据库、未碰后台/支付/密钥/环境变量/日志/用户数据。
+- 线上验证通过：`https://lens.yutoai.net/seo/literature-review.html?v=20260618191618` 返回 HTTP 200，标题为 `AI Literature Review Workspace | Lens by YutoAI`；公网 `sitemap.xml`、`llms.txt`、`llms-full.txt` 均命中 `literature-review.html`；主站 `https://lens.yutoai.net/?v=20260618191618` 仍返回 HTTP 200；远端 `9520` 和 `38000` 端口保持在线。
+- 边界：本轮未提交搜索引擎，未发帖/评论/私信，未提交海外目录，未注册外部账号。
+- 回滚方式：恢复备份 `/www/wwwroot/Lens/AIWebQuickDeploy/backups/public-chat-before-literature-review-20260618191618.tar.gz` 中的 `public/chat/sitemap.xml`、`public/chat/llms.txt`、`public/chat/llms-full.txt` 和 `public/chat/seo`；本地回滚则删除 `chat/public/seo/literature-review.html` 并从三份发现文件移除该 URL。
+
+# 0.0.96 (2026-06-18)
+- 新增 Lens 海外研究者 SEO/AIO 入口：`chat/public/seo/literature-review.html`，英文定位为 AI literature review workspace，覆盖 paper triage、PDF notes、source comparison、review drafting 和 academic writing refinement。
+- 公开发现链路同步接入：`chat/public/sitemap.xml` 新增 `https://lens.yutoai.net/seo/literature-review.html`，`chat/public/llms.txt` 与 `chat/public/llms-full.txt` 增加 literature review 页面和相关用途说明。
+- 安全边界：页面仅展示研究者可理解的价值、场景、边界和公开入口；不包含内部路径、服务器信息、后台字段、客户资料、审计细节、风控阈值或未公开业务规则。
+- 验证：`git diff --check -- chat/public/seo/literature-review.html chat/public/sitemap.xml chat/public/llms.txt chat/public/llms-full.txt` 无输出；`xmllint --noout chat/public/sitemap.xml` 通过；已确认新页包含 canonical、OG URL、Twitter Card 和 JSON-LD；公开文件敏感词扫描未命中内部路径、服务器、密钥、数据库等词。
+- 边界：本轮未运行生产构建，未部署服务器，未刷新缓存，未提交搜索引擎，未注册账号，未发帖/评论/私信，未提交海外目录。
+- 回滚方式：删除 `chat/public/seo/literature-review.html`，并从 `chat/public/sitemap.xml`、`chat/public/llms.txt`、`chat/public/llms-full.txt` 移除 literature review 相关条目。
+
+# 0.0.95 (2026-06-17)
+- 强化 Lens 长期代码质量规则：用户要求“确保所有代码像诗一样优雅，不要屎山代码”，已写入 `AGENTS.md`。新规则要求所有新写和重构代码表达准确、节奏清楚、无多余分支、无重复堆叠、无暧昧命名；宁可收窄范围，也不要把能运行但难理解、难回滚、难扩展的代码留进主路径。
+- 本次仅更新本地 `AGENTS.md`、`STATUS.md` 和 `CHANGELOG.md`；未修改业务代码、未构建、未部署、未改服务器、未刷新缓存、未触碰数据库或线上服务。
+
+# 0.0.94 (2026-06-16)
+- 记录 Lens 专属 SEO/AIO 自动部署授权：用户确认以后 Lens SEO/AIO 自动化完成本地优化并通过校验后，若改动仅涉及 `lens.yutoai.net` 的公开 SEO/AIO 范围，例如 metadata、robots、sitemap、llms、canonical、JSON-LD、Open Graph、Twitter Card 和公开可索引静态页内容，可以按最小范围自动部署到线上并在完成后汇报。
+- 同步保留自动部署安全边界：禁止自动触碰数据库、支付、后台、密钥、环境变量、Nginx、PM2、Cloudflare DNS/WAF、用户数据、日志、上传文件、非 SEO 业务源码或高风险服务器状态；如部署需要重启服务、刷新缓存、修改服务器配置、迁移数据库或覆盖非 SEO 文件，仍必须先停止并请求用户明确授权。
+- 完成 Lens 2026-06 SEO/AIO 补丁受限自动部署：本地通过 `git diff --check`、`chat ./node_modules/.bin/vue-tsc --noEmit` 与 `chat ./node_modules/.bin/vite build --mode=production`；构建仅保留既有 `chat/src/store/modules/chat/index.ts` 动静态导入 warning。部署前只读确认远端 `public/chat` 与 `public/chat/seo` 目录存在，`9520` 仍由 PM2 监听。
+- 服务器同步范围保持最小：已创建备份 `/www/wwwroot/Lens/AIWebQuickDeploy/backups/public-chat-before-seo-autodeploy-20260616232242.tar.gz`，随后仅同步 `chat/dist/index.html`、`chat/dist/llms-full.txt` 与 `chat/dist/seo/` 到线上 `public/chat` 对应路径；未重启服务、未改 PM2、未刷新 Cloudflare、未改数据库、未碰后台/支付/密钥/环境变量/日志/用户数据。
+- 部署后验证通过：远端文件校验确认 `index.html` 包含 `Lens by YutoAI 学术工作台`、`llms-full.txt` 包含 `Lens combines`、所有线上 `public/chat/seo/*.html` 包含 `twitter:card`；公网 `https://lens.yutoai.net/?v=20260616232242` 返回 `HTTP 200`，`Last-Modified` 为 `Tue, 16 Jun 2026 14:17:41 GMT`，公网 `llms-full.txt` 与 `seo/paper-summary.html` 已命中新内容。
+
+# 0.0.93 (2026-06-15)
+- 执行 Lens SEO/AIO 每周只读复查：已读取根目录 `AGENTS.md`、Lens `AGENTS.md`、`STATUS.md`、`CHANGELOG.md` 与自动化记忆；本次终端 `curl` 可直接访问线上 `https://lens.yutoai.net/`，已抓取首页、`/robots.txt`、`/sitemap.xml`、`/llms.txt`、`/llms-full.txt`、6 个 `/seo/*.html` 和旧法律页 `/legal/terms.html`、`/legal/privacy.html`。
+- 线上基础状态通过：首页、robots、sitemap、llms 与 6 个 SEO 专题页均返回 `HTTP 200`，旧本地法律页均返回 `HTTP 410`；`robots.txt` 声明 sitemap、开放 llms/seo 并阻止 `/api/`；`sitemap.xml` 返回 `application/xml`，包含 9 个唯一绝对 URL 且不含 `/legal/`；6 个 SEO 专题页均未误命中 SPA fallback，canonical 与 OG URL 均为 `https://lens.yutoai.net/...` 绝对 URL。
+- 发现线上与本地补丁未对齐：线上 6 个 `/seo/*.html` 仍缺少本地已补的 Twitter Card；线上 `/llms-full.txt` 仍使用 `YutoAI combines / YutoAI can work with / YutoAI is suited for` 三处旧主语，本地 `chat/public/llms-full.txt` 与 `chat/dist/llms-full.txt` 已收敛为 `Lens`。线上公开文件 `Last-Modified` 均为 `Thu, 14 May 2026 05:58:00 GMT`，说明 2026-06 本地 SEO/AIO 补丁尚未完整部署。
+- 本地一致性复核通过：`chat/public/seo` 与 `chat/dist/seo` 无差异，`chat/public/llms-full.txt` 与 `chat/dist/llms-full.txt` 无差异，`robots.txt` 和 `sitemap.xml` 的 public/dist 产物一致。旧本地法律页源文件和构建产物仍不存在。
+- 本轮未修改 SEO 源文件、未构建、未上传、未部署、未刷新 Cloudflare 缓存、未提交 Google/Bing、未重启服务、未修改服务器、未读取 Keychain 凭据、未改数据库或业务链路；仅更新本地 `STATUS.md`、`CHANGELOG.md` 与自动化记忆。若后续人工授权上线，最小范围为 `chat/dist/index.html`、`chat/dist/llms-full.txt` 与 `chat/dist/seo/*.html` 到线上 `public/chat` 对应路径，先备份再零停机同步，回滚时恢复同步前备份。
+
+# 0.0.92 (2026-06-08)
+- 执行 Lens SEO/AIO 每周只读复查：已读取根目录 `AGENTS.md`、Lens `AGENTS.md`、`STATUS.md`、`CHANGELOG.md` 与自动化记忆；确认 2026-06-01 本地 SEO/AIO 补丁仍在工作区，尚未部署。
+- 本地公开发现链路复核通过：`chat/public/sitemap.xml` 包含 9 个唯一绝对 URL；`robots.txt` 声明 sitemap、开放 llms/seo 并阻止 `/api/`；`llms.txt` 与 `llms-full.txt` 覆盖全部 6 个专题页；6 个 `chat/public/seo/*.html` 均包含绝对 canonical、OG URL、Twitter Card、绝对 Twitter image 和 Lens 品牌语义，且未误命中 SPA 根容器；旧本地法律页源文件与构建产物均不存在。
+- 完成低风险本地 SEO/AIO 优化：`chat/public/llms-full.txt` 将三处能力说明主语从泛品牌 `YutoAI` 收敛为 `Lens`，并通过生产构建同步到 `chat/dist/llms-full.txt`。影响范围仅 AI 抓取器扩展说明文件，不改变登录、上传、聊天、学术调用、科研流水线、套餐、支付、数据库或用户数据。
+- 本地验证通过：静态一致性检查、`git diff --check`、`chat ./node_modules/.bin/vue-tsc --noEmit` 与 `chat ./node_modules/.bin/vite build --mode=production` 均通过；构建仅保留既有 `chat/src/store/modules/chat/index.ts` 动静态导入 warning。
+- 线上复查限制：终端 `curl` 仍无法解析 `lens.yutoai.net`，使用 `--resolve` 直连 Cloudflare 边缘 IP `104.21.68.141 / 172.67.195.240` 也无法连接；`web.open` 可只读读取 `https://lens.yutoai.net/`，标题为 `Lens | YutoAI`。本轮未能独立确认 `/robots.txt`、`/sitemap.xml`、`/llms*.txt`、全部 `/seo/*.html`、旧法律页线上 `410`、Cloudflare header、Google Search Console 或 Bing Webmaster 状态。
+- 本轮未上传、未部署、未刷新缓存、未提交 Google/Bing、未重启服务、未修改服务器、未读取 Keychain 凭据、未改数据库或业务链路。若后续人工授权上线，先备份线上 `public/chat`，再零停机同步除 `index.html` 外静态文件，最后覆盖 `index.html`；回滚时恢复同步前备份。
+
+# 0.0.91 (2026-06-08)
+- 执行 Lens SEO/AIO 每周只读复查：已读取根目录 `AGENTS.md`、Lens `AGENTS.md`、`STATUS.md`、`CHANGELOG.md` 与自动化记忆；确认 2026-06-01 本地 SEO/AIO 补丁仍存在于工作区和 `chat/dist`，但尚未部署。
+- 本地 SEO/AIO 状态保持完整：`chat/index.html` 的隐藏 SEO 快照与 noscript 主语为 `Lens by YutoAI`；6 个 `chat/public/seo/*.html` 均保留 `twitter:card / twitter:title / twitter:description / twitter:image`，图片统一为绝对 URL `https://lens.yutoai.net/logo.png`；sitemap 仍包含 9 个唯一绝对 URL，robots 声明 sitemap、开放 llms/seo 并阻止 `/api/`，两份 llms 文档覆盖全部专题页；旧本地法律页源文件与构建产物均不存在。
+- 本地验证通过：已执行静态一致性检查、`git diff --check`、`chat ./node_modules/.bin/vue-tsc --noEmit` 与 `chat ./node_modules/.bin/vite build --mode=production`；构建仅保留既有 `chat/src/store/modules/chat/index.ts` 动静态导入 warning。
+- 线上复查结果：当前终端环境无 DNS 配置，`curl/fetch` 无法解析 `lens.yutoai.net`；通过 Cloudflare DoH 只读解析到 `104.21.68.141 / 172.67.195.240`，但沙箱无法连接 Cloudflare 边缘 IP。`web.open` 可读取 `https://lens.yutoai.net/`，内容仍显示旧隐藏 SEO 语义 `YutoAI 学术工作台` 与 noscript `YutoAI`，说明本地补丁未切到线上根路径或仍被旧缓存命中。本轮未能独立确认 `/robots.txt`、`/sitemap.xml`、`/llms*.txt`、全部 `/seo/*.html`、旧法律页 `410`、Cloudflare header、Google Search Console 或 Bing Webmaster 状态。
+- 本轮未上传、未部署、未刷新缓存、未提交 Google/Bing、未重启服务、未修改服务器、未读取 Keychain 凭据、未改数据库或业务链路。若后续人工授权上线，先备份线上 `public/chat`，再零停机同步除 `index.html` 外静态文件，最后覆盖 `index.html`；回滚时恢复同步前备份。
+
+# 0.0.90 (2026-06-01)
+- 执行 Lens SEO/AIO 首次自动化周检：本地静态审计确认 `chat/index.html`、`robots.txt`、`sitemap.xml`、两份 llms 文档与 6 个专题页均存在；sitemap 包含 9 个唯一绝对 URL，robots 已声明 sitemap、开放 llms/seo 发现链路并阻止 `/api/`，两份 llms 文档均覆盖全部专题页。
+- 补齐专题页 Twitter Card：`chat/public/seo/*.html` 的 6 个公开专题页新增 `twitter:card / twitter:title / twitter:description / twitter:image`，图片统一为绝对 URL `https://lens.yutoai.net/logo.png`。影响范围仅公开 SEO 元数据；不改变页面业务逻辑、登录、上传、聊天、学术调用、科研流水线、套餐、支付或数据库。
+- 收敛首页抓取器品牌语义：`chat/index.html` 的隐藏 SEO 快照标题、简介与 noscript 文案统一改为 `Lens by YutoAI` 主语，避免抓取器继续只看到泛品牌 `YutoAI`。影响范围仅静态抓取器语义与禁用 JavaScript 时的提示文本。
+- 本地验证通过：已执行静态一致性检查、`git diff --check`、`chat ./node_modules/.bin/vue-tsc --noEmit` 与 `chat ./node_modules/.bin/vite build --mode=production`；构建仅保留既有 Vite 动静态导入 warning。`chat/dist` 已本地生成并确认专题页与 public 源文件一致，旧 `legal/terms.html` 与 `legal/privacy.html` 构建产物均不存在。
+- 线上复查受阻：终端沙箱无法解析 `lens.yutoai.net`；Chrome 插件连接成功，但浏览器安全策略明确阻止访问 `https://lens.yutoai.net` 且禁止绕过。因此本轮没有独立确认线上 HTTP 状态、Content-Type、SPA fallback、旧法律页 `410`、Cloudflare 缓存、Google Search Console 或 Bing Webmaster 状态。未部署、未上传、未刷新缓存、未提交搜索引擎、未重启服务、未改服务器或数据库。后续如获人工授权上线，先备份线上 `public/chat`，再零停机同步除 `index.html` 外静态文件，最后覆盖 `index.html`；回滚时恢复同步前备份。
+
 # 0.0.89 (2026-05-14)
 - 图片全局解析正式启用：`admin/src/views/models/key.vue` 中图片解析的 `全局解析` 选项已解除禁用，提示文案改为“先用全局视觉模型解析图片，再把图片内容交给当前模型”；`service/src/modules/chat/chat.service.ts` 新增全局图片摘要前置逻辑，会提取上传图片、调用全局视觉模型生成安全摘要，再把摘要注入当前模型输入。影响范围：图片上传后的聊天输入构造；不改变逆向格式、GPT Vision、文件解析、扣费、套餐或学术服务。回滚方式：恢复本次 admin 与 chat service 改动，重新构建并同步 `public/admin` 与 `dist`。
 - 首页新增 Lens 教程入口：`chat/src/views/chat/components/Workspace/Home.vue` 在首页主能力区上方增加低噪音文本导航，打开 `https://docs.yutoai.net/lens/`；五套语言包新增教程文案。影响范围：仅首页导航展示；不改变能力入口、上传、编排或业务接口。回滚方式：移除该按钮和语言包 key 后重新构建同步 `public/chat`。
@@ -175,11 +395,11 @@
 
 ## 0.0.58 (2026-04-15)
 - 已同步新的浏览器清理约束：按根目录 `AGENTS.md`，以后每次使用 Playwright / Chromium 完成调试、截图、自动化或验收后，必须立即关闭浏览器窗口、会话和残留后台进程，不允许继续占用系统资源。
-- 本地记录已补齐：`memory.md` 已把这条要求写入当前长期约束，后续所有浏览器相关操作都按这条规则收尾。影响范围：仅本地规则与记忆文件。回滚方式：恢复本地记录到本次补充前版本即可。
+- 本地记录已补齐：`STATUS.md` 已把这条要求写入当前长期约束，后续所有浏览器相关操作都按这条规则收尾。影响范围：仅本地规则与记忆文件。回滚方式：恢复本地记录到本次补充前版本即可。
 
 ## 0.0.57 (2026-04-15)
 - 已纠正 Chromium 路径真相源：按根目录 `AGENTS.md` 重新核对后，当前固定 Playwright Chromium 本体应以 `/Users/hkyutong/Library/Application Support/PlaywrightChromium/chromium-1217/...` 为准，`~/Library/Caches/ms-playwright` 不再作为是否可用的判断依据。
-- 本地记录已同步校正：`Agents.md`、`memory.md` 已补上“先看固定本体路径、不要再把缓存目录当真相源”的说明，避免后续 Playwright/Chromium 验收时再沿用旧路径判断。影响范围：仅本地规则与记忆文件。回滚方式：恢复三份本地记录到本次修正前版本即可。
+- 本地记录已同步校正：`AGENTS.md`、`STATUS.md` 已补上“先看固定本体路径、不要再把缓存目录当真相源”的说明，避免后续 Playwright/Chromium 验收时再沿用旧路径判断。影响范围：仅本地规则与记忆文件。回滚方式：恢复三份本地记录到本次修正前版本即可。
 
 ## 0.0.56 (2026-04-15)
 - 首页继续做减法并完成发布：`chat/src/views/chat/components/Workspace/Home.vue` 已移除大标题 Hero，只保留一行动作入口；读材料区撤下 `Arxiv 摘要`，第三列标题收成“研究链路”，并把 `代码解释 / 自己编排 / 1 条精选案例` 合并进同一列，首页整体从“分段展示”进一步收敛成更短的研究目录。
@@ -191,7 +411,7 @@
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅首页前端结构。回滚方式：恢复 `Workspace/Home.vue` 到本次改动前版本即可。
 
 ## 0.0.54 (2026-04-14)
-- 已完成本轮安全同步：主界面去噪改动已提交为 `f43ab15 refactor: reduce workspace noise` 并推送到 `origin/main`；本次仍未把本地 `Agents.md / memory.md / changelog.md` 推上 GitHub，只同步了前端显示层代码与构建产物。
+- 已完成本轮安全同步：主界面去噪改动已提交为 `f43ab15 refactor: reduce workspace noise` 并推送到 `origin/main`；本次仍未把本地 `AGENTS.md / STATUS.md / CHANGELOG.md` 推上 GitHub，只同步了前端显示层代码与构建产物。
 - 已完成前端零停机发布：本地 `chat/dist` 已再次同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，继续采用“先同步除 `index.html` 外的静态资源、最后覆盖 `index.html`”的方式，不重启 `9520` 与 `38000`，也不触碰学术服务目录。
 - 线上回查通过：`https://lens.yutoai.net/?v=20260414082441` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-14 00:24:41 GMT`；服务器 `public/chat/index.html` 修改时间为 `2026-04-14 08:24:41 +0800`，`9520` 仍由进程 `4048630` 监听，`38000` 仍由进程 `4048524` 监听。影响范围：仅前端显示层与语义层。回滚方式：回退 GitHub 到前一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
 
@@ -201,7 +421,7 @@
 - 同步压缩交互文案：`chat/src/views/chat/components/Footer/index.vue` 把“提交任务”收成“发送”；`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 同步缩短首页区块标题、登录占位文案和右侧面板标题/空态提示。已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`，构建仍只有既有 warning。影响范围：仅前端显示层与语义层。回滚方式：恢复 `Workspace/Home.vue`、`AcademicPanel.vue`、`Footer/index.vue`、`chat/index.html` 与上述 locale 到本次改动前版本即可。
 
 ## 0.0.52 (2026-04-14)
-- 已完成本轮安全同步：首页重设计已提交为 `4c2e360 refactor: redesign the research workspace` 并推送到 `origin/main`；本次仍未把本地 `Agents.md / memory.md / changelog.md` 推上 GitHub，只同步了首页前端代码与构建产物。
+- 已完成本轮安全同步：首页重设计已提交为 `4c2e360 refactor: redesign the research workspace` 并推送到 `origin/main`；本次仍未把本地 `AGENTS.md / STATUS.md / CHANGELOG.md` 推上 GitHub，只同步了首页前端代码与构建产物。
 - 已完成前端零停机发布：本地 `chat/dist` 已再次同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，继续采用“先同步除 `index.html` 外的静态资源、最后覆盖 `index.html`”的方式，不重启 `9520` 与 `38000`，也不触碰学术服务目录。
 - 线上回查通过：`https://lens.yutoai.net/?v=20260414081200` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-14 00:12:35 GMT`；服务器 `public/chat/index.html` 修改时间为 `2026-04-14 08:12:35 +0800`，`9520` 仍由进程 `4048630` 监听，`38000` 仍由进程 `4048524` 监听。影响范围：仅首页前端静态资源。回滚方式：回退 GitHub 到前一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
 
@@ -211,7 +431,7 @@
 - 本地验证通过：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`；构建仍只有既有的 `chat/src/store/modules/chat/index.ts` 动静态混合导入 warning。影响范围：仅首页前端结构与五套 locale。回滚方式：恢复 `Workspace/Home.vue` 与对应 locale 到本次改动前版本即可。
 
 ## 0.0.50 (2026-04-14)
-- 已完成本轮安全同步：首页“工作方式入口”改造已提交为 `0b25356 refactor: focus the research entry` 并推送到 `origin/main`；本次没有把本地 `Agents.md / memory.md / changelog.md` 推上 GitHub，只同步了首页前端代码与构建产物。
+- 已完成本轮安全同步：首页“工作方式入口”改造已提交为 `0b25356 refactor: focus the research entry` 并推送到 `origin/main`；本次没有把本地 `AGENTS.md / STATUS.md / CHANGELOG.md` 推上 GitHub，只同步了首页前端代码与构建产物。
 - 已完成前端零停机发布：本地 `chat/dist` 已同步到服务器 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`，继续采用“先同步除 `index.html` 外的静态资源、最后覆盖 `index.html`”的方式，未重启 `9520` 与 `38000`，也未触碰学术服务目录。
 - 线上回查通过：`https://lens.yutoai.net/?v=20260414074458` 返回 `HTTP 200`，`Last-Modified` 为 `2026-04-13 23:44:58 GMT`；服务器 `public/chat/index.html` 修改时间为 `2026-04-14 07:44:58 +0800`，`9520` 仍由进程 `4048630` 监听，`38000` 仍由进程 `4048524` 监听。影响范围：仅首页前端静态资源。回滚方式：回退 GitHub 到前一提交，并把服务器 `public/chat` 恢复到上一版构建产物即可。
 
@@ -223,10 +443,10 @@
 ## 0.0.48 (2026-04-14)
 - 首页结构继续专业化：`chat/src/views/chat/components/Workspace/Home.vue` 已从“高频能力 + 能力编排”的同层清单，重构为“单步任务 / 多步流程”的双区工作台；左侧按“阅读与理解 / 写作与改写”组织入口，右侧独立承载流程编排，减少功能市场感并强化研究任务导向。
 - 首页文案改成操作语言：`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 已把首页改成更偏研究操作的措辞，如 “研究工作台 / 单步任务 / 直接提问 / 阅读与理解 / 写作与改写”，避免学术用户先读营销式或泛功能式标题。
-- 长期规则入口迁移到本地 `Agents.md`：后续以 `Agents.md / memory.md / changelog.md` 持续维护流程与记忆，`.gitignore` 已补充 `Agents.md`。本地验证：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 通过；Playwright 浏览器验收本轮受现有共享 Chromium 缺失提示阻塞，未下载或替换任何运行时。影响范围：仅首页前端结构、五套 locale、本地规则文件与忽略规则。回滚方式：恢复 `Workspace/Home.vue`、对应 locale、`.gitignore` 与本地记录文件到本次改动前版本即可。
+- 长期规则入口迁移到本地 `AGENTS.md`：后续以 `AGENTS.md / STATUS.md / CHANGELOG.md` 持续维护流程与记忆，`.gitignore` 已补充 `AGENTS.md`。本地验证：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 通过；Playwright 浏览器验收本轮受现有共享 Chromium 缺失提示阻塞，未下载或替换任何运行时。影响范围：仅首页前端结构、五套 locale、本地规则文件与忽略规则。回滚方式：恢复 `Workspace/Home.vue`、对应 locale、`.gitignore` 与本地记录文件到本次改动前版本即可。
 ## 0.0.47 (2026-04-14)
 - 继续收掉空主页文案噪音：`chat/src/views/chat/chatBase.vue` 已移除空主页内容区的大字“你的项目”，`chat/src/views/chat/components/Workspace/Home.vue` 已移除说明句“直接提问，或先导入资料。”，首页进一步只保留真正可操作的标题与入口。
-- 补充同步纪律：后续默认按“完成改动后立即同步”的方式执行，至少包含本地校验、更新 `Agents.md / memory.md / changelog.md`、推送 GitHub，以及按影响范围同步服务器；前端展示层改动默认热同步 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。
+- 补充同步纪律：后续默认按“完成改动后立即同步”的方式执行，至少包含本地校验、更新 `AGENTS.md / STATUS.md / CHANGELOG.md`、推送 GitHub，以及按影响范围同步服务器；前端展示层改动默认热同步 `/www/wwwroot/Lens/AIWebQuickDeploy/public/chat`。
 - 本地验证：已执行 `./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production`。影响范围：仅聊天空主页与首页 Hero 展示，以及后续交付流程约束。回滚方式：恢复 `chatBase.vue`、`Workspace/Home.vue` 与记录文件到本次改动前版本即可。
 
 ## 0.0.46 (2026-04-14)
@@ -290,7 +510,7 @@
 - 本地验证通过：`./chat/node_modules/.bin/vue-tsc --noEmit` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过；并使用 `/Users/hkyutong/.codex/skills/playwright/scripts/playwright_cli.sh` 配合共享 Chromium 完成深色模式真实截图验收，确认右侧控制面板空态不再留白。影响范围：仅聊天前端右侧学术控制面板及多语言文案，不涉及服务端和部署。回滚方式：恢复 `AcademicPanel.vue` 与上述 locale 文件到本次改动前版本即可。
 
 ## 0.0.34 (2026-04-13)
-- 补强浏览器运行时禁令：`sop.md`、`memory.md`、`changelog.md` 已再次明确 `/Users/hkyutong/Library/Caches/ms-playwright/chromium-1217/...` 属于全局共享 Playwright Chromium 运行时，严禁清理、删除、移动或替换，也不能当作普通缓存处理。
+- 补强浏览器运行时禁令：`sop.md`、`STATUS.md`、`CHANGELOG.md` 已再次明确 `/Users/hkyutong/Library/Caches/ms-playwright/chromium-1217/...` 属于全局共享 Playwright Chromium 运行时，严禁清理、删除、移动或替换，也不能当作普通缓存处理。
 - 继续收敛科研流水线反馈：`chat/src/views/chat/components/Message/Text/index.vue` 现在在折叠态增加进度条、已完成步数和当前/失败状态 chip，并补上步骤卡片的完成态/运行态/失败态样式，深色模式下也保持更稳定的对比度与状态辨识度；`chat/src/locales/zh-CN.json`、`chat/src/locales/en-US.json`、`chat/src/locales/ja-JP.json`、`chat/src/locales/zh-TW.json`、`chat/src/locales/ko-KR.json` 同步新增对应文案。
 - 本地验证通过：直接使用项目现有二进制执行 `./chat/node_modules/.bin/vue-tsc --noEmit && echo TYPECHECK_OK` 与 `./chat/node_modules/.bin/vite build --mode=production` 均通过；期间未下载、安装或升级任何新依赖。影响范围：仅聊天消息区的科研流水线展示与多语言文案，不涉及服务端和部署链路。回滚方式：恢复 `Message/Text/index.vue` 与上述 locale 文件到本次改动前版本即可。
 
@@ -301,10 +521,10 @@
 - 浏览器验收未完成但已受控停止：尝试用现有 Playwright 包装脚本做本地可视化验收时，包装层报“shared Playwright Chromium is missing”，但共享 Chromium 目录仍在本机缓存中；本轮仅做只读确认，没有下载新浏览器，也没有继续展开排障。影响范围：仅前端空状态首页和对应文案，不涉及接口、服务端或部署链路。风险：主要是尚未完成浏览器级目测验收。回滚方式：恢复 `Workspace/Home.vue` 与上述多语言文件到本次改动前版本即可。
 
 ## 0.0.32 (2026-04-13)
-- 仅更新项目记录文件，不改业务代码：`sop.md`、`memory.md`、`changelog.md` 已同步补充长期工程约束，明确后续代码必须保持结构清楚、分层明确、命名准确、抽象克制、职责单一、可读可测可维护可扩展，禁止为了图快堆砌屎山代码或主动留下隐性技术债。
+- 仅更新项目记录文件，不改业务代码：`sop.md`、`STATUS.md`、`CHANGELOG.md` 已同步补充长期工程约束，明确后续代码必须保持结构清楚、分层明确、命名准确、抽象克制、职责单一、可读可测可维护可扩展，禁止为了图快堆砌屎山代码或主动留下隐性技术债。
 - 安全规则进一步收紧：补充“敏感信息、隐私文件和内部资产默认只在本地安全环境处理，遵循最小暴露、最小权限、最小留痕；未经用户明确批准，禁止上传到服务器、GitHub、公开站点或第三方平台”的长期约束，并继续保留 `服务器.txt` 仅限本地使用的禁令。
-- 文档维护规则改为强制执行：以后每次任务完成后都要同步更新 `memory.md`、`sop.md`、`changelog.md`，其中 `memory.md` 负责当前状态快照，`changelog.md` 负责已发生事实，`sop.md` 负责稳定流程与长期规范。
-- 工具与清理规则补齐：确认可直接使用已安装的插件、skill、Playwright 与现有共享 Chromium；测试结束后主动关闭 Chromium；同时把“清理本地垃圾前必须先评估是否影响业务、调试、审计、回滚和维护”写入长期规则。影响范围仅限记录与流程约束，无运行时行为变化；风险较低。回滚方式：若未来确认这些规则描述需要调整，仅回退本次对 `sop.md`、`memory.md`、`changelog.md` 的文档修改即可。
+- 文档维护规则改为强制执行：以后每次任务完成后都要同步更新 `STATUS.md`、`sop.md`、`CHANGELOG.md`，其中 `STATUS.md` 负责当前状态快照，`CHANGELOG.md` 负责已发生事实，`sop.md` 负责稳定流程与长期规范。
+- 工具与清理规则补齐：确认可直接使用已安装的插件、skill、Playwright 与现有共享 Chromium；测试结束后主动关闭 Chromium；同时把“清理本地垃圾前必须先评估是否影响业务、调试、审计、回滚和维护”写入长期规则。影响范围仅限记录与流程约束，无运行时行为变化；风险较低。回滚方式：若未来确认这些规则描述需要调整，仅回退本次对 `sop.md`、`STATUS.md`、`CHANGELOG.md` 的文档修改即可。
 
 ## 0.0.31 (2026-04-12)
 - 完成长会话抗卡死与上线验证收尾：`service/src/modules/chatLog/chatLog.service.ts` 正式固定 `/chatlog/chatList` 为分页接口，`chat/src/store/modules/chat/index.ts`、`chat/src/views/chat/chatBase.vue`、`chat/src/views/chat/components/Message/index.vue`、`chat/src/views/chat/components/Message/Text/index.vue` 同步完成历史记录分页加载、顶部加载旧消息、可视区窗口化渲染与正文缓存，配合 `service/scripts/prod_gate_suite.mjs`、`service/scripts/full_smoke_test.mjs` 与 `service/playwright/long_chat_pressure.spec.cjs` 完成 500/1000 条长会话压测与发布闸门验证。
@@ -565,3 +785,178 @@
 - 初始化版本
 
 - 2026-03-11: 修复刷新后普通聊天消息被误隐藏；收紧学术润色表格快照提取，避免刷新后第三列内容挤在一起。
+
+## 2026-07-15 三件套命名与职责统一
+
+- 已将本目录三件套统一为 `AGENTS.md`、`STATUS.md`、`CHANGELOG.md`。
+- 职责固定为：`AGENTS.md` 保存少改的长期规则；`STATUS.md` 保存当前状态并在每次交接时覆盖更新；`CHANGELOG.md` 只追加已确认事实。
+- 本次仅调整本地项目文档名称、职责说明和相互引用；未修改业务代码、线上服务、生产配置或业务数据。
+
+## 2026-08-31 AcademicGPT 前端重构续进
+
+- 研究入口、能力面板、消息状态和滚动到底部完成首轮键盘可达性收口：补充 `focus-visible`、`aria-pressed`、`role=status`/`aria-live` 与 Enter/Space 操作；契约脚本同步增加静态断言。
+- 导入资料区域、研究输入框和能力面板说明改为从 `zh-CN / zh-TW / en-US / ja-JP / ko-KR` locale 读取，避免新增界面继续混用硬编码中文。
+- 390×844 移动视口只读复核确认研究入口、任务列表、研究输入框和能力设置入口真实渲染；临时浏览器标签、视口和 Vite 服务已恢复/关闭。
+- 尝试运行本地 Academic 回归套件未形成通过结论：共享 Chromium 可执行文件存在，但当前 Playwright 版本缺少对应 `chromium_headless_shell`；同时本地 Vite API 代理目标未解析为有效 URL，后端请求不可用。未下载浏览器、未安装依赖、未修改服务器或线上数据。
+- 本轮通过 `npm run verify:research-contract`、`vue-tsc --noEmit -p tsconfig.json`、`vite build --mode=production` 和 `git diff --check`；构建仍仅有既有 chat store 动静态导入 warning。
+- 修复本地 Vite API 代理读取错误：`chat/vite.config.ts` 现在优先使用实际存在的 `VITE_GLOB_API_URL`，并提供旧变量及 `127.0.0.1:9520` 兜底；生产请求契约、后端端点和部署路径未改变。
+- 进一步收敛 Vite 配置职责：`VITE_GLOB_API_URL` 只作为客户端 API 前缀，proxy target 会去除末尾 `/api`，显式 `VITE_APP_API_BASE_URL` 优先；避免开发代理把带路径的客户端 URL 当作 origin。
+- AppList 入口已隔离后，移除 Footer 挂载时对 `/app/list` 的无必要请求；保留旧选择状态与兼容分支，避免扩大删除范围。
+- 使用仅本机 mock API 的浏览器闭环确认研究首页、中文润色学术流、结果落地、刷新恢复、文献综述通用 chat 入口均可运行，且主界面不出现 AppList；该结果不替代真实后端回归。
+- 完成后端编译回归：`service` 的 TypeScript no-emit 检查与 Nest build 均成功；`verify_research_contract.mjs` 新增对 Academic controller 四个路由的静态一致性断言，防止前端契约常量与后端路由漂移。
+- 收口未登录初始化噪声：Footer 仅在已有登录态时预加载 Academic 能力列表，未登录用户不会因能力列表请求触发无意义 401；任务入口仍保留按需加载能力数据的路径。
+- 2026-08-31：`MemberCenter.vue` 对签到接口返回值增加数组与字段归一化，异常配置不会再让非核心签到视图触发 `map/some` 类型错误；未改变签到接口、计费或用户权益语义。契约验证、类型检查、生产构建与 diff 校验均通过。
+- 2026-08-31：扩展 `service/playwright/academic_regression.spec.cjs`，增加上传论文随学术请求提交、会员能力编排添加步骤并提交工作流两条浏览器回归场景；脚本通过 `node --check`，实际执行仍等待可用的匹配 Playwright headless shell。
+- 2026-08-31：实际尝试运行 4 条 Academic 浏览器回归时，Playwright 仍寻找不存在的 `chromium_headless_shell-1169`，因此 4 条均未启动浏览器；已删除生成的 `service/test-results` 临时错误记录并关闭本地 Vite 服务，未下载浏览器或安装依赖。
+- 2026-08-31：回归入口已与当前 AcademicGPT UI 对齐，不再依赖已移除的“学术模式切换”按钮，改由研究任务和能力选择进入 Academic 模式；4 条场景可被正确发现。
+- 2026-08-31：研究本地状态迁移增加类型边界，隐藏回复索引只接受合法群组/回复 ID，异常旧 `chatStorage` 不会污染刷新恢复；契约验证、类型检查与 diff 校验通过。
+- 2026-08-31：研究状态迁移进一步将活动会话、群组键和回复索引归一化为正整数，重复/非法 ID 丢弃；正常历史会话兼容不变。
+- 2026-08-31：移除公网用户端对 99AI 应用市场的全部挂载与调用：Footer 不再请求 `/app/*` 列表、不再提供 `@应用` 搜索和应用选择；chatBase 不再加载 AppList/AppTips、不再提供应用配置弹窗，空会话统一进入 AcademicGPT 研究首页。历史 `appId` 仍仅透传给兼容请求。
+- 2026-08-31：依据 Lens 删除门槛，旧 99AI 用户端源码及 API/store 未物理删除，保留为回滚资产且不进入当前构建入口；待真实后端联调、计费/分享、部署回滚和观察周期完成后再删除。
+- 2026-08-31：Playwright 配置与策略守卫固定使用共享 Chromium 可执行文件；本地 mock AcademicGPT 浏览器回归 4/4 通过，覆盖编辑覆盖、润色刷新、论文上传和会员工作流；测试服务已停止，临时测试产物已清理，未触碰固定 Chromium。
+- 2026-08-31：最终本地门禁 `verify:research-contract`、`vue-tsc --noEmit`、Vite production build 与 `git diff --check` 全部通过；生产构建仅保留既有 chat store 动静态导入 warning。真实 9520/Redis/academic-4.0 E2E 尚未完成。
+- 2026-08-31：继续收口用户端旧状态：删除活动前端中的 `showAppListComponent` 状态与切换动作；重新构建产物未命中 `/app/list`、应用广场/市场或 `AppList` 字符串。旧组件/API/store 仍保留在源码树中但无挂载入口，等待删除门槛完成。
+- 2026-08-31：当前工作树最终固定 Chromium 浏览器回归 4/4 通过（编辑覆盖、润色刷新、论文上传、会员工作流）；Vite 已停止，9002 无监听，未残留 Playwright Chromium 进程或 `service/test-results`。
+- 2026-08-31：在 `service` 目录执行 `npm run build:test`（Nest webpack）复核通过；本次未启动后端、未连接 Redis/MySQL、未修改线上状态。
+- 2026-08-31：在本机使用 `INIT_DB_ON_BOOT=false` 启动 `service/dist/main`，Redis 与 MySQL 连接成功，Academic controller 四个路由均完成注册；只读 `/api/config/queryFront` 返回 200，未携带登录态访问 `/api/auth/getInfo`、`/api/academic/core-function-list` 与 `/api/academic/plugin-list` 均按预期返回 401。启动流程因本机 Redis 缺少 JWT_SECRET 自动写入了生成的本地密钥；未调用业务写入、支付、学术生成或线上接口。测试后已停止服务并清理临时响应文件。
+- 2026-08-31：仅以 `EXISTS/TTL` 复核本机 `JWT_SECRET` 状态（存在、永久 TTL），未读取密钥内容；该本地状态未主动删除，留待用户决定是否恢复本机 Redis 基线。
+- 2026-08-31：新增 `service/scripts/academic_real_gate.mjs` 与 `test:academic-real-gate`，建立真实 Academic 认证预检门禁；脚本仅接受外部短期 Bearer token，默认限制本机目标，只读验证登录态、前台配置和 Academic 能力列表，禁止生成、上传、计费和业务写入，缺少 token 时安全返回退出码 2 且不泄露凭据。
+- 2026-08-31：使用假 token 对本机真实 service 执行 `academic_real_gate.mjs` 失败路径验证：前台配置返回 200，登录态与两个 Academic 能力列表返回 401，脚本退出码为 1 且输出仅含状态摘要；服务已停止，未调用生成、上传或业务写入接口。
+- 2026-08-31：为避免旧应用货架意外进入活动 store，移除 `chat/src/store/modules/index.ts` 对 `app-cat-store` 的导出；回滚 AppList 直接引用自身模块，`verify:research-contract`、Vue 类型检查和生产 Vite 构建均通过，构建产物旧应用字符串扫描干净。
+- 2026-08-31：活动 store 收口后用固定共享 Chromium 重跑 Academic mock 回归，权限允许的实际执行 4/4 通过（19.8 秒）；清理了测试服务、监听端口、`service/test-results`、本轮残留 Chromium 进程和已确认空的临时 profile，未触碰固定 Chromium 本体。
+- 2026-08-31：扩展 `verify_research_contract.mjs` 的活动入口扫描，覆盖 chat 主入口、Header、Footer、AcademicPanel、研究首页、侧栏和活动 store，静态禁止旧应用 API、`useAppCatStore`、AppList/AppTips 引用；回滚目录继续保留但不纳入活动白名单。
+- 2026-08-31：回归新增研究入口对论文速读、LaTeX 翻译的插件选择与请求契约覆盖；按需加载、Max 权限和中英文显示断言修正后，完整固定 Chromium mock 回归 5/5 通过（23.3 秒），测试服务与产物已清理。
+- 2026-08-31：只读复核本机 academic-4.0 运行条件：系统 `/opt/homebrew/bin/python3.12` 可用，现有 `academic-4.0/venv` 为 Python 3.11.14；FastAPI、Uvicorn、Pydantic、Requests、OpenAI 均可导入，38000 端口无监听。未启动、重建或安装依赖，真实学术生成链路仍未验收。
+- 2026-08-31：在隔离 `/tmp` 存储根、去除非法 `NO_PROXY` 条目且不触碰项目结果目录的条件下启动 academic-4.0，真实读取 `/academic/core-function-list` 返回 200/6 项，`/academic/plugin-list` 返回 200/28 项，包含论文速读、PDF 总结/深度理解、LaTeX 翻译/润色等能力；未调用生成、上传、计费或线上接口。服务已停止，38000 无监听，隔离临时文件已清理。
+- 2026-08-31：在同一隔离环境完成 academic-4.0 文件契约回归：上传仓库内 `main.py` 返回 200/1 个文件，随后 `/academic/file` 返回 200、内容长度 300 字节；未使用账号、未调用模型、未触碰项目真实存储或线上接口。服务已停止，隔离目录已清理。
+- 2026-08-31：最新前端门禁复核通过：`verify:research-contract`、`type-check`、Vite production build 与 `git diff --check` 均成功；生成的 `chat/dist` 产物未命中 `/app/list`、应用广场/市场、`AppList` 或 `AppTips`，保留用于部署契约验证。
+- 2026-08-31：新增 `service/scripts/academic_engine_contract_gate.mjs` 及 `test:academic-engine-contract`，将 academic-4.0 能力列表、隔离上传和文件读取回归固化为自动门禁；脚本会隔离存储根、清除非法代理环境、自动停止进程并清理临时目录。本轮回归通过，未调用模型或业务写入。
+- 2026-08-31：修正 `long_chat_pressure.spec.cjs` 原统计不存在的 `.workspace-entry` 导致的假通过，改为检查 AcademicGPT 实际 `.workspace-record`；新增 1000 条研究消息窗口化/连续加载/输入交互 mock 场景，固定共享 Chromium 完整 6/6 通过（28.2 秒），测试服务与 `service/test-results` 已清理。
+- 2026-08-31：`verify_research_contract.mjs` 新增长会话选择器静态护栏，要求压力测试使用 `.workspace-record` 并禁止 `.workspace-entry`，防止窗口化验收再次假通过；契约门禁通过。
+- 2026-08-31：补齐 AcademicGPT 活动 Footer 的五语言文案（展开/收起、拖拽导入、上传、发送/停止、推理、网络搜索及无障碍标签），移除对应硬编码 UI 文案；locale JSON、类型检查、契约验证和生产构建均通过。
+- 2026-08-31：活动 AcademicGPT 输入区的登录、附件上传失败、文件/图片类型与大小限制、数量上限及模型能力提示统一接入 `zh-CN / zh-TW / en-US / ja-JP / ko-KR` locale；参数化文件名、数量和大小由 i18n 插值渲染，不再新增硬编码中文边界提示。
+- 2026-08-31：`npm run type-check`、`npm run verify:research-contract`、直接 `vite build --mode=production` 与 `git diff --check` 通过；`npm run build` 的包装格式步骤因 Corepack 尝试联网检查 pnpm 且无 TTY 中止，非代码编译错误，已用离线 Vite 构建完成产物复核。
+- 2026-08-31：修复 `chat/package.json` 的构建依赖链：`build` 改用 `npm run format`，`format` 改用项目已安装的本地 `prettier`，不再调用 `pnpm dlx` 触发联网解析；保留显式格式化命令的写入语义，未对历史未格式化文件做无关全仓重排。
+- 2026-08-31：补齐 `build-only` 脚本并执行 `npm run build-check`，并行类型检查与 Vite 生产构建通过；随后 `verify:research-contract` 与 `git diff --check` 通过，仍仅有既有 chat store 动静态导入 warning。
+- 2026-08-31：ChatBase 外层“生成中请稍后再试”提示纳入五语言 `lens.footer.busyRetry`，活动用户端新增提示不再直接写死中文；locale JSON、类型检查、契约验证和生产构建均通过。
+- 2026-08-31：进一步将 `chat` 的 `build` 改为只调用 `build-only`，格式化改为显式 `npm run format`；实际执行 `npm run build`、`npm run build-check`、契约验证和 diff 校验通过，构建不再隐式改写源码。
+- 2026-08-31：修复流式请求中断与多字节尾块边界：`chatBase.vue` 固定保存本次请求的 `AbortSignal`，主动停止只保留已接收内容并显示“已停止”，不再误报失败或同步错误内容；`fetchStream` 在结束时 flush `TextDecoder`，避免跨 chunk 字符丢失。契约护栏、类型检查和生产构建通过。
+- 2026-08-31：流式尾块回调异常与普通分片统一隔离，展示层回调抛错不会把已成功读取的响应伪装成网络失败；契约验证、类型检查和生产构建复核通过。
+- 2026-08-31：研究契约验证新增“流式中间结果主动中止”生命周期断言，确认 reducer 进入 `aborted` 且已完成结果不会被中止覆盖。
+- 2026-08-31：Academic Playwright 回归选择器同步支持本地化发送按钮（`发送`/`Send`），修复旧 aria-label 导致的测试假失败；固定共享 Chromium 实际执行 6/6 通过（28.3 秒），覆盖编辑截断、润色刷新、论文上传、插件任务、会员工作流和 1000 条消息窗口化。测试服务、监听端口与 `service/test-results` 已清理。
+- 2026-08-31：研究结果区的来源/附件摘要、联网搜索、深度思考、空结果与文件结果提示统一接入五语言 locale；契约验证、类型检查、生产构建和 locale JSON 解析通过。
+- 2026-08-31：将流式文本读取抽为 `chat/src/domain/research/textStream.ts` 纯领域辅助，统一处理跨 chunk UTF-8、尾块 flush 与展示回调异常隔离；`fetch.ts` 收敛为请求错误包装，契约验证、类型检查、生产构建和 `git diff --check` 复核通过。
+- 2026-08-31：强化旧 99AI 页面隔离门禁：`verify_research_contract.mjs` 新增根路由与 `chat.vue` 可达入口断言，确保只进入 `chatBase.vue`，不允许 `Welcome`、`AiBot`、`PresetHints`、`AppList` 或 `AppTips` 重新成为用户入口；契约验证与类型检查通过。
+- 2026-08-31：AcademicGPT 主区的服务不可用、请求失败、请求 ID、重试、错误关闭、历史消息加载及回复覆盖失败提示统一接入 `zh-CN / zh-TW / en-US / ja-JP / ko-KR` locale；契约验证、类型检查、生产构建和 `git diff --check` 通过。
+- 2026-08-31：请求失败 toast 的请求 ID 后缀改为 locale 插值，异常路径不再重新引入硬编码中文；契约验证、类型检查和 `git diff --check` 复核通过。
+- 2026-08-31：契约门禁新增本地状态 Academic-only 断言，锁定 `academicMode: true` 的默认与恢复值，防止旧缓存让新用户端回退到通用 99AI 聊天请求；历史 `appId` 仍仅兼容透传。
+- 2026-08-31：新增固定共享 Chromium 浏览器回归，实际验证默认研究会话渲染 AcademicGPT 工作区、发送请求命中 `/academic/chat-process` 的 `function=chat`、不命中 `/chatgpt/chat-process` 且不显示应用广场/市场；用例 1/1 通过，测试服务与 `service/test-results` 已清理。
+- 2026-08-31：完整 Academic 浏览器回归扩展并实际执行 7/7 通过，覆盖默认 Academic 请求路由、编辑截断、润色刷新、论文上传、论文速读/LaTeX 任务绑定、会员工作流与 1000 条长会话窗口化；Vite 服务、监听端口和 `service/test-results` 已清理。
+- 2026-08-31：流式 UTF-8 回调异常隔离测试改为捕获预期日志并断言非空分片回调次数，契约门禁输出恢复为干净通过结果；运行时错误隔离行为未改变。
+- 2026-08-31：在流式测试收口后再次执行 `npm run build-only`，Vite production build 通过，仅保留既有 chat store 动静态导入 warning。
+- 2026-08-31：整体门禁复核通过：`chat` 的 `npm run build-check`、`verify:research-contract`、`service` 的 `npm run build:test` 与 `git diff --check` 均成功；本轮未启动服务、未访问线上环境。
+- 2026-08-31：Footer 移除 Academic 模式双向开关语义，改为只读 AcademicGPT 状态；store 保留带兼容参数的启用方法，明确旧调用方不会重新打开通用 99AI 模式；构建检查与契约验证通过。
+- 2026-08-31：最新 `chat/dist` 产物级扫描未命中应用广场/应用市场、`AppList`、`AppTips`、`/app/list` 或 `@应用`；`chat/dist/index.html` 与 `service/public/chat` 均存在，部署输出契约保持不变。
+- 2026-08-31：Academic 契约门禁新增兼容 API 静态检查，覆盖认证、会话组/历史、上传、余额、订单和分享模块的既有路径；确认移除 99AI 用户界面未丢失账号、文件、计费或分享 API 入口；契约验证、类型检查和 diff 校验通过。
+- 2026-08-31：消息结果区的下载失败、文件地址、复制、图片资料、图像结果、可交付结果和下一步提示统一接入 `zh-CN / zh-TW / en-US / ja-JP / ko-KR` locale；`build-check`、契约验证和 diff 校验通过。
+- 2026-08-31：会员中心移除登录/升级流程残留的调试 `console.log`，并用契约门禁锁定不再回写调试状态；不改变会员、支付或签到逻辑；`build-check`、契约验证和 diff 校验通过。
+- 2026-08-31：会员中心签到、额度、会员状态和卡密兑换文案统一接入 `lens.member` 五语言 locale；未改变签到、计费、支付或权益判断。`npm run verify:research-contract` 与 `npm run build-check` 通过，构建仍仅保留既有 chat store 动静态导入 warning。
+- 2026-08-31：会员中心签到成功、登录要求和登出提示也改为五语言 locale；复核 `chat/dist` 未包含 `AppList`、`AppTips`、应用市场或 `/app/list` 活动入口。旧 99AI 文件未物理删除，继续等待真实后端与灰度删除门槛。
+- 2026-08-31：按固定 Chromium runner 重跑 Academic 回归，7 个用例均在浏览器启动前因 `Target page, context or browser has been closed` 失败；策略门禁通过但未形成产品结论。Vite 与 9002 监听已停止；失败用例的 `error-context.md` 诊断证据保留，未执行递归清理。
+- 2026-08-31：对固定共享 Chromium 执行最小 headless dump-dom 探针，进程退出码 134 且无输出；确认浏览器运行时本身当前不可用。未下载、替换或修改共享 Chromium，空探针文件已清理。
+- 2026-08-31：Playwright runner 与 global setup 增加只读 headless 运行预检；当前固定 Chromium 在预检阶段明确返回 `signal:SIGABRT`，runner 会提前停止而不产生 7 个重复失败用例。策略扫描、脚本语法检查通过，未使用本机 Chrome 替代。
+- 2026-08-31：Header、模型选择器和研究侧栏的活动用户文案继续接入五语言 locale，覆盖外部链接、模型切换、空状态和未命名项目；`verify:research-contract`、`build-check` 与 `git diff --check` 通过。
+- 2026-08-31：消息结果区编辑、取消、复制、删除、重新生成和朗读按钮，以及复制成功提示改为复用 locale；未改变消息操作或请求契约，契约验证和生产构建通过。
+- 2026-08-31：ChatBase 登录成功与支付成功提示改为复用既有 locale；未改变认证、支付或会话请求契约，契约验证、类型检查和生产构建通过。
+- 2026-08-31：Footer 拖放上传的图片/文档能力不匹配提示改为五语言参数化文案，并移除不再使用的硬编码 reason 字段；未改变上传契约，验证与生产构建通过。
+- 2026-08-31：收紧 ChatBase Academic 路由：无历史 `appId` 的会话即使旧缓存状态异常也强制走 AcademicGPT，仅带旧 `appId` 的历史会话保留通用请求兼容分支；契约验证、类型检查与生产构建通过。
+- 2026-08-31：`useAppId` 归一化为正整数，防止旧数据中的字符串 `"0"` 误触发通用 99AI 分支；重建 `chat/dist` 后 AppList、AppTips、应用市场、`/app/list`、`@应用` 扫描均干净。
+- 2026-08-31：AcademicGPT 输入区拖放上传的图片、文档及混合能力不匹配提示继续接入五语言参数化 locale，移除未使用的硬编码 reason 字段；未改变上传或计费语义，契约验证和生产构建通过。
+- 2026-08-31：恢复并隔离分享用户链路：新增 `chat/src/components/SharedHtmlView.vue`，`App.vue` 对 `?shareCode=` 做 8 位字母数字校验并调用既有 `/share/:shareCode`；分享模式不挂载聊天路由、登录初始化、缓存清理或可配置统计脚本，不提供编辑、删除或重新生成操作，iframe 禁止脚本、表单、弹窗并使用 `no-referrer`。`chat/src/api/share.ts` 将创建/读取响应收敛为显式类型契约，五语言分享状态已补齐。`verify:research-contract`、locale JSON 解析、`npm run build-check`、生产产物旧应用入口扫描和 `git diff --check` 通过；未启动服务、未写数据库、未访问线上环境，真实账号分享闭环仍待验收。
+- 2026-08-31：为 AcademicGPT assistant 结果区补充“分享研究结果”入口：复用 `/share/create`，把已渲染结果封装成最小只读 HTML 文档，复制后端返回链接，并提供创建中/成功/复制失败/失败五语言反馈。mock 回归新增创建请求断言；类型检查、契约验证、生产构建和 diff 校验通过。未写数据库、未访问线上环境，真实账号分享仍待验收。
+- 2026-08-31：分享创建请求在前端增加最小 HTML 白名单清洗，移除脚本、嵌入/表单/样式、事件属性和不安全 URL，仅保留安全内容；后端既有清洗未改变，分享结果形成前后端双层防护。`verify:research-contract`、Vue 类型检查、生产构建、旧入口扫描和 diff 校验通过。
+- 2026-08-31：将分享 HTML 清洗、URL 白名单和只读文档生成抽离到 `chat/src/domain/research/share.ts`，消息展示组件只负责调用领域函数；研究契约门禁新增无 DOM fallback 安全断言，类型检查、生产构建和 diff 校验通过。
+- 2026-08-31：分享回归新增 assistant 结果按钮场景，断言 `/share/create` 请求包含只读 `<article>` 结果且不触发通用聊天请求；Node 语法、契约门禁、Vue 类型检查、生产构建和 diff 校验通过。实际 Playwright 仍在固定 Chromium headless 预检 `SIGABRT` 阶段提前停止。
+- 2026-08-31：为分享只读路径新增 `service/playwright/academic_regression.spec.cjs` mock 回归：覆盖有效/非法分享码，验证 `/share/:shareCode` 读取、父页面不挂载聊天壳/输入框/编辑操作、iframe 仅 `allow-same-origin`。用例已通过 Node 语法和研究契约静态验证；实际运行因固定共享 Chromium headless 预检 `signal:SIGABRT` 提前停止，未下载、替换浏览器或生成新的重复失败产物。
+- 2026-08-31：只读复核本地 Lens 9520 与 38000 端口当前均无监听；旧 99AI 用户端源码仍仅作为回滚资产保留，当前构建入口和活动 UI 未引用。未启动服务、未修改业务文件、未触碰线上环境。
+- 2026-08-31：改进 `academic_engine_contract_gate.mjs` 的环境阻塞诊断：当沙箱禁止绑定本机回环端口时，输出 `local_port_permission_denied` 并以退出码 2 表示环境阻塞，不再伪装成学术契约失败；本次复核确认原因为 `listen EPERM`，未启动服务或写入业务数据。
+- 2026-09-01：新增 AcademicGPT 发布候选门禁 `chat/scripts/verify_academic_release_candidate.mjs` 与 `npm run verify:release-candidate` / `release-check`：验证 `chat/dist` 的静态资源引用、12 项兼容契约、旧 99AI UI/API 零残留、敏感标记和 source map 禁止项；支持 `--mirror` 对同步目录逐文件校验并允许旧哈希资源保留。当前候选 182 个文件、6,785,728 字节，门禁通过。
+- 2026-09-01：发布门禁发现 `index.html` 的 Safari mask icon 指向不存在的 `icon/safari-pinned-tab.svg`，已修正为实际产物 `./safari-pinned-tab.svg`；重新生产构建和发布门禁通过。
+- 2026-09-01：`build.sh` 已在 chat 构建、同步 `service/public/chat`、打包 `AIWebQuickDeploy/public/chat` 三个阶段接入发布门禁，确保错误候选或不一致镜像在启动服务前失败。本轮只读确认现有 `service/public/chat` 尚未同步最新候选，未覆盖本地镜像、未部署或启动服务。
+- 2026-09-01：新增受限静态发布器 `service/scripts/sync_static_release.mjs`，仅允许 `public/chat` 与 `.release-backups/chat-latest`，同步前保留唯一完整备份，先复制资源、最后原子切换 `index.html`；回滚同样最后恢复入口，且不删除旧哈希资源。`build.sh` 不再删除整个 `service/public/chat`，`service` 新增 `rollback:chat-static` 命令。
+- 2026-09-01：在隔离 `/tmp` 完成静态发布与回滚演练：旧镜像 198 文件、新候选 182 文件，切换后候选镜像门禁通过，回滚后旧 index SHA-256 `6941ccaf21f74b716f2a211e99ffd776a76b96d55824efed038f0999ea76696c` 精确恢复，无 staging 残留；临时目录已清理，未触碰线上。
+- 2026-09-01：新增 `service/scripts/static_release_contract_gate.mjs` 与 `test:static-release-contract`，自动验证静态同步/回滚、旧哈希资源保留、路径作用域和临时 staging 清理；`build.sh` 在同步 chat 镜像前强制运行该门禁。本轮测试通过，临时夹具自动清理。
+- 2026-09-01：扩展 `academic_real_gate.mjs` 为授权账号 10 步只读门禁，增加会话/历史、余额/会员、模型、公开套餐和可选既有分享读取，并加入远端 HTTPS、显式授权、URL 凭据/片段拒绝、重定向拒绝和 1–30 秒超时边界；不调用生成、上传、订单、创建会话或分享创建。
+- 2026-09-01：新增 `academic_real_gate_contract.mjs` 与 `test:academic-real-gate-contract`，离线验证 10 项读取、Bearer 头、仅两个无副作用 POST、六类写入端点零调用、远端 HTTP 和非法分享码请求前拒绝；测试通过且未输出 token。`build.sh` 已在 chat 静态同步前执行该安全契约，本轮未使用真实账号或访问线上。
+- 2026-09-01：新增未自动执行的 `academic_controlled_write_gate.mjs` / `test:academic-controlled-write`，要求短期 token subject 与指定测试用户一致、指定模型、明确 charged/free 计费预期和确认口令；默认只创建临时会话、执行一次最小 Academic 请求、验证计费方向并删除会话，明确不调用订单、支付、套餐、卡密、数据库或全量删除。
+- 2026-09-01：上传与分享创建设为默认关闭的独立可选写入，因后端暂无用户侧删除接口，开启时要求额外残留确认且只输出引用指纹。新增 `academic_controlled_write_gate_contract.mjs`，离线验证默认零残留、残留确认、成功/失败/计费不符时 cleanup、可选上传/分享和高风险端点零调用；测试与 service 构建通过，`build.sh` 已接入该契约。本轮未注入真实 token、未生成、未上传、未分享、未扣费。
+- 2026-09-01：新增非破坏性的旧 99AI 删除就绪门禁 `service/scripts/verify_legacy_removal_ready.mjs` 与 `test:legacy-removal-gate`，核对回滚资产、活动源码/构建产物零引用、候选/部署入口哈希、真实验收证据和 24 小时观察期；当前执行明确因缺少 `.legacy-removal-evidence.json` 与部署镜像参数返回阻塞，`canDelete:false`，未删除任何旧文件。
+- 2026-09-01：使用仓库内 `service/public/chat` 作为同步镜像再次执行删除就绪门禁，明确阻塞于缺少删除证据文件及镜像入口哈希不一致；未覆盖本地镜像、未部署、未删除旧 99AI 文件。
+- 2026-09-01：本轮复核执行 `chat` `npm run release-check`、`service` Nest 编译、真实认证契约、受控写入契约、静态发布契约和旧前端删除门禁契约，全部通过；`chat/dist`、`service/public/chat`、`AIWebQuickDeploy/public/chat` 入口 SHA-256 均为 `99a1d4013c563f8ad93bac25019c649f3de58c4fbfaeeae060333f7ee46a4ef0`，两个镜像逐文件发布候选门禁通过。
+- 2026-09-01：本轮尝试使用 Codex in-app Browser 访问本地 `http://127.0.0.1:9003/`，被浏览器安全策略拒绝；未改用原始 CDP、本机 Chrome 或其他绕过路径，因此没有新增浏览器运行验收结论。9003 仍由 PID 95857 的本地 Python 静态服务器占用，终止信号和受控权限申请均被环境拒绝。
+- 2026-09-01：删除 Playwright 自动生成且无审计价值的 `service/test-results/.last-run.json`；保留失败预检的 `error-context.md` 诊断证据。未删除固定共享 Chromium、回滚资产、业务文件或线上数据。
+- 2026-09-01：再次运行 `service` 的 `test:academic-engine-contract`，结果为 `local_port_permission_denied`（`listen EPERM: operation not permitted 127.0.0.1`）；门禁同时确认未调用业务写入、学术生成、外部模型或项目真实存储。未采用绕过浏览器/端口权限的方式。
+- 2026-09-01：增强旧 99AI 删除就绪门禁：`verify_legacy_removal_ready.mjs` 对部署镜像逐文件比较候选包哈希，覆盖入口之外的资源漂移；契约测试先制造 `index.js` 漂移并确认被阻断，再恢复后通过。脚本继续固定 `canDelete:false`，未删除任何旧源码或回滚资产。
+- 2026-09-01：删除证据门禁新增候选文件清单 SHA-256；真实证据需同时绑定入口哈希和全量清单哈希，避免仅入口未变但资源漂移时误判。当前清单哈希为 `84404c59595152617c2287b8500795bfbdf3ed73c4ee38cc725e795ace5d6fab`，契约测试通过，未执行删除。
+- 2026-09-01：最终复核 `chat` `npm run release-check`、`service` `npm run build:test`、`test:legacy-removal-gate`、`test:static-release-contract` 和 `git diff --check` 均通过；QuickDeploy 镜像删除就绪检查确认 182 个候选文件与 120 个活动源码文件均完成检查，仅缺 `.legacy-removal-evidence.json`。9003 仍由本地 PID 95857 占用，固定共享 Chromium 未被修改。
+- 2026-09-01：本轮复核确认本地未预置短期 Academic E2E token 或目标地址；`test:academic-engine-contract` 再次因本机回环端口 `listen EPERM` 阻塞且无业务副作用。真实认证契约、受控写入契约、静态发布契约及 `service/public/chat`、`AIWebQuickDeploy/public/chat` 两个镜像逐文件发布候选校验全部通过。
+- 2026-09-01：审计 `chatBase.vue` 路由边界，确认新会话/无历史 `appId` 只调用 `/academic/chat-process`，只有历史正 `appId` 会保留 `/chatgpt/chat-process` 兼容路径；契约门禁已覆盖该条件，本轮未修改业务路由。
+- 2026-09-01：本轮复核确认公网用户端当前入口不再使用 99AI 聊天页面：新会话和无历史 `appId` 固定进入 AcademicGPT 工作区并调用 `/academic/chat-process`，旧 `/chatgpt/chat-process` 仅保留给历史正 `appId` 兼容分支。`chat` `release-check`、`service` 编译、真实读取/受控写入/静态发布/删除契约均通过；隔离 `academic-4.0` 运行门禁实际通过（核心 6、插件 28、隔离上传与读取均通过，零业务副作用）。旧 99AI 组件/API/store 尚未物理删除，删除就绪门禁仍因缺少 `.legacy-removal-evidence.json` 安全拒绝；未访问真实账号、未部署线上。
+- 2026-09-01：按三件套职责收敛 `STATUS.md` 为当前快照，移除其中已过期的历史阻塞描述；历史验证记录继续保留在 `CHANGELOG.md`，未修改业务代码、线上资源或回滚资产。
+- 2026-09-01：线上只读复核 `HEAD https://lens.yutoai.net/` 返回 HTTP 200，`Last-Modified` 为 2026-06-16；当前 AcademicGPT 候选尚未被证明部署，未执行线上写操作。
+- 2026-09-01：类型边界收口后重新构建并通过 `chat` 发布检查；候选 182 个文件、6,786,180 字节，入口 SHA-256 为 `fc39b51ede8ac343b8c372bfdee3d9448dede6af15ed34e1afe3b8e3bb1a8143`，清单 SHA-256 为 `eb4d410d6c5d33fb96bebc4928bfe6343e60fdbf1b49783b8ecc2aadaf35ae19`。使用受控发布器同步 `service/public/chat` 与 `AIWebQuickDeploy/public/chat` 后，两个镜像逐文件校验通过；旧 99AI 删除门禁仍仅缺 `.legacy-removal-evidence.json`。
+- 2026-09-01：导出统一 `AcademicEntity` 类型并将 `AcademicPanel.vue` 的学术能力对象参数改为显式类型；`vue-tsc`、研究契约、完整 release-check、Nest 编译、受控写入契约和静态发布契约均通过，未改变运行时请求或权限语义。
+- 2026-09-01：修正 Academic 会员权限层对 `Date` 到期时间的解析，并将工作流/权限函数收敛到 `AcademicEntity`、`AcademicBalance` 类型；类型检查、研究契约、完整 release-check、Nest 编译、真实读取/受控写入/静态发布契约均通过。最终候选 182 个文件、6,786,223 字节，入口 SHA-256 为 `eafc9f4501839777a7928703d79cfd0aadfbb3e5fcb3543cc798114414b3fc01`，两个本地发布镜像逐文件校验通过；删除门禁仍因缺少 `.legacy-removal-evidence.json` 拒绝删除。
+- 2026-09-01：研究契约新增 Academic 会员权限矩阵断言，覆盖未来 `Date`、日期字符串、完整时间、过期会员、无到期时间和免费用户基础能力白名单；相关 4 个文件通过 Prettier、类型检查、研究契约与完整 release-check。候选与两个本地镜像哈希保持一致，未执行线上写入或旧源码删除。
+- 2026-09-01：固定共享 Chromium 预检通过，`academic_regression.spec.cjs` 浏览器回归 10/10 通过，覆盖 Academic 路由、只读分享、编辑截断、润色刷新、论文上传、论文速读/LaTeX、会员工作流和长会话窗口化；测试用 Vite 已停止，Playwright 自动生成的 `service/test-results/.last-run.json` 已清理。该结果仍不替代真实账号联调、线上灰度和观察期证据。
+- 2026-09-01：用户明确将产品边界改为“彻底废弃 99AI 前端、只保留 99AI 后端”。Lens 桌面端移除右侧常驻能力栏，Academic 能力改为顶部“研究工具”按需抽屉；中央研究任务区恢复完整宽度，主壳样式从 `prism-shell` 更名为 `academic-workspace-shell`。
+- 2026-09-01：物理删除 9 个旧用户端文件：AppList、AppTips、Welcome、appStore API/store、通用 plugin API/侧栏、AiBot 与 PresetHints；同时移除通用插件列表请求、store 状态、选择动作、`usingPluginId` 请求字段和启动时自动清空浏览器存储的遗留行为。Academic 插件、工作流、账号、历史会话、文件、计费、订单与分享后端契约继续保留。
+- 2026-09-01：旧 UI 删除门禁改为验证目标文件必须不存在，并增加 `--source-only` 本地清理模式；9 个目标文件、116 个活动源码文件及 182 个生产候选文件扫描通过。Vue 类型检查、研究契约、Vite production build、发布候选门禁和删除门禁契约通过；移除会将普通请求异常原样显示为底部红条的 `app-boot-error` 调试脚本后，最终候选为 6,779,648 字节，入口 SHA-256 为 `a9512951ceb3f617f6f83ce5eabd6c1838c322167f03c182df97cee83f5efd06`，清单 SHA-256 为 `43096d268a1c86d378b54f6a3bc2f6b0d4b078ea69c3d0365fa09ef2b2de53c4`。
+- 2026-09-01：Academic Playwright 回归更新为显式打开/关闭研究工具抽屉，不再依赖旧三栏常驻选择器；固定共享 Chromium 完整回归 10/10 通过（54.1 秒）。本地 dev 前端保留在 `http://127.0.0.1:9002/` 供查看，未启动后端、未访问真实账号、未部署线上。
+- 2026-09-01：针对“仍像普通聊天页、不是专业学术 GPT”的反馈完成 UI 大幅重构：Lens 使用独立品牌壳和学术蓝灰设计系统，首屏改为研究资料主入口、阅读/写作/研究链路任务分类与深海军蓝 Academic Pipeline；侧栏改为研究项目语义，顶部栏不再重复项目名。桌面端和 390×844 移动端应用内浏览器均完成视觉复核，无横向溢出。
+- 2026-09-01：修复通用 `useScroll` 挂载时无条件滚到底部导致空研究首页 Hero 被截断的问题；滚动策略由 `chatBase` 根据首页/历史会话状态决定，空首页稳定保持 `scrollTop=0`，历史消息首次加载仍沿用页面层滚底逻辑。
+- 2026-09-01：专业学术工作台重构后通过 `vue-tsc --noEmit`、研究契约、Vite production build、发布候选门禁、旧前端源码/产物删除门禁及固定共享 Chromium Academic 回归 10/10。最终候选 182 个文件、6,788,068 字节，入口 SHA-256 为 `09475370f0e75291c6545880a837d7aebacb8417c0cf592dc133b322f2c03f44`，清单 SHA-256 为 `a0e7ca67c3bb1e8ac8bea7d03ba50a046366bca508b4667a68b6d0d4ee3bd964`；未部署线上、未调用真实生成/上传/分享/计费。
+- 2026-09-01：按用户要求进一步对齐 `gpt_academic` 稳定 Gradio 工作台结构：空研究页改为左侧对话输出、右侧输入/基础功能/函数插件、底部统一输入器；普通顶栏移除无效的旧侧栏开关和“当前研究项目”聊天壳，改为 `GPT Academic · Lens`，并补回独立登录/账号入口，不恢复旧 99AI 导航。
+- 2026-09-01：新工作台恢复“开始文献综述”P0 入口，基础功能覆盖论文总结、PDF 深读、Arxiv 摘要、文献综述、英文润色、LaTeX 翻译和代码解释；新增界面文案全部接入五语言 locale。固定 Chromium 浏览器回归最终 10/10 通过，登录、默认 Academic 请求零 99AI 回退、上传、润色、工作流、长会话和只读分享保持稳定。
+- 2026-09-01：最终 `vue-tsc`、研究契约、Vite production build、发布候选门禁和旧前端源码/产物移除门禁通过；`chat/dist` 为 182 个文件、6,774,955 字节，入口 SHA-256 `9cdae025c3f693737fbf7441a84921abd35dcfa9b7f2cdced9bdef3d8716f862`，清单 SHA-256 `2994d31df698dfcbc61a80012c54fba66f49d4ed843b6f735431645270fd43f6`，旧 UI 零残留。应用内浏览器已真实复核 Academic 首页、账号入口、文献综述入口及旧侧栏按钮为零；未部署线上，未触发真实生成、上传、分享或计费。
+- 2026-09-01：继续清理旧 99AI 用户端残留：删除不再挂载的 `sider/index.vue`、`sider/List.vue`、`sider/ListItem.vue`，移除 `siderCollapsed` 布局状态及 260px 常驻占位；历史研究项目、搜索、置顶、重命名、删除和新建能力迁移到顶栏“你的项目”按需抽屉。固定 Chromium Academic 回归 10/10 通过，研究契约、类型检查、生产构建、发布候选和旧 UI 零残留门禁通过。最新候选 182 个文件、6,782,491 字节，入口 SHA-256 `08c2131a70d2446cff8386f58ed7b2adbc631d10b9b97a94069cea3ccd9448a7`；未部署线上。
+- 2026-09-01：登录弹窗完成 AcademicGPT 视觉收口：移除 `prism-login`/“欢迎使用 YutoAI”旧品牌标记，改用 `academic-login` 学术蓝灰主题，并新增五语言 `lens.login.title/subtitle` 文案；研究契约同步增加登录旧标记零残留断言。`vue-tsc --noEmit`、`verify_research_contract.mjs`、Vite production build、发布候选门禁及固定共享 Chromium Academic 回归 10/10 全部通过；最新候选 182 个文件、6,783,138 字节，入口 SHA-256 `3af0039cc612b5ce5afddca4ff7c56833c8436e96be45b868733aeb4aac5463e`。未部署线上、未访问真实账号、未触发生成/上传/分享/计费。
+- 2026-09-01：补齐登录品牌无障碍文本，将 logo `alt` 从 `YutoAI` 改为 `Lens AcademicGPT`；重新执行 Vite production build 与发布候选门禁通过，候选 182 个文件、6,783,153 字节，入口 SHA-256 `578b64d9d68a405b82910aae0bcc021788761ac275726c977468bfed08a2942f`。未改变认证请求契约，未部署线上。
+- 2026-09-01：只读核验 `https://lens.yutoai.net/` 仍加载旧线上资源 `js/index-d5cf264c.js`，其中可检出 `AppList`、`应用广场` 与 `prism-shell`，确认公网尚未切换到 AcademicGPT 候选；未执行任何线上写操作。
+- 2026-09-01：使用受控静态发布器将入口 SHA-256 为 `578b64d9d68a405b82910aae0bcc021788761ac275726c977468bfed08a2942f` 的最新 AcademicGPT 候选同步到 `service/public/chat` 与 `AIWebQuickDeploy/public/chat`；两个本地镜像逐文件发布候选校验均通过，静态发布/回滚契约确认旧哈希资源保留、路径守卫有效且无 staging 残留。仅更新本地部署镜像，未修改服务器。
+- 2026-09-01：通过固定共享 Chromium 对本地 9002 做桌面与 390×844 移动端真实渲染复核：AcademicGPT 工作台、学术任务区、统一输入器及登录弹窗均正常，登录品牌与无障碍文本均为 `Lens AcademicGPT`，未发现横向溢出。浏览器进程及本轮 Playwright CLI 快照/日志/截图均已清理，固定 Chromium 本体未触碰。
+- 2026-09-01：依据老师和学生的核心使用场景，首屏基础功能新增“比较多篇论文”“整理研究笔记”“生成教学材料”三类 AcademicGPT chat 任务；全部使用现有 `/academic/chat-process` 对话契约，不引入 99AI 应用市场或通用插件货架。五语言文案、领域任务配置、首页 featured 清单、研究契约和 Playwright 回归均已补齐。
+- 2026-09-01：新增三类研究任务的固定共享 Chromium 回归通过，完整 `academic_regression.spec.cjs` 为 11/11；同时 `vue-tsc --noEmit`、locale JSON、研究契约、Vite production build、NestJS `build:test`、静态发布/回滚契约和两个本地部署镜像逐文件候选校验均通过。最新候选 182 个文件、6,788,902 字节，入口 SHA-256 `102c5494d02a11de0cda98b322421dc3e194c751e793a4ced66ae405325db361`。未部署线上。
+- 2026-09-01：修正首页 featured 任务清单遗漏，将 Arxiv 摘要和代码解释恢复，与比较论文、研究笔记、教学材料等共 10 项研究任务完整呈现；基础功能区增加独立滚动约束，避免窄屏被底部输入器遮挡。研究契约、类型检查、locale JSON 与 Academic 固定 Chromium 回归 11/11 均通过。
+- 2026-09-01：重新执行 `chat` `release-check`、受控静态同步、两个本地镜像逐文件校验、NestJS 编译、静态发布/回滚契约和旧 UI 源码门禁均通过。最新候选 182 个文件、6,788,984 字节，入口 SHA-256 `77b47aa5fb65aa4448ba790261bf98f6968fd78bbdf3adae82069aa546d3d5bc`，清单 SHA-256 `2d5a8156c5e5c2fe62728b2808299d260d5d4779cb1206fd45ef6eba90e5b9b7`；未部署线上，旧 UI 删除门禁仍按真实账号与观察期缺失保持 `canDelete:false`。
+- 2026-09-01：临时从 `service/public/chat` 启动本地 9003 静态服务，HTTP 200 回查成功，实际加载 `index-625bc049.js` 并检出“比较多篇论文”“整理研究笔记”“生成教学材料”文案；验证后已停止服务，9003 无监听，未触碰线上。
+- 2026-09-01：补充 `docs/DEPLOYMENT.md` 的 AcademicGPT 前台发布闸门，要求候选/两个镜像逐文件校验、线上根入口哈希回查、Academic 任务 smoke check 和受控回滚；明确禁止从旧服务器目录或历史压缩包复制 `public/chat`。仅更新本地文档，未执行线上写操作。
+- 2026-09-01：完成度审计：本地候选与两个部署镜像逐文件一致；`academic_real_gate.mjs` 因缺少获授权的 `LENS_ACADEMIC_E2E_TOKEN` 以退出码 2 安全阻塞；旧 UI 删除门禁（含 `service/public/chat`）因缺少 `.legacy-removal-evidence.json` 保持 `canDelete:false`；线上只读资源仍检出 `AppList`、`应用广场`、`prism-shell`。未执行线上写操作。
+- 2026-09-01：用户明确纠正产品命名边界：产品名固定为 `Lens`，归属 `YutoAI`；“学术 GPT”只描述用途和交互范式，不作为产品品牌。活动页头、首屏、登录、分享和五语言状态文案已统一为 Lens / by YutoAI，`AGENTS.md` 同步固化该长期规则。
+- 2026-09-01：删除旧 99AI 风格的桌面/移动双设置壳，重建单一 Lens 自适应设置中心；物理删除 `MobileSettingsDialog.vue` 及 `mobileSettingsDialog` / `mobileInitialTab` 状态与全部移动分支调用。账户、会员、使用必读和协议内容继续复用现有后端契约。
+- 2026-09-01：本轮 `./node_modules/.bin/vue-tsc --noEmit`、研究契约、Vite production build 和 `git diff --check` 通过；应用内浏览器实际复核本地 9002 显示 `Lens by YutoAI` 与 `Lens · 就绪`，未出现 99AI 或 AcademicGPT 产品品牌。未部署线上；旧前端删除门禁仍因缺少部署/观察证据保持 `canDelete:false`。
+- 2026-09-01：将输入器六处匿名拖拽模板回调收敛为显式 `DragEvent` 处理函数，消除严格类型错误；重新执行 `vue-tsc --noEmit`、研究契约、生产构建、受控写入契约、旧 UI 删除契约、静态发布/回滚契约和 `git diff --check` 均通过。
+- 2026-09-01：最新 Lens 候选为 178 个文件、6,752,564 字节，入口 SHA-256 `46f1b6bae018bb342c3cc7a396ab1f3a8d7fe90943c2bc3bad822f25c010211f`，`legacyUiIncluded:false`；受控同步到 `service/public/chat` 与 `AIWebQuickDeploy/public/chat` 后两个本地镜像逐文件一致，各自唯一最新回滚备份有效。未执行线上部署。
+- 2026-09-01：清理 `.playwright-cli/` 中 2 个无审计价值的日志/页面快照残留并删除空目录；固定共享 Chromium 未修改。应用内浏览器临时桌面视口已恢复默认，9002 Lens 页面作为用户可见交付标签保留。
+- 2026-09-01：完成活动前端依赖图审计并删除 10 个零引用旧文件：全局公告 API、旧 BadWords/CloseButton/Identity/PhoneIdentity/微信登录/数据管理组件、appStore 遗留类型文件和旧 users store；同步移除无调用的身份弹窗状态。审计结果为 140 个源码文件、114 个可达文件、0 个未使用的活动 UI/API/store 文件，未触碰认证、会员、会话、文件、计费、订单或分享契约。
+- 2026-09-01：旧 UI 删除门禁扩展为 22 个已移除用户端文件，source-only 扫描通过；完整门禁仅缺线上发布与观察证据文件，保持 `canDelete:false`，未伪造删除完成。
+- 2026-09-01：应用内浏览器完成 Lens 公开桌面和 390×844 移动回归：页面无横向溢出、无 99AI/AcademicGPT 产品品牌；登录弹窗正常。补齐关闭按钮五语言 `aria-label` 并在实际 DOM 验证可被读屏定位。最新候选 178 个文件、6,749,920 字节，入口 SHA-256 `af6ade41b2a014b5075ef3ca85f84e480f1defc152ba33411477ad8b9ad92809`；两个本地部署镜像逐文件一致。未部署线上。
+- 2026-09-01：本地 NestJS 根路由只读健康检查返回 HTTP 200；`academic_engine_contract_gate.mjs` 实际通过，确认 academic-4.0 6 项核心能力、28 项插件能力、隔离上传与读取可用，且零业务写入、零生成、零外部模型调用、零项目存储触碰。真实账号只读门禁与受控写入门禁契约均通过，但本机未注入 `LENS_ACADEMIC_E2E_TOKEN`，未执行真实账号请求。
+- 2026-09-04：再次固化 Lens 品牌边界：HTML `application-name` 改为 `Lens`，运行时 SEO/JSON-LD 固定区分 `Lens` 产品与 `YutoAI` 发布方，不再允许后端通用 `siteName` 或欢迎文案覆盖产品身份与描述；繁体工作台品牌与开发态应用日志统一为 `Lens by YutoAI`。活动源码、生产候选和两个本地部署镜像均未检出 `AcademicGPT`、`GPT Academic`、`学术 GPT` 或 `99AI` 产品品牌标记。
+- 2026-09-04：品牌修正后 `vue-tsc --noEmit`、研究契约、Vite production build、发布候选门禁、两个本地镜像逐文件校验和 `git diff --check` 通过。最新候选为 178 个文件、6,749,707 字节，入口 SHA-256 `70767721e5488f1c10a0c3862b6e1fc1c14dcb4507da91f958f535d1aa5374d0`，`legacyUiIncluded:false`；同步时清理旧哈希产物并保留独立正式协议文件，未部署线上。
+- 2026-09-04：本地 Lens 前端已重新启动在 `http://127.0.0.1:9002/`，只读 HTML 回查确认标题以 Lens 为主语、`application-name` 为 Lens、站点归属为 `Lens by YutoAI`；本地 `9520/38000` 当前未启动。
+- 2026-09-04：清理 `/private/tmp` 中 9 月 1 日遗留的空 Academic 隔离测试目录与测试根标记；未触碰固定共享 Chromium、源码、正式协议、日志、凭据或回滚资产。
+- 2026-09-04：重新启动本地 NestJS 与 academic-4.0 后完成真实账号只读门禁：登录态、前台配置、27 个会话、历史消息、余额、模型、1 个公开套餐、6 项核心能力和 26 项前台插件全部通过；套餐列表与详情均返回 HTTP 200 和计费选项。token 仅存在于单一测试进程，未打印、未落盘，未调用写入、生成、上传或分享创建。
+- 2026-09-04：登录后真实浏览器回归发现“使用必读”正在展示后端遗留 `YutoLens` 文案和默认管理员/预览账号密码。新增前后端双重公开公告安全边界：疑似凭据公告一律回退为 Lens 安全使用说明，安全自定义公告继续保留，旧品牌别名统一为 Lens；后端 `/config/queryFront` 与 `/config/notice` 复核均为 HTTP 200，危险凭据行与遗留品牌不可见。未修改数据库原始配置。
+- 2026-09-04：公开公告安全策略新增 7 项单元测试并全部通过；发布候选门禁新增已知默认凭据文案阻断。NestJS webpack 编译、Vue 类型检查、研究契约、Vite production build、真实只读门禁、受控写入契约、静态发布/回滚契约和旧 UI source-only 删除门禁通过。
+- 2026-09-04：完成登录后桌面与 `390×844` 移动回归，账户安全、升级方案、结构化使用必读和 500 轮历史研究会话均正常，无横向溢出；未触发改密、购买、上传或生成。临时移动视口已恢复并关闭测试标签，未下载 Playwright 依赖或触碰固定共享 Chromium。
+- 2026-09-04：更新开发文档为 Lens 正确架构：Lens 学术研究前端、99AI/NestJS 后端能力层与 academic-4.0 学术执行层，不再把整个产品描述为 99AI 通用聊天平台。
+- 2026-09-04：最新 Lens 候选为 178 个文件、6,750,194 字节，入口 SHA-256 `82296e85fc7dc8a50414237df414b48da03b6476c0e6f535f7240c7b6e63affc`，清单 SHA-256 `66d1d58b007ed68e26c480967a39e122b5e8b76821cab785a1a5671d84dee1c9`，`legacyUiIncluded:false`；`service/public/chat` 与 `AIWebQuickDeploy/public/chat` 两个本地镜像逐文件一致。未部署线上。
+- 2026-09-04：公网只读复核 `https://lens.yutoai.net/` 返回 HTTP 200、入口资源仍为 `index-d5cf264c.js`、`Last-Modified` 为 2026-06-16；线上包仍检出 `AppList`、应用广场与 `prism-shell`，未检出当前 `Lens by YutoAI` 品牌，确认公网尚未切换。本轮未执行服务器、Cloudflare 或线上文件写入。
+- 2026-09-04：使用真实本地账号完成 NestJS `http://127.0.0.1:9520/` 实际静态生产镜像浏览器验收：未登录首屏、登录后 27 个研究项目、历史研究、账户安全、套餐页、安全使用必读以及 `390×844` 移动工具抽屉均正常，标题与品牌保持 Lens / Lens by YutoAI；未触发改密、购买、签到、兑换、上传或生成，测试标签已关闭且临时视口已恢复。
+- 2026-09-04：纠正“只换接口和样式、活动组件仍沿用 99AI chat 骨架”的问题：根路由从 `views/chat` 迁到独立 `views/workbench`，将 ChatBase/Header/Footer/Message/Workspace Home 分解并重命名为 Lens 研究工作区、工作台页头、研究输入器、研究记录和研究起始页；`views/chat` 目录不再存在于当前工作树。99AI/NestJS 的认证、会话、文件、计费、订单、分享和模型数据契约继续作为后端兼容层保留。
+- 2026-09-04：移除活动前端的旧外链网页容器、页头外链分支及其全局状态，研究项目改为按需抽屉，桌面活动界面固定为中央研究任务/文档式记录与右侧能力面板；包身份同步改为 `lens-web`、作者为 YutoAI。类型检查、研究契约、Vite production build 与 `git diff --check` 通过；旧 UI 门禁扫描 103 个活动源码和 177 个候选文件，无违规项。浏览器已刷新本地 `9002` 并确认 Lens by YutoAI 工作台真实渲染；未部署线上。
+- 2026-09-04：用户明确将 Lens 用户端技术栈改为 Gradio。新增 `academic-4.0/gradio_app.py`、`lens_ui/app.py` 与 `lens_ui/backend.py`，以 Gradio 3.50.2 构建左侧研究记录、右侧研究输入/资料上传/基础功能/函数插件的工作台；账号登录、能力列表、研究会话创建、文件上传和 Academic NDJSON 流分别对接现有 NestJS 接口，权限、扣费与持久化继续以后端为唯一真相源。
+- 2026-09-04：本地 9002 的 Vue/Vite 进程已停止，Python/Uvicorn Gradio 进程接管同一地址并返回 HTTP 200；应用内浏览器确认页面由 Gradio 原生 Chatbot、Textbox、File、Radio、Dropdown 与 Button 组件组成，未登录提交会被“请先登录 Lens”门禁阻止，控制台无应用错误或警告。适配器 3 项单元测试、Python 编译检查与 `git diff --check` 通过；清理了已退役的 `chat/dist` 构建产物和 Python `__pycache__`，未部署线上。
+- 2026-09-04：用户进一步明确最终架构为“Vue 替代 Gradio 页面层，但保持 gpt_academic/Gradio 的专业研究工作台布局”；停止并移除 9002 的 Gradio 用户端，删除 `gradio_app.py`、`lens_ui` 页面/适配层及对应测试，Uvicorn/FastAPI 重新固定为 38000 API-only。Vue 桌面布局调整为研究记录主区与右侧输入/学术工具操作区，移动端保留底部输入器；9002 Vue 开发服务已启动，应用内浏览器确认品牌为 Lens by YutoAI 且不再渲染 Gradio 页面。类型检查、研究契约、Vite production build、发布候选、旧 UI source-only 门禁和 `git diff --check` 均通过；最新候选 177 个文件、6,747,486 字节，入口 SHA-256 `fa44b8ab5550524d433f91dec722fdaff874ffe1c65fabeaaf317c5e966100df`，`legacyUiIncluded:false`。未部署线上。
+- 2026-09-04：按 Apple 最新 Human Interface Guidelines 完成 Lens 视觉系统重构：以系统中性色、系统蓝、系统字体和语义层级替换旧企业蓝灰；Liquid Glass 仅用于顶部导航与研究输入功能层，研究内容保持标准材质；首页任务、研究记录、右侧能力区、发送操作和移动端导航统一间距、圆角、字体与 44px 核心触控目标，并补齐可见键盘焦点和 Reduce Motion。应用内浏览器在窄屏真实复核，移动导航不再拥挤且品牌保持 Lens by YutoAI。Vue 类型检查、Prettier、研究契约、Vite production build、NestJS 编译、公开公告 7 项测试、发布候选、旧 UI source-only 门禁、Playwright 策略门禁和 `git diff --check` 全部通过；最新候选 177 个文件、6,751,293 字节，入口 SHA-256 `6f203c8acf7ef3620f7e9f6103babde31c75944b266493e7fae1aa3aee5b2f2b`，`legacyUiIncluded:false`。未部署线上。

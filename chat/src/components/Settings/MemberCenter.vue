@@ -229,7 +229,7 @@ function buildOrderInfo(pkg: Pkg) {
 }
 
 function formatQuota(value: number) {
-  return value > 99999 ? '无限额度' : value
+  return value > 99999 ? t('lens.member.unlimitedQuota') : value
 }
 
 function getDisplayPlanName(pkg: Pkg) {
@@ -540,7 +540,26 @@ async function useCrami() {
 const showCrami = ref(true)
 
 // 签到相关状态和方法
-const signInData = ref<{ signInDate: string; isSigned: boolean }[]>([])
+type SignInRecord = { signInDate: string; isSigned: boolean }
+
+function normalizeSignInRecords(value: unknown): SignInRecord[] {
+  if (!Array.isArray(value)) return []
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+
+    const record = item as Record<string, unknown>
+    const signInDate = typeof record.signInDate === 'string' ? record.signInDate : ''
+    if (!signInDate) return []
+
+    return [{
+      signInDate,
+      isSigned: record.isSigned === true,
+    }]
+  })
+}
+
+const signInData = ref<SignInRecord[]>([])
 const signInLoading = ref(false)
 const today = new Date().toISOString().split('T')[0]
 
@@ -565,7 +584,7 @@ async function getSigninLog() {
   try {
     const res: ResData = await fetchSignLogAPI()
     if (res.success) {
-      signInData.value = res.data || []
+      signInData.value = normalizeSignInRecords(res.data)
     }
   } catch (error) {
     console.error('加载签到数据失败:', error)
@@ -577,7 +596,7 @@ async function handleSignIn() {
     signInLoading.value = true
     const res: ResData = await fetchSignInAPI()
     if (res.success) {
-      ms.success('签到成功！')
+      ms.success(t('lens.member.signInSuccess'))
       await getSigninLog()
       authStore.getUserInfo()
     }
@@ -601,11 +620,9 @@ const isLogin = computed(() => authStore.isLogin)
 
 // 登录检测函数
 function checkLoginStatus() {
-  console.log('升级套餐 - 检查登录状态:', isLogin.value)
   if (!isLogin.value) {
-    console.log('用户未登录，关闭设置弹窗并打开登录弹窗')
     // 显示消息提醒
-    ms.warning('请先登录后使用升级套餐')
+    ms.warning(t('lens.member.loginRequired'))
     // 关闭设置弹窗
     useGlobalStore.updateSettingsDialog(false)
     // 打开登录弹窗
@@ -617,12 +634,10 @@ function checkLoginStatus() {
 
 // 监听登录状态变化
 watch(isLogin, newLoginStatus => {
-  console.log('升级套餐 - 登录状态变化:', newLoginStatus)
   // 如果组件可见但用户登出了，立即关闭设置弹窗并打开登录弹窗
   if (props.visible && !newLoginStatus) {
-    console.log('用户已登出，关闭设置弹窗并打开登录弹窗')
     // 显示消息提醒
-    ms.warning('账户已登出，请重新登录后查看')
+    ms.warning(t('lens.member.loggedOut'))
     useGlobalStore.updateSettingsDialog(false)
     authStore.setLoginDialog(true)
   }
@@ -800,14 +815,14 @@ watch(
           <div
             class="mb-1 border-b border-[var(--paper-border)] pb-4 text-[18px] font-semibold text-[var(--text-main)]"
           >
-            签到奖励
+            {{ t('lens.member.signInReward') }}
           </div>
 
           <!-- 签到信息 -->
           <div
             class="mb-2 rounded-[20px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-4 text-sm leading-7 text-[var(--text-sub)]"
           >
-            <span>签到赠送：</span>
+            <span>{{ t('lens.member.signInGift') }}</span>
             <span v-if="signInModel3Count > 0 && !isHideModel3Point"
               ><b class="mx-2 text-[var(--text-main)]">{{ signInModel3Count }}</b
               ><span>{{ model3Name }}</span></span
@@ -820,10 +835,7 @@ watch(
               ><b class="mx-2 text-[var(--text-main)]">{{ signInMjDrawToken }}</b
               ><span>{{ drawMjName }}</span></span
             >
-            <span
-              >（已连续签到<b class="mx-1 text-[var(--text-main)]">{{ consecutiveDays }}</b
-              >天）</span
-            >
+            <span>{{ t('lens.member.consecutiveDays', { days: consecutiveDays }) }}</span>
           </div>
 
           <!-- 签到日历 -->
@@ -831,13 +843,13 @@ watch(
             <div
               class="grid grid-cols-7 text-center text-xs leading-6 text-[var(--text-sub)]"
             >
-              <div>日</div>
-              <div>一</div>
-              <div>二</div>
-              <div>三</div>
-              <div>四</div>
-              <div>五</div>
-              <div>六</div>
+              <div>{{ t('lens.member.weekdaySun') }}</div>
+              <div>{{ t('lens.member.weekdayMon') }}</div>
+              <div>{{ t('lens.member.weekdayTue') }}</div>
+              <div>{{ t('lens.member.weekdayWed') }}</div>
+              <div>{{ t('lens.member.weekdayThu') }}</div>
+              <div>{{ t('lens.member.weekdayFri') }}</div>
+              <div>{{ t('lens.member.weekdaySat') }}</div>
             </div>
             <div class="mt-2 grid grid-cols-7 text-sm">
               <div
@@ -870,9 +882,9 @@ watch(
               :disabled="hasSignedInToday || signInLoading"
               class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span v-if="signInLoading">签到中...</span>
-              <span v-else-if="hasSignedInToday">已签到</span>
-              <span v-else>签到</span>
+              <span v-if="signInLoading">{{ t('lens.member.signingIn') }}</span>
+              <span v-else-if="hasSignedInToday">{{ t('lens.member.signedIn') }}</span>
+              <span v-else>{{ t('lens.member.signIn') }}</span>
             </button>
           </div>
         </div>
@@ -885,7 +897,7 @@ watch(
           <div
             class="mb-1 border-b border-[var(--paper-border)] pb-4 text-[18px] font-semibold text-[var(--text-main)]"
           >
-            额度信息
+            {{ t('lens.member.quotaInfo') }}
           </div>
 
           <!-- 余额信息 -->
@@ -899,7 +911,7 @@ watch(
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel3Count > 999999
-                    ? '无限额度'
+                    ? t('lens.member.unlimitedQuota')
                     : (userBalance.sumModel3Count ?? 0)
                 }}
                 <span
@@ -919,7 +931,7 @@ watch(
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel4Count > 99999
-                    ? '无限额度'
+                    ? t('lens.member.unlimitedQuota')
                     : (userBalance.sumModel4Count ?? 0)
                 }}
                 <span
@@ -939,7 +951,7 @@ watch(
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumDrawMjCount > 99999
-                    ? '无限额度'
+                    ? t('lens.member.unlimitedQuota')
                     : (userBalance.sumDrawMjCount ?? 0)
                 }}
                 <span
@@ -954,12 +966,18 @@ watch(
             <div
               class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">会员状态</div>
+              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">
+                {{ t('lens.member.memberStatus') }}
+              </div>
               <div
                 class="whitespace-nowrap text-lg font-bold"
                 :class="isMember ? 'text-[var(--text-main)]' : 'text-[var(--text-sub)]'"
               >
-                {{ userBalance.expirationTime ? `${userBalance.expirationTime} 到期` : '非会员' }}
+                {{
+                  userBalance.expirationTime
+                    ? `${userBalance.expirationTime} ${t('lens.member.expires')}`
+                    : t('lens.member.nonMember')
+                }}
               </div>
             </div>
           </div>
@@ -969,7 +987,9 @@ watch(
             v-if="showCrami"
             class="mt-4 flex-grow border-t border-[var(--paper-border)] pt-4"
           >
-            <div class="mb-3 text-base font-medium text-[var(--text-main)]">卡密兑换</div>
+            <div class="mb-3 text-base font-medium text-[var(--text-main)]">
+              {{ t('lens.member.cardRedeem') }}
+            </div>
             <div class="flex items-center space-x-2">
               <input
                 v-model="code"
@@ -982,7 +1002,7 @@ watch(
                 @click="useCrami"
                 class="inline-flex w-[116px] items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-5 py-3 text-[15px] font-medium text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                兑换
+                {{ t('lens.member.redeem') }}
               </button>
             </div>
           </div>

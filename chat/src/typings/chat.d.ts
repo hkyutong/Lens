@@ -5,6 +5,7 @@ declare namespace Chat {
     canvasText?: string
     modelType?: number
     status?: number
+    aborted?: boolean
     fileInfo?: string
     model?: string
     modelName?: string
@@ -88,7 +89,6 @@ declare namespace Chat {
     activeModelPrice?: number
     activeGroupAppId?: number
     isStreamIn?: boolean
-    pluginList: []
     academicMode: boolean
     mobileAcademicPanelVisible: boolean
     academicPluginList: any[]
@@ -107,17 +107,6 @@ declare namespace Chat {
     hiddenReplyChatIdsByGroup?: Record<number, number[]>
     hiddenReplyTailAnchorByGroup?: Record<number, number>
     prompt?: string
-    currentPlugin?: {
-      // 可选，存储当前使用的插件信息
-      pluginId: number
-      pluginName: string
-      description: string
-      pluginImg: string
-      parameters: string
-      deductType: number
-      drawingType: number
-      modelType: number
-    }
   }
 
   interface ConversationRequest {

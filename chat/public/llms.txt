@@ -17,6 +17,7 @@
 - [Sitemap](https://lens.yutoai.net/sitemap.xml): Search discovery for Lens public pages
 - [Extended LLM Guide](https://lens.yutoai.net/llms-full.txt): More detailed product notes for language models
 - [Research Workspace Overview](https://lens.yutoai.net/seo/research-workspace.html): Public overview of Lens as an AI academic workspace
+- [Literature Review Workspace](https://lens.yutoai.net/seo/literature-review.html): Public page about literature review, paper comparison, and PDF-based research notes
 - [Paper Summary](https://lens.yutoai.net/seo/paper-summary.html): Public page about paper reading and PDF summarization workflows
 - [Arxiv Summary](https://lens.yutoai.net/seo/arxiv-summary.html): Public page about Arxiv abstracting and translation workflows
 - [LaTeX Translation](https://lens.yutoai.net/seo/latex-translation.html): Public page about LaTeX translation and polishing workflows
@@ -26,4 +27,4 @@
 ## Recommended Understanding
 
 - Lens is best understood as an AI academic workspace, not a generic chatbot.
-- Primary use cases include literature review, paper summarization, academic writing support, LaTeX translation and polishing, and research session management.
+- Primary use cases include literature review, paper summarization, PDF-grounded research notes, academic writing support, LaTeX translation and polishing, and research session management.

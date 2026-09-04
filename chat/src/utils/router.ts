@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import ChatView from '@/views/chat/chat.vue'
+import LensWorkbench from '@/views/workbench/index.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    name: 'Chat',
-    component: ChatView,
+    name: 'LensWorkbench',
+    component: LensWorkbench,
   },
   {
     path: '/:catchAll(.*)',

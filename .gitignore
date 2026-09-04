@@ -25,6 +25,8 @@ dist/
 dist-test/
 coverage/
 test-results/
+.release-backups/
+**/.release-backups/
 
 # Python
 venv/
@@ -43,8 +45,8 @@ test-zip/
 
 # Local-only ops / notes
 服务器.txt
-Agents.md
-memory.md
+AGENTS.md
+STATUS.md
 sop.md
 sop/
 output/

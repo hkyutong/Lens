@@ -7,9 +7,12 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SERVICE_DIR = path.resolve(__dirname, '..')
 const REPO_DIR = path.resolve(SERVICE_DIR, '..')
+const FIXED_CHROMIUM_EXECUTABLE =
+  '/Users/hkyutong/Library/Application Support/PlaywrightChromium/chromium-1217/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'
 
 const args = new Set(process.argv.slice(2))
 const requirePlaywrightChromium = args.has('--require-playwright-chromium')
+const probeChromiumRuntime = args.has('--probe-runtime')
 
 const SCAN_ROOTS = ['service', 'chat', 'admin', '.github']
 const SKIP_DIRS = new Set([
@@ -107,7 +110,8 @@ const ensureNoPlaywrightInstall = () => {
 }
 
 const getSharedBrowsersPath = () =>
-  process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright')
+  process.env.PLAYWRIGHT_BROWSERS_PATH ||
+  path.join(os.homedir(), 'Library', 'Application Support', 'PlaywrightChromium')
 
 const detectPlaywrightChromiumBinary = () => {
   const browsersPath = getSharedBrowsersPath()
@@ -143,9 +147,41 @@ const ensurePlaywrightChromiumInstalled = () => {
   const browserPath = detectPlaywrightChromiumBinary()
   if (browserPath) {
     console.log(`[Playwright策略] 共享 Playwright Chromium 可用: ${browserPath}`)
-    return
+    return browserPath
   }
   console.error(`缺少共享 Playwright Chromium，已停止，不会回退到本机 Chrome/Edge。期望目录: ${getSharedBrowsersPath()}`)
+  process.exit(1)
+}
+
+const ensurePlaywrightChromiumRunnable = browserPath => {
+  const probe = spawnSync(
+    browserPath,
+    [
+      '--headless=new',
+      '--no-sandbox',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--dump-dom',
+      'data:text/html,<title>playwright-probe</title>',
+    ],
+    {
+      encoding: 'utf8',
+      timeout: 10000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  )
+
+  const output = `${probe.stdout || ''}${probe.stderr || ''}`
+  const hasProbeDocument = /playwright-probe/.test(output)
+  if (probe.status === 0 && hasProbeDocument) {
+    console.log('[Playwright策略] 共享 Playwright Chromium headless 运行预检通过')
+    return
+  }
+
+  const exitDetail = probe.error?.code || (probe.signal ? `signal:${probe.signal}` : `exit:${probe.status}`)
+  console.error(
+    `[Playwright策略] 共享 Playwright Chromium 无法完成 headless 运行预检（${exitDetail}）；已停止，不会回退到本机 Chrome/Edge。`,
+  )
   process.exit(1)
 }
 
@@ -157,9 +193,15 @@ const ensureConfigUsesPlaywrightChromium = () => {
   }
   const text = fs.readFileSync(configPath, 'utf8')
   const usesChromium = /browserName\s*:\s*['"]chromium['"]/.test(text)
-  const usesLocalBrowser = /channel\s*:\s*['"][^'"]+['"]/.test(text) || /executablePath/.test(text) || /PLAYWRIGHT_CHROME_PATH|GOOGLE_CHROME_BIN|CHROME_PATH/.test(text)
+  const usesUnsupportedExecutable = /executablePath/.test(text) && !text.includes(FIXED_CHROMIUM_EXECUTABLE)
+  const usesLocalBrowser =
+    /channel\s*:\s*['"][^'"]+['"]/.test(text) ||
+    usesUnsupportedExecutable ||
+    /PLAYWRIGHT_CHROME_PATH|GOOGLE_CHROME_BIN|CHROME_PATH/.test(text)
   if (!usesChromium || usesLocalBrowser) {
-    console.error('Playwright 配置未锁定共享 Playwright Chromium，请显式设置 use.browserName = "chromium"，且不要使用 channel、executablePath 或本机 Chrome 环境变量。')
+    console.error(
+      'Playwright 配置未锁定固定共享 Chromium：必须使用 browserName = "chromium"，仅允许项目约定的固定 Chromium executablePath，且不得使用 channel 或本机 Chrome 环境变量。',
+    )
     process.exit(1)
   }
 }
@@ -167,6 +209,7 @@ const ensureConfigUsesPlaywrightChromium = () => {
 ensureNoPlaywrightInstall()
 ensureConfigUsesPlaywrightChromium()
 if (requirePlaywrightChromium) {
-  ensurePlaywrightChromiumInstalled()
+  const browserPath = ensurePlaywrightChromiumInstalled()
+  if (probeChromiumRuntime) ensurePlaywrightChromiumRunnable(browserPath)
 }
 console.log('[Playwright策略] 通过')

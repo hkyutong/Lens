@@ -15,10 +15,9 @@ import {
   fetchQueryChatLogListAPI,
 } from '@/api/chatLog'
 import { fetchModelBaseConfigAPI } from '@/api/models'
-import { fetchQueryPluginsAPI } from '@/api/plugin'
 import { fetchAcademicCoreFunctionList, fetchAcademicPluginList } from '@/api/academic'
 import { getToken } from '../auth/helper'
-import { useGlobalStoreWithOut } from '../global'
+import { normalizeAcademicMessageSnapshot } from '@/domain/research/stream'
 
 const CHAT_HISTORY_PAGE_SIZE = 80
 const CHAT_RENDER_WINDOW_LIMIT = 1200
@@ -89,11 +88,7 @@ export const useChatStore = defineStore('chat-store', {
     normalizeChatRows(rows: any[]) {
       return (Array.isArray(rows) ? rows : []).map((item: any) => ({
         ...item,
-        fileUrl: item.fileUrl ?? item.file_url ?? '',
-        imageUrl: item.imageUrl ?? item.image_url ?? '',
-        reasoningText: item.reasoningText ?? item.reasoning_text ?? '',
-        networkSearchResult: item.networkSearchResult ?? item.network_search_result ?? '',
-        fileVectorResult: item.fileVectorResult ?? item.file_vector_result ?? '',
+        ...normalizeAcademicMessageSnapshot(item),
       }))
     },
 
@@ -240,7 +235,8 @@ export const useChatStore = defineStore('chat-store', {
       this.reconcileAcademicSelectionState()
     },
 
-    setAcademicMode(enabled: boolean) {
+    // 保留参数以兼容历史调用方，但 Lens 用户端始终固定为学术研究模式。
+    setAcademicMode(enabled = true) {
       this.academicMode = true
       if (enabled) {
         this.mobileAcademicPanelVisible = true
@@ -303,14 +299,12 @@ export const useChatStore = defineStore('chat-store', {
     },
 
     setAcademicWorkflowSteps(steps: Chat.AcademicWorkflowStep[]) {
-      this.academicWorkflowSteps = (Array.isArray(steps) ? steps : [])
-        .slice(0, 3)
-        .map(step => ({
-          kind: step?.kind === 'plugin' ? 'plugin' : 'core',
-          name: String(step?.name || '').trim(),
-          displayName: String(step?.displayName || step?.name || '').trim(),
-          args: String(step?.args || '').trim(),
-        }))
+      this.academicWorkflowSteps = (Array.isArray(steps) ? steps : []).slice(0, 3).map(step => ({
+        kind: step?.kind === 'plugin' ? 'plugin' : 'core',
+        name: String(step?.name || '').trim(),
+        displayName: String(step?.displayName || step?.name || '').trim(),
+        args: String(step?.args || '').trim(),
+      }))
       if (this.academicWorkflowSteps.length) {
         this.academicWorkflowEnabled = true
         this.academicMode = true
@@ -320,7 +314,9 @@ export const useChatStore = defineStore('chat-store', {
     },
 
     addAcademicWorkflowStep(step?: Partial<Chat.AcademicWorkflowStep>) {
-      const current = Array.isArray(this.academicWorkflowSteps) ? [...this.academicWorkflowSteps] : []
+      const current = Array.isArray(this.academicWorkflowSteps)
+        ? [...this.academicWorkflowSteps]
+        : []
       if (current.length >= 3) return
       current.push({
         kind: step?.kind === 'plugin' ? 'plugin' : 'core',
@@ -338,9 +334,12 @@ export const useChatStore = defineStore('chat-store', {
       next[index] = {
         ...next[index],
         ...patch,
-        kind: patch?.kind === 'plugin' ? 'plugin' : patch?.kind === 'core' ? 'core' : next[index].kind,
+        kind:
+          patch?.kind === 'plugin' ? 'plugin' : patch?.kind === 'core' ? 'core' : next[index].kind,
         name: String((patch?.name ?? next[index].name) || '').trim(),
-        displayName: String((patch?.displayName ?? next[index].displayName ?? patch?.name ?? next[index].name) || '').trim(),
+        displayName: String(
+          (patch?.displayName ?? next[index].displayName ?? patch?.name ?? next[index].name) || ''
+        ).trim(),
         args: String((patch?.args ?? next[index].args) || '').trim(),
       }
       this.setAcademicWorkflowSteps(next)
@@ -377,29 +376,6 @@ export const useChatStore = defineStore('chat-store', {
 
     setAcademicPluginArgs(args: string) {
       this.academicPluginArgs = args || ''
-    },
-
-    /* 查询插件列表 */
-    async queryPlugins() {
-      try {
-        const res: any = await fetchQueryPluginsAPI()
-        if (res.success && res.code === 200) {
-          // 过滤掉不启用的插件并只保留需要的字段
-          this.pluginList = res.data.rows
-            .filter((plugin: any) => plugin.isEnabled === 1)
-            .map((plugin: any) => ({
-              pluginId: plugin.id,
-              pluginName: plugin.name,
-              description: plugin.description,
-              pluginImg: plugin.pluginImg,
-              parameters: plugin.parameters,
-              deductType: plugin.deductType,
-              drawingType: plugin.drawingType,
-              modelType: plugin.modelType,
-            }))
-        } else {
-        }
-      } catch (error) {}
     },
 
     /* 对话组过滤 */
@@ -542,7 +518,6 @@ export const useChatStore = defineStore('chat-store', {
     /* 变更对话组 */
     // 设置当前激活的对话组
     async setActiveGroup(uuid: number) {
-      useGlobalStoreWithOut().updateShowAppListComponent(false)
       // useGlobalStore.updateImagePreviewer(false)
       // this.chatList = [];
       this.active = uuid
@@ -620,9 +595,16 @@ export const useChatStore = defineStore('chat-store', {
         })
 
         const payload = res?.data
-        const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.rows) ? payload.rows : []
+        const rows = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.rows)
+            ? payload.rows
+            : []
         const normalizedList = this.normalizeChatRows(rows)
-        const normalizedWithHiddenFilter = this.applyHiddenReplyFilter(normalizedList, Number(this.active))
+        const normalizedWithHiddenFilter = this.applyHiddenReplyFilter(
+          normalizedList,
+          Number(this.active)
+        )
 
         if (Array.isArray(payload)) {
           this.chatList = normalizedWithHiddenFilter
@@ -718,12 +700,6 @@ export const useChatStore = defineStore('chat-store', {
     setUsingMcpTool(context: boolean) {
       this.usingMcpTool = context
       this.recordState()
-    },
-
-    setUsingPlugin(plugin: any) {
-      // Set the current plugin to the new plugin if provided, else clear it
-      this.currentPlugin = plugin || undefined
-      this.recordState() // Record the state change
     },
 
     setPreferredModel(model: any) {

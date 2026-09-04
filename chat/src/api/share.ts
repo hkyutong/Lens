@@ -1,15 +1,22 @@
-import { get, post } from '@/utils/request'
+import { get, post, type Response } from '@/utils/request'
 
-/* order buy */
-export function createShare<T>(data: { htmlContent: string }): Promise<T> {
-  return post<T>({
+export interface CreateShareResult {
+  shareCode: string
+}
+
+export interface SharedHtmlResult {
+  htmlContent: string
+}
+
+export function createShare(data: { htmlContent: string }): Promise<Response<CreateShareResult>> {
+  return post<CreateShareResult>({
     url: '/share/create',
     data,
   })
 }
 
-export function getShare<T>(shareCode: string): Promise<T> {
-  return get<T>({
+export function getShare(shareCode: string): Promise<Response<SharedHtmlResult>> {
+  return get<SharedHtmlResult>({
     url: `/share/${shareCode}`,
   })
 }

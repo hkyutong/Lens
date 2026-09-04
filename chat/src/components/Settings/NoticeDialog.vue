@@ -19,7 +19,24 @@ interface Props {
 
 const props = defineProps<Props>()
 const globalConfig = computed(() => authStore.globalConfig)
-const noticeContent = computed(() => globalConfig.value.noticeInfo || LENS_USAGE_NOTICE)
+const credentialDisclosurePatterns = [
+  /(?:初始|默认|預設).{0,16}(?:管理员|管理員|预览|預覽|账号|帳號|账户|帳戶|用户|用戶).{0,24}(?:密码|密碼|口令)/i,
+  /(?:账号|帳號|账户|帳戶|用户名|用戶名)\s*[:：=]\s*\S+.{0,40}(?:密码|密碼|口令)\s*[:：=]\s*\S+/i,
+  /\b(?:password|passwd|pwd)\s*[:：=]\s*\S+/i,
+  /\b(?:admin|super|root)\s+[A-Za-z0-9!@#$%^&*._-]{4,}\b/i,
+]
+
+function sanitizeNotice(value: unknown) {
+  const normalized = String(value || '')
+    .replace(/\bYutoLens\b/gi, 'Lens')
+    .trim()
+  if (!normalized) return LENS_USAGE_NOTICE
+  return credentialDisclosurePatterns.some(pattern => pattern.test(normalized))
+    ? LENS_USAGE_NOTICE
+    : normalized
+}
+
+const noticeContent = computed(() => sanitizeNotice(globalConfig.value.noticeInfo))
 const isLensPlanNotice = computed(() => {
   const content = noticeContent.value || ''
   const hasPlanNames =
@@ -115,7 +132,11 @@ onMounted(() => {
       <div
         class="border-b border-[var(--border-color)] pb-2 text-base font-semibold text-[var(--text-main)]"
       >
-        {{ isLensPlanNotice ? t('lens.usageNotice.title') : globalConfig.noticeTitle || t('lens.settings.notice') }}
+        {{
+          isLensPlanNotice
+            ? t('lens.usageNotice.title')
+            : globalConfig.noticeTitle || t('lens.settings.notice')
+        }}
       </div>
 
       <div class="overflow-y-auto" :class="{ 'max-h-[calc(70vh-120px)]': !isMobile }">
@@ -253,8 +274,7 @@ onMounted(() => {
   border-radius: 24px;
   padding: 22px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0)),
-    var(--surface-card);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0)), var(--surface-card);
 }
 
 .usage-notice__plan-head {

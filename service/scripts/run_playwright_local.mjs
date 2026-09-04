@@ -9,14 +9,14 @@ const serviceDir = path.resolve(__dirname, '..')
 const guardScript = path.join(serviceDir, 'scripts/guard_playwright_policy.mjs')
 const sharedBrowsersPath =
   process.env.PLAYWRIGHT_BROWSERS_PATH ||
-  path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright')
+  path.join(os.homedir(), 'Library', 'Application Support', 'PlaywrightChromium')
 const sharedEnv = {
   ...process.env,
   PLAYWRIGHT_BROWSERS_PATH: sharedBrowsersPath,
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1',
 }
 
-const guard = spawnSync(process.execPath, [guardScript, '--require-playwright-chromium'], {
+const guard = spawnSync(process.execPath, [guardScript, '--require-playwright-chromium', '--probe-runtime'], {
   cwd: serviceDir,
   stdio: 'inherit',
   env: sharedEnv,

@@ -37,17 +37,13 @@ export interface GlobalState {
   bindWxDialog: boolean
   signInDialog: boolean
   appDialog: boolean
-  identityDialog: boolean
-  phoneIdentityDialog: boolean
   userAgreementDialog: boolean
   BadWordsDialog: boolean
   htmlDialog: boolean
   pythonDialog: boolean
   pythonContent: string
   settingsDialog: boolean
-  mobileSettingsDialog: boolean
   settingsActiveTab: number
-  mobileInitialTab?: string
   isChatIn: boolean
   isCacheEnabled: boolean
   orderInfo: OrderInfo
@@ -58,8 +54,6 @@ export interface GlobalState {
   contentType: 'html' | 'markmap' | ''
   textContent: string
   full_json: string
-  externalLinkDialog: boolean
-  showAppListComponent: boolean
   showBadWordsDialog: boolean
   showHtmlPreviewer: boolean
   showTextEditor: boolean
@@ -69,7 +63,6 @@ export interface GlobalState {
   isMarkdownPreviewerVisible: boolean
   previewImageUrls: string[]
   initialImageIndex: number
-  currentExternalLink: string | null
   mjImageData: any
   workflowContent: string[]
   markdownContent: string

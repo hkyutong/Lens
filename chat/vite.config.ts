@@ -2,6 +2,15 @@ import path from 'path'
 import { defineConfig, loadEnv } from 'vite'
 import { createVitePlugins } from './vite/plugins'
 
+const resolveApiProxyTarget = (env: Record<string, string>) => {
+  const explicitTarget = String(env.VITE_APP_API_BASE_URL || '').trim()
+  if (/^https?:\/\//i.test(explicitTarget)) return explicitTarget.replace(/\/$/, '')
+
+  const configuredApiUrl = String(env.VITE_GLOB_API_URL || '').trim()
+  const origin = configuredApiUrl.replace(/\/api\/?$/i, '')
+  return /^https?:\/\//i.test(origin) ? origin : 'http://127.0.0.1:9520'
+}
+
 const manualChunkGroups: Array<{ name: string; patterns: string[] }> = [
   {
     name: 'vue-vendor',
@@ -14,7 +23,7 @@ const manualChunkGroups: Array<{ name: string; patterns: string[] }> = [
   },
   {
     name: 'utils-vendor',
-    patterns: ['/node_modules/@vueuse/', '/node_modules/clientjs/', '/node_modules/pinyin-match/'],
+    patterns: ['/node_modules/@vueuse/', '/node_modules/clientjs/'],
   },
   {
     name: 'icons-vendor',
@@ -93,7 +102,7 @@ export default defineConfig(({ mode }) => {
       open: false,
       proxy: {
         '/api': {
-          target: viteEnv.VITE_APP_API_BASE_URL,
+          target: resolveApiProxyTarget(viteEnv),
           changeOrigin: true,
           rewrite: path => path.replace(/^\/api/, '/api/'),
         },

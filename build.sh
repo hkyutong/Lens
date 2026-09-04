@@ -8,6 +8,7 @@ CHAT_DIR="$ROOT_DIR/chat"
 ADMIN_DIR="$ROOT_DIR/admin"
 ACADEMIC_DIR="$ROOT_DIR/academic-4.0"
 QUICK_DEPLOY_DIR="$ROOT_DIR/AIWebQuickDeploy"
+CHAT_RELEASE_BACKUP_DIR="$SERVICE_DIR/.release-backups/chat-latest"
 
 SERVICE_PM2_NAME="${SERVICE_PM2_NAME:-lens-service}"
 ACADEMIC_PM2_NAME="${ACADEMIC_PM2_NAME:-lens-academic}"
@@ -183,6 +184,32 @@ build_chat() {
   (cd "$CHAT_DIR" && run_pnpm exec vite build --mode=production)
 }
 
+verify_chat_release_candidate() {
+  log "校验 AcademicGPT 前端发布候选"
+  node "$CHAT_DIR/scripts/verify_academic_release_candidate.mjs"
+}
+
+verify_chat_release_mirror() {
+  local mirror_dir="$1"
+  log "校验 AcademicGPT 前端同步镜像：$mirror_dir"
+  node "$CHAT_DIR/scripts/verify_academic_release_candidate.mjs" --mirror "$mirror_dir"
+}
+
+verify_static_release_contract() {
+  log "校验静态发布与回滚契约"
+  node "$SERVICE_DIR/scripts/static_release_contract_gate.mjs"
+}
+
+verify_academic_real_gate_contract() {
+  log "校验 Academic 真实只读门禁契约"
+  node "$SERVICE_DIR/scripts/academic_real_gate_contract.mjs"
+}
+
+verify_academic_controlled_write_contract() {
+  log "校验 Academic 受控写入门禁契约"
+  node "$SERVICE_DIR/scripts/academic_controlled_write_gate_contract.mjs"
+}
+
 build_service() {
   log "构建 service"
   (cd "$SERVICE_DIR" && run_pnpm run build:test)
@@ -190,10 +217,13 @@ build_service() {
 
 sync_frontend_assets() {
   log "同步前端静态资源到 service/public"
-  rm -rf "$SERVICE_DIR/public/admin" "$SERVICE_DIR/public/chat"
+  rm -rf "$SERVICE_DIR/public/admin"
   mkdir -p "$SERVICE_DIR/public/admin" "$SERVICE_DIR/public/chat" "$SERVICE_DIR/public/file"
   cp -R "$ADMIN_DIR/dist/." "$SERVICE_DIR/public/admin/"
-  cp -R "$CHAT_DIR/dist/." "$SERVICE_DIR/public/chat/"
+  node "$SERVICE_DIR/scripts/sync_static_release.mjs" \
+    --candidate "$CHAT_DIR/dist" \
+    --target "$SERVICE_DIR/public/chat" \
+    --backup "$CHAT_RELEASE_BACKUP_DIR"
 }
 
 package_aiwebquickdeploy() {
@@ -353,9 +383,17 @@ main() {
 
   build_admin
   build_chat
+  verify_chat_release_candidate
   build_service
+  verify_academic_real_gate_contract
+  verify_academic_controlled_write_contract
+  verify_static_release_contract
   sync_frontend_assets
+  verify_chat_release_mirror "$SERVICE_DIR/public/chat"
   package_aiwebquickdeploy
+  if [ "$PACKAGE_AIWEBQUICKDEPLOY" = "1" ]; then
+    verify_chat_release_mirror "$QUICK_DEPLOY_DIR/public/chat"
+  fi
 
   if [ "$QUICK_DEPLOY_ONLY" = "1" ]; then
     log "已完成构建并生成 AIWebQuickDeploy 部署包，跳过服务启动（QUICK_DEPLOY_ONLY=1）"

@@ -75,6 +75,28 @@ const parseRequestBody = request => {
   }
 };
 
+const sendButton = page =>
+  page.getByRole('button', { name: /发送消息|^发送$|^Send$/ }).last();
+
+const openResearchTools = async page => {
+  const drawer = page.locator('.research-tool-drawer');
+  if (await drawer.isVisible().catch(() => false)) return drawer;
+  await page
+    .getByRole('button', { name: /研究工具|Research Tools|研究ツール|연구 도구/ })
+    .click();
+  await expect(drawer).toBeVisible({ timeout: 10000 });
+  return drawer;
+};
+
+const closeResearchTools = async (page, drawer) => {
+  await drawer
+    .getByRole('button', {
+      name: /关闭能力设置|關閉能力設定|Close capability settings|機能設定を閉じる|기능 설정 닫기/,
+    })
+    .click();
+  await expect(drawer).toBeHidden({ timeout: 10000 });
+};
+
 async function mountRegressionApi(page, options = {}) {
   const group = createGroup();
   const state = {
@@ -85,6 +107,9 @@ async function mountRegressionApi(page, options = {}) {
     nextChatId: 6000,
     chatRequests: [],
     academicRequests: [],
+    workflowRequests: [],
+    shareRequests: [],
+    shareCreateRequests: [],
   };
 
   await page.route('**/api/**', async route => {
@@ -115,14 +140,24 @@ async function mountRegressionApi(page, options = {}) {
         body: JSON.stringify({
           success: true,
           data: {
-            id: 1,
-            username: 'super',
-            email: 'super@example.com',
-            role: 'super',
+            userInfo: {
+              id: 1,
+              username: 'super',
+              email: 'super@example.com',
+              role: 'super',
+            },
             userBalance: {
               sumModel3Count: 9999,
               sumModel4Count: 9999,
               drawMjCount: 0,
+              ...(options.member
+                ? {
+                    packageId: 1,
+                    packageWeight: 30,
+                    packageName: '研究者 Max',
+                    expirationTime: '2099-12-31',
+                  }
+                : {}),
             },
           },
           message: 'ok',
@@ -142,6 +177,37 @@ async function mountRegressionApi(page, options = {}) {
             isAutoOpenNotice: 0,
             wechatSilentLoginStatus: 0,
             clearCacheEnabled: 0,
+          },
+          message: 'ok',
+        }),
+      });
+      return;
+    }
+
+    if (path === '/share/create') {
+      state.shareCreateRequests.push(parseRequestBody(request))
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { shareCode: `${CHAT_BASE_URL}/?shareCode=Abc12345` },
+          message: 'ok',
+        }),
+      })
+      return
+    }
+
+    if (path.startsWith('/share/')) {
+      state.shareRequests.push(path.slice('/share/'.length));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            htmlContent:
+              '<!doctype html><html><body><h2>只读研究成果</h2><p>分享内容不会挂载聊天操作。</p><button>不应在父页面执行</button></body></html>',
           },
           message: 'ok',
         }),
@@ -214,7 +280,11 @@ async function mountRegressionApi(page, options = {}) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: { rows: [] }, message: 'ok' }),
+        body: JSON.stringify({
+          success: true,
+          data: { rows: Array.isArray(options.plugins) ? options.plugins : [] },
+          message: 'ok',
+        }),
       });
       return;
     }
@@ -272,6 +342,19 @@ async function mountRegressionApi(page, options = {}) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ success: true, data: true, message: 'ok' }),
+      });
+      return;
+    }
+
+    if (path === '/upload/file') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: '/file/userFiles/209912/31/paper.pdf',
+          message: 'ok',
+        }),
       });
       return;
     }
@@ -339,7 +422,12 @@ async function mountRegressionApi(page, options = {}) {
         '| 把问题、文本或任务发给我 | 您只需将问题、文本或任务发送给我 | 增加“您只需”使指引更友好；用“发送”替代“发”，语气更正式 |',
         '| 我不能直接访问你的本地文件 | 我无法直接访问您的本地文件 | “无法”比“不能”更正式；“您的”体现尊重 |',
       ].join('\n');
-      output = `${stableSummary}\n\n我将首先用中文提供文本的更正版本，然后输出一个 Markdown 表格列名严格为：\`修改前原文片段 | 修改后片段 | 修改原因与解释\`表格会按“小句/短片段”的粒度拆分，确保每一行只描述一个局部修改每个单元格内容将尽量简短，只摘录必要片段\n\n${malformedTable}\n${leakedTail}`;
+      output =
+        body.overwriteReply && String(body.main_input || '').includes('编辑')
+          ? '编辑后的首条回复'
+          : body.function === 'chat'
+          ? `已收到：${String(body.main_input || '').trim()}`
+          : `${stableSummary}\n\n我将首先用中文提供文本的更正版本，然后输出一个 Markdown 表格列名严格为：\`修改前原文片段 | 修改后片段 | 修改原因与解释\`表格会按“小句/短片段”的粒度拆分，确保每一行只描述一个局部修改每个单元格内容将尽量简短，只摘录必要片段\n\n${malformedTable}\n${leakedTail}`;
 
       if (body.overwriteReply) {
         const userId = Number(body.chatId || 0);
@@ -368,6 +456,37 @@ async function mountRegressionApi(page, options = {}) {
       return;
     }
 
+    if (path === '/academic/workflow-process') {
+      const body = parseRequestBody(request);
+      state.workflowRequests.push(body);
+      const assistantId = ++state.nextChatId;
+      const output = `工作流已完成：${body.workflow?.steps?.length || 0} 步`;
+      groupLogs.push(
+        buildChatLog({
+          chatId: assistantId - 1,
+          role: 'user',
+          content: String(body.main_input || ''),
+        }),
+        buildChatLog({ chatId: assistantId, role: 'assistant', content: output }),
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/plain; charset=utf-8',
+        body: `${JSON.stringify({ chatId: assistantId })}\n${JSON.stringify({
+          taskData: {
+            type: 'academic-workflow',
+            status: 'completed',
+            steps: body.workflow?.steps || [],
+          },
+          progress: 100,
+          finalContent: output,
+          content: output,
+          finishReason: 'stop',
+        })}\n`,
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -382,7 +501,7 @@ async function loginAsSuper(page) {
   await page.goto(CHAT_BASE_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1000);
 
-  const loginButton = page.getByRole('button', { name: '登录或注册' });
+  const loginButton = page.getByRole('button', { name: /登录|Sign In/ });
   if (await loginButton.count()) {
     await loginButton.first().click({ force: true });
     await page.locator('#username').fill(LOGIN_USER);
@@ -392,8 +511,75 @@ async function loginAsSuper(page) {
     await page.waitForTimeout(1200);
   }
 
-  await expect(page.getByText('E2E Regression Group')).toBeVisible({ timeout: 20000 });
+  await expect(page.locator('#workspace-composer')).toBeEnabled({ timeout: 20000 });
 }
+
+test('Lens 默认研究会话只走 Academic 请求，不回退到 99AI 通用聊天页', async ({ page }) => {
+  const state = await mountRegressionApi(page);
+
+  await loginAsSuper(page);
+
+  await expect(page.getByText(/应用广场|应用市场/)).toHaveCount(0);
+  await expect(page.locator('.academic-home')).toBeVisible();
+
+  const input = page.locator('#workspace-composer');
+  await input.fill('请概括这项研究的核心问题');
+  await sendButton(page).click();
+
+  await expect.poll(() => state.academicRequests.length).toBe(1);
+  expect(state.chatRequests).toHaveLength(0);
+  expect(state.academicRequests[0].function).toBe('chat');
+  expect(state.academicRequests[0].main_input).toBe('请概括这项研究的核心问题');
+});
+
+test('Lens 研究结果可创建只读分享链接', async ({ page }) => {
+  const state = await mountRegressionApi(page);
+  await loginAsSuper(page);
+
+  const input = page.locator('#workspace-composer');
+  await input.fill('请输出可分享的研究结论');
+  await sendButton(page).click();
+  await expect(page.getByText('已收到：请输出可分享的研究结论')).toBeVisible({ timeout: 10000 });
+
+  await page.getByRole('button', { name: /分享研究结果|Share research result/ }).click();
+  await expect.poll(() => state.shareCreateRequests.length).toBe(1);
+  expect(state.shareCreateRequests[0].htmlContent).toContain('<article>');
+  expect(state.shareCreateRequests[0].htmlContent).toContain('已收到：请输出可分享的研究结论');
+  expect(state.chatRequests).toHaveLength(0);
+});
+
+test('分享链接只显示只读成果，不挂载 Lens/99AI 聊天壳', async ({ page }) => {
+  const state = await mountRegressionApi(page);
+
+  await page.goto(`${CHAT_BASE_URL}/?shareCode=Abc12345`, { waitUntil: 'domcontentloaded' });
+
+  await expect(page.getByText(/只读研究成果|Read-only research result/)).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(/此页面仅供阅读|This page is read-only/)).toBeVisible();
+  await expect(page.locator('.academic-home')).toHaveCount(0);
+  await expect(page.locator('#workspace-composer')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /编辑|删除|重新生成|Edit|Delete|Regenerate/ })).toHaveCount(0);
+  await expect(page.locator('iframe')).toHaveCount(1);
+  await expect(page.locator('iframe').first()).toHaveAttribute('sandbox', 'allow-same-origin');
+
+  const sharedFrame = page.frameLocator('iframe').first();
+  await expect(sharedFrame.locator('h2')).toHaveText('只读研究成果');
+  expect(state.shareRequests).toEqual(['Abc12345']);
+  expect(state.academicRequests).toHaveLength(0);
+  expect(state.chatRequests).toHaveLength(0);
+});
+
+test('非法分享链接停留在只读错误态，不回退到聊天首页或发起请求', async ({ page }) => {
+  const state = await mountRegressionApi(page);
+
+  await page.goto(`${CHAT_BASE_URL}/?shareCode=bad`, { waitUntil: 'domcontentloaded' });
+
+  await expect(page.getByText(/分享链接格式无效|The share link is invalid/)).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('.academic-home')).toHaveCount(0);
+  await expect(page.locator('#workspace-composer')).toHaveCount(0);
+  expect(state.shareRequests).toHaveLength(0);
+  expect(state.academicRequests).toHaveLength(0);
+  expect(state.chatRequests).toHaveLength(0);
+});
 
 test('编辑消息会永久截断后续消息，主题切换分隔线不会闪白', async ({ page }) => {
   const state = await mountRegressionApi(page, {
@@ -410,17 +596,17 @@ test('编辑消息会永久截断后续消息，主题切换分隔线不会闪�
   await expect(page.getByText('后续用户消息')).toBeVisible();
   await expect(page.getByText('后续助手回复')).toBeVisible();
 
-  await page.getByRole('button', { name: '编辑' }).first().click();
-  const editTextarea = page.locator('.text-wrap textarea').first();
+  await page.getByRole('button', { name: /编辑|Edit/ }).first().click();
+  const editTextarea = page.locator('.workspace-record__editor textarea').first();
   await editTextarea.fill('编辑后的首条用户消息');
-  await page.getByRole('button', { name: '发送' }).first().click();
+  await page.getByRole('button', { name: /保存修改|Save|Update/ }).click();
 
   await expect(page.getByText('编辑后的首条回复')).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('后续用户消息')).toHaveCount(0);
   await expect(page.getByText('后续助手回复')).toHaveCount(0);
 
-  await page.getByRole('button', { name: '重新生成' }).first().click();
-  await expect.poll(() => state.chatRequests.length).toBe(2);
+  await page.getByRole('button', { name: /重新生成|Regenerate/ }).first().click();
+  await expect.poll(() => state.academicRequests.length).toBe(2);
   await expect(page.getByText('后续用户消息')).toHaveCount(0);
   await expect(page.getByText('后续助手回复')).toHaveCount(0);
 
@@ -430,18 +616,16 @@ test('编辑消息会永久截断后续消息，主题切换分隔线不会闪�
   await expect(page.getByText('后续用户消息')).toHaveCount(0);
   await expect(page.getByText('后续助手回复')).toHaveCount(0);
 
-  expect(state.chatRequests[0].overwriteReply).toBe(true);
-  expect(Number(state.chatRequests[0].chatId)).toBe(1001);
-  expect(Number(state.chatRequests[0].replyChatId)).toBe(1002);
-  expect(state.chatRequests[1].overwriteReply).toBe(true);
-  expect(Number(state.chatRequests[1].chatId)).toBe(1001);
-  expect(Number(state.chatRequests[1].replyChatId)).toBe(1002);
+  expect(state.academicRequests[0].overwriteReply).toBe(true);
+  expect(Number(state.academicRequests[0].chatId)).toBe(1001);
+  expect(Number(state.academicRequests[0].replyChatId)).toBe(1002);
+  expect(state.academicRequests[1].overwriteReply).toBe(true);
+  expect(Number(state.academicRequests[1].chatId)).toBe(1001);
+  expect(Number(state.academicRequests[1].replyChatId)).toBe(1002);
 
-  await page.getByRole('button', { name: '切换主题' }).click();
+  await page.getByRole('button', { name: /切换主题|Switch to (?:dark|light) mode/ }).click();
   await expect
-    .poll(() =>
-      page.evaluate(() => Boolean(document.querySelector('.account-divider')))
-    )
+    .poll(() => page.evaluate(() => Boolean(document.querySelector('.account-divider'))))
     .toBe(false);
 });
 
@@ -459,15 +643,15 @@ test('学术润色保留总段落且刷新后表格稳定，重新生成走覆�
 
   await loginAsSuper(page);
 
-  const academicToggle = page.getByRole('button', { name: '启用或禁用学术模式' });
-  if ((await academicToggle.getAttribute('aria-pressed')) !== 'true') {
-    await academicToggle.click();
-  }
-  await page.locator('select').first().selectOption('中文润色');
+  const researchTools = await openResearchTools(page);
+  const coreSelector = researchTools.locator('select').first();
+  await expect(coreSelector.locator('option[value="中文润色"]')).toBeAttached({ timeout: 10000 });
+  await coreSelector.selectOption('中文润色');
+  await closeResearchTools(page, researchTools);
 
-  const input = page.locator('textarea[aria-label="聊天消息输入框"]');
+  const input = page.locator('#workspace-composer');
   await input.fill('请用中文润色下面这段说明文字');
-  await page.getByRole('button', { name: '发送消息' }).click();
+  await sendButton(page).click();
 
   await expect(
     page.getByText('以下为润色后的总段落：我会先给出完整润色版本，然后用三列表格说明修改原因。'),
@@ -482,30 +666,33 @@ test('学术润色保留总段落且刷新后表格稳定，重新生成走覆�
   expect(liveRows).toBeGreaterThan(10);
   expect(await liveTable.locator('tbody tr').first().locator('td').count()).toBe(3);
   await expect(liveTable.locator('tbody tr').first().locator('td').nth(2)).not.toContainText(
-    '拼写、语法、清晰、简洁和整体可读性'
+    '拼写、语法、清晰、简洁和整体可读性',
   );
   await expect(liveTable.locator('tbody tr').nth(1).locator('td').nth(2)).not.toContainText(
-    '同时必须用中文分解长句'
+    '同时必须用中文分解长句',
   );
   await expect(liveTable.locator('tbody tr').nth(2).locator('td').nth(2)).not.toContainText(
-    '我的能力包括：'
+    '我的能力包括：',
   );
   await expect(liveTable.locator('tbody tr').nth(5).locator('td').nth(2)).not.toContainText(
-    '编程帮助、代码调试与思路梳理'
+    '编程帮助、代码调试与思路梳理',
   );
   await expect(liveTable.locator('tbody tr').nth(8).locator('td').nth(2)).not.toContainText(
-    '使用方式很简单：'
+    '使用方式很简单：',
   );
   await expect(liveTable.locator('tbody tr').nth(10).locator('td').nth(2)).not.toContainText(
-    '我会给出对应的回答或处理结果'
+    '我会给出对应的回答或处理结果',
   );
   await expect(liveTable.locator('tbody tr').nth(13).locator('td').nth(2)).not.toContainText(
-    '我不能直接访问你的本地文件'
+    '我不能直接访问你的本地文件',
   );
   await expect(
-    liveTable.locator('tbody tr', {
-      has: page.locator('td', { hasText: '我的服务能力包括：' }),
-    }).locator('td').nth(2)
+    liveTable
+      .locator('tbody tr', {
+        has: page.locator('td', { hasText: '我的服务能力包括：' }),
+      })
+      .locator('td')
+      .nth(2),
   ).not.toContainText('回答问题、解释概念、提供学习与研究辅导');
 
   expect(state.academicRequests).toHaveLength(1);
@@ -526,39 +713,40 @@ test('学术润色保留总段落且刷新后表格稳定，重新生成走覆�
   const persistedRows = await persistedTable.locator('tbody tr').count();
   expect(persistedRows).toBeGreaterThan(10);
   expect(await persistedTable.locator('tbody tr').first().locator('td').count()).toBe(3);
+  await expect(persistedTable.locator('tbody tr').first().locator('td').nth(2)).not.toContainText(
+    '拼写、语法、清晰、简洁和整体可读性',
+  );
+  await expect(persistedTable.locator('tbody tr').nth(1).locator('td').nth(2)).not.toContainText(
+    '同时必须用中文分解长句',
+  );
+  await expect(persistedTable.locator('tbody tr').nth(2).locator('td').nth(2)).not.toContainText(
+    '我的能力包括：',
+  );
+  await expect(persistedTable.locator('tbody tr').nth(5).locator('td').nth(2)).not.toContainText(
+    '编程帮助、代码调试与思路梳理',
+  );
+  await expect(persistedTable.locator('tbody tr').nth(8).locator('td').nth(2)).not.toContainText(
+    '使用方式很简单：',
+  );
+  await expect(persistedTable.locator('tbody tr').nth(10).locator('td').nth(2)).not.toContainText(
+    '我会给出对应的回答或处理结果',
+  );
+  await expect(persistedTable.locator('tbody tr').nth(13).locator('td').nth(2)).not.toContainText(
+    '我不能直接访问你的本地文件',
+  );
   await expect(
-    persistedTable.locator('tbody tr').first().locator('td').nth(2)
-  ).not.toContainText('拼写、语法、清晰、简洁和整体可读性');
-  await expect(
-    persistedTable.locator('tbody tr').nth(1).locator('td').nth(2)
-  ).not.toContainText('同时必须用中文分解长句');
-  await expect(
-    persistedTable.locator('tbody tr').nth(2).locator('td').nth(2)
-  ).not.toContainText('我的能力包括：');
-  await expect(
-    persistedTable.locator('tbody tr').nth(5).locator('td').nth(2)
-  ).not.toContainText('编程帮助、代码调试与思路梳理');
-  await expect(
-    persistedTable.locator('tbody tr').nth(8).locator('td').nth(2)
-  ).not.toContainText('使用方式很简单：');
-  await expect(
-    persistedTable.locator('tbody tr').nth(10).locator('td').nth(2)
-  ).not.toContainText('我会给出对应的回答或处理结果');
-  await expect(
-    persistedTable.locator('tbody tr').nth(13).locator('td').nth(2)
-  ).not.toContainText('我不能直接访问你的本地文件');
-  await expect(
-    persistedTable.locator('tbody tr', {
-      has: page.locator('td', { hasText: '我的服务能力包括：' }),
-    }).locator('td').nth(2)
+    persistedTable
+      .locator('tbody tr', {
+        has: page.locator('td', { hasText: '我的服务能力包括：' }),
+      })
+      .locator('td')
+      .nth(2),
   ).not.toContainText('回答问题、解释概念、提供学习与研究辅导');
 
-  const academicToggleAfterReload = page.getByRole('button', { name: '启用或禁用学术模式' });
-  if ((await academicToggleAfterReload.getAttribute('aria-pressed')) !== 'true') {
-    await academicToggleAfterReload.click();
-  }
-  await page.locator('select').first().selectOption('中文润色');
-  await page.getByRole('button', { name: '重新生成' }).last().click();
+  const reopenedResearchTools = await openResearchTools(page);
+  await reopenedResearchTools.locator('select').first().selectOption('中文润色');
+  await closeResearchTools(page, reopenedResearchTools);
+  await page.getByRole('button', { name: /重新生成|Regenerate/ }).last().click();
   await expect(
     page.getByText('以下为润色后的总段落：我会先给出完整润色版本，然后用三列表格说明修改原因。'),
   ).toBeVisible({ timeout: 10000 });
@@ -567,4 +755,191 @@ test('学术润色保留总段落且刷新后表格稳定，重新生成走覆�
   expect(Boolean(state.academicRequests[1].overwriteReply)).toBe(true);
   expect(state.academicRequests[1].chatId).toBeGreaterThan(0);
   expect(state.academicRequests[1].replyChatId).toBeGreaterThan(0);
+});
+
+test('上传论文后随学术请求提交，资料不会停留在界面状态', async ({ page }) => {
+  const state = await mountRegressionApi(page, { initialLogs: [] });
+  await loginAsSuper(page);
+
+  await page.getByRole('button', { name: /开始文献综述|Start literature review/ }).click();
+
+  const fileInput = page.locator('input[type="file"]').first();
+  await fileInput.setInputFiles({
+    name: 'paper.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4 academic regression fixture'),
+  });
+  await expect(page.getByText('paper.pdf')).toBeVisible({ timeout: 10000 });
+
+  const input = page.locator('#workspace-composer');
+  await input.fill('请总结这篇论文的研究问题与主要结论');
+  await sendButton(page).click();
+
+  await expect(page.getByText('已收到：请总结这篇论文的研究问题与主要结论')).toBeVisible({
+    timeout: 10000,
+  });
+  expect(state.academicRequests).toHaveLength(1);
+  const submittedFiles = JSON.parse(String(state.academicRequests[0].fileUrl || '[]'));
+  expect(submittedFiles).toEqual([
+    {
+      name: 'paper.pdf',
+      url: '/file/userFiles/209912/31/paper.pdf',
+      type: 'document',
+    },
+  ]);
+});
+
+test('老师和学生的比较、研究笔记与教学材料入口走 Academic 对话链路', async ({ page }) => {
+  const state = await mountRegressionApi(page, { initialLogs: [] });
+  await loginAsSuper(page);
+
+  const input = page.locator('#workspace-composer');
+  await expect(page.getByRole('button', { name: /比较多篇论文|Compare papers/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /整理研究笔记|Organize research notes/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /生成教学材料|Create teaching material/ })).toBeVisible();
+
+  await page.getByRole('button', { name: /比较多篇论文|Compare papers/ }).click();
+  await expect(input).toHaveValue(/比较当前资料中的多篇论文|Compare the papers/);
+  await page.getByRole('button', { name: /整理研究笔记|Organize research notes/ }).click();
+  await expect(input).toHaveValue(/结构化研究笔记|structured research notes/);
+  await page.getByRole('button', { name: /生成教学材料|Create teaching material/ }).click();
+  await expect(input).toHaveValue(/生成教学材料|Create teaching material/);
+
+  await sendButton(page).click();
+  await expect.poll(() => state.academicRequests.length).toBe(1);
+  expect(state.academicRequests).toHaveLength(1);
+  expect(state.academicRequests[0].function).toBe('chat');
+  expect(state.academicRequests[0].appId).toBe(0);
+  expect(String(state.academicRequests[0].main_input || '')).toMatch(/生成教学材料|Create teaching material/);
+  await expect(page.locator('.workspace-record--assistant').last()).toBeVisible({ timeout: 10000 });
+});
+
+test('研究入口将论文速读与 LaTeX 任务绑定到 Academic 插件选择器', async ({ page }) => {
+  const state = await mountRegressionApi(page, {
+    initialLogs: [],
+    member: true,
+    plugins: [
+      {
+        name: 'PDF批量总结',
+        group: '学术',
+        description: '批量阅读 PDF 论文',
+      },
+      {
+        name: 'LaTeX精准翻译',
+        group: '学术',
+        description: '翻译 LaTeX 文稿',
+      },
+    ],
+  });
+  await loginAsSuper(page);
+
+  await page.getByRole('button', { name: /总结论文|Summarize Paper/ }).click();
+  const researchTools = await openResearchTools(page);
+  const pluginSelect = researchTools.locator('select').nth(1);
+  await expect(pluginSelect.locator('option[value="PDF批量总结"]')).toBeAttached({
+    timeout: 10000,
+  });
+
+  await expect.poll(() => pluginSelect.inputValue()).toBe('PDF批量总结');
+  await expect(page.locator('#workspace-composer')).toHaveValue(
+    /论文|paper/i,
+  );
+
+  await closeResearchTools(page, researchTools);
+  await page.getByRole('button', { name: /LaTeX 翻译|Translate LaTeX/ }).click();
+  const reopenedResearchTools = await openResearchTools(page);
+  const reopenedPluginSelect = reopenedResearchTools.locator('select').nth(1);
+  await expect.poll(() => reopenedPluginSelect.inputValue()).toBe('LaTeX精准翻译');
+  await closeResearchTools(page, reopenedResearchTools);
+  await page.getByRole('button', { name: /总结论文|Summarize Paper/ }).click();
+  const finalResearchTools = await openResearchTools(page);
+  await expect.poll(() => finalResearchTools.locator('select').nth(1).inputValue()).toBe('PDF批量总结');
+  await closeResearchTools(page, finalResearchTools);
+
+  await sendButton(page).click();
+  await expect.poll(() => state.academicRequests.length).toBe(1);
+  expect(state.academicRequests).toHaveLength(1);
+  expect(state.academicRequests[0].function).toBe('plugin');
+  expect(state.academicRequests[0].plugin_name).toBe('PDF批量总结');
+});
+
+test('会员可从能力编排添加步骤并提交工作流', async ({ page }) => {
+  const state = await mountRegressionApi(page, { member: true, initialLogs: [] });
+  await loginAsSuper(page);
+
+  await page
+    .getByRole('button', {
+      name: /自定义研究流程|自訂研究流程|Custom research workflow|研究フローを作成|연구 워크플로 만들기/,
+    })
+    .click();
+  const researchTools = await openResearchTools(page);
+  await researchTools.getByRole('button', { name: /添加能力|Add capability/ }).click();
+
+  const workflowCard = page.locator('.research-controls__workflow-card').first();
+  await expect(workflowCard).toBeVisible({ timeout: 10000 });
+  await workflowCard.locator('select').first().selectOption('core');
+  await expect(
+    workflowCard.locator('select').nth(1).locator('option[value="中文润色"]'),
+  ).toBeAttached({
+    timeout: 10000,
+  });
+  await workflowCard.locator('select').nth(1).selectOption('中文润色');
+  await closeResearchTools(page, researchTools);
+
+  const input = page.locator('#workspace-composer');
+  await input.fill('请按当前链路处理这份研究材料');
+  await sendButton(page).click();
+
+  await expect(page.getByText('工作流已完成：1 步')).toBeVisible({ timeout: 10000 });
+  expect(state.workflowRequests).toHaveLength(1);
+  expect(state.workflowRequests[0].workflow.steps).toEqual([
+    expect.objectContaining({ kind: 'core', name: '中文润色' }),
+  ]);
+});
+
+test('长研究会话窗口化并保持输入可交互', async ({ page }) => {
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(String(error?.message || error)));
+
+  const initialLogs = Array.from({ length: 1000 }, (_, index) =>
+    buildChatLog({
+      chatId: 10000 + index,
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `长研究会话第 ${index + 1} 条记录`,
+    }),
+  );
+  await mountRegressionApi(page, { initialLogs });
+  await loginAsSuper(page);
+
+  const scroller = page.locator('#scrollRef');
+  const input = page.locator('#workspace-composer');
+  await expect(scroller).toBeVisible();
+  await expect(input).toBeVisible();
+
+  const collectMetrics = () =>
+    page.evaluate(() => ({
+      renderedRecords: document.querySelectorAll('.workspace-record').length,
+      totalDomNodes: document.querySelectorAll('*').length,
+      scrollHeight: document.querySelector('#scrollRef')?.scrollHeight || 0,
+    }));
+
+  const firstMetrics = await collectMetrics();
+  expect(firstMetrics.renderedRecords).toBeLessThan(180);
+  expect(firstMetrics.totalDomNodes).toBeLessThan(2600);
+  expect(firstMetrics.scrollHeight).toBeGreaterThan(0);
+
+  for (let pageIndex = 0; pageIndex < 4; pageIndex += 1) {
+    await scroller.evaluate(node => {
+      node.scrollTop = 0;
+      node.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+    await page.waitForTimeout(500);
+  }
+
+  const loadedMetrics = await collectMetrics();
+  expect(loadedMetrics.renderedRecords).toBeLessThan(240);
+  expect(loadedMetrics.totalDomNodes).toBeLessThan(3600);
+  await input.click();
+  await input.fill('继续总结这组长研究会话的共同结论');
+  expect(pageErrors).toEqual([]);
 });

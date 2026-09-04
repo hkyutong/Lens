@@ -1,4 +1,5 @@
 import { ss } from '@/utils/storage'
+import { readResearchState, writeResearchState } from '@/domain/research/storage'
 
 const LOCAL_NAME = 'chatStorage'
 
@@ -13,8 +14,6 @@ export function defaultState(): Chat.ChatState {
     chatList: [],
     groupKeyWord: '',
     baseConfig: null,
-    currentPlugin: undefined,
-    pluginList: [],
     academicMode: true,
     mobileAcademicPanelVisible: false,
     academicPluginList: [],
@@ -39,7 +38,16 @@ export function defaultState(): Chat.ChatState {
 
 export function getLocalState(): Chat.ChatState {
   const localState = ss.get(LOCAL_NAME)
-  return { ...defaultState(), ...localState, academicMode: true }
+  const researchState = readResearchState(localState)
+  return {
+    ...defaultState(),
+    ...localState,
+    active: researchState.active,
+    preferredModel: researchState.preferredModel,
+    hiddenReplyChatIdsByGroup: researchState.hiddenReplyChatIdsByGroup,
+    hiddenReplyTailAnchorByGroup: researchState.hiddenReplyTailAnchorByGroup,
+    academicMode: true,
+  }
 }
 
 export function setLocalState({
@@ -48,6 +56,12 @@ export function setLocalState({
   hiddenReplyChatIdsByGroup,
   hiddenReplyTailAnchorByGroup,
 }: Chat.ChatState) {
+  writeResearchState({
+    active,
+    preferredModel: preferredModel || null,
+    hiddenReplyChatIdsByGroup: hiddenReplyChatIdsByGroup || {},
+    hiddenReplyTailAnchorByGroup: hiddenReplyTailAnchorByGroup || {},
+  })
   ss.set(LOCAL_NAME, {
     ...ss.get(LOCAL_NAME),
     active,

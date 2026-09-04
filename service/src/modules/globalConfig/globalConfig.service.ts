@@ -1,4 +1,4 @@
-import { formatUrl, hideString } from '@/common/utils';
+import { formatUrl, hideString, sanitizePublicNotice } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
@@ -353,10 +353,11 @@ export class GlobalConfigService implements OnModuleInit {
       });
       await this.initGetAllConfig();
     }
-    const publicConfig = data.reduce((prev, cur) => {
+    const publicConfig: Record<string, any> = data.reduce((prev, cur) => {
       prev[cur.configKey] = cur.configVal;
       return prev;
     }, {});
+    publicConfig.noticeInfo = sanitizePublicNotice(publicConfig.noticeInfo);
     /* 追加一些自定义的配置 */
     const { wechatOfficialAppId, wechatOfficialAppSecret } = await this.getConfigs([
       'wechatOfficialAppId',
@@ -458,7 +459,11 @@ export class GlobalConfigService implements OnModuleInit {
 
   /* 查询公告信息 */
   async queryNotice() {
-    return await this.getConfigs(['noticeInfo', 'noticeTitle']);
+    const notice = await this.getConfigs(['noticeInfo', 'noticeTitle']);
+    return {
+      ...notice,
+      noticeInfo: sanitizePublicNotice(notice?.noticeInfo),
+    };
   }
 
   /* 开启多个支付规则的时候 按顺序只使用一个 */

@@ -1,234 +1,415 @@
-<template>
-  <transition name="modal-fade">
-    <div
-      v-if="props.visible"
-      class="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--modal-overlay)] backdrop-blur-[10px]"
-    >
-      <div
-        class="bg-[var(--dialog-bg)] rounded-2xl border border-[var(--border-color)] flex flex-col backdrop-blur shadow-[var(--dialog-shadow)]"
-        :class="isMobile ? 'w-full h-full rounded-none' : 'h-[82vh] w-full max-w-5xl p-5 mx-2'"
-      >
-        <!-- 标题部分 -->
-        <div class="flex justify-between items-center mb-4 pb-3">
-          <span class="text-xl font-semibold text-[var(--text-main)]">{{ t('lens.settings.setting') }}</span>
-          <button @click="handleClose" class="btn-icon btn-md">
-            <Close size="20" />
-          </button>
-        </div>
-        <!-- 主体部分 -->
-        <div class="flex flex-grow min-h-0">
-          <!-- 左边标签栏 -->
-          <div
-            class="w-1/4 bg-[var(--surface-panel)] rounded-2xl p-2 border border-[var(--border-color)] flex flex-col min-h-0 overflow-y-auto"
-          >
-            <div
-              v-for="(tab, index) in tabs"
-              :key="index"
-              @click="switchTab(index)"
-              class="relative flex items-center gap-3 px-4 py-3 my-1 break-all rounded-xl cursor-pointer group font-medium text-sm transition-colors"
-              :class="{
-                'bg-[var(--surface-card)] text-[var(--text-main)] border border-[var(--border-color)]':
-                  activeTab === index,
-                'text-[var(--text-sub)] hover:text-[var(--text-main)] hover:bg-[var(--surface-card)]':
-                  activeTab !== index,
-              }"
-            >
-              {{ tab.name }}
-            </div>
-
-            <!-- 添加退出登录按钮，位于标签栏最下方 -->
-            <div class="mt-auto">
-              <div
-                @click="showLogoutConfirmation"
-                class="relative flex items-center gap-3 px-4 py-3 my-2 break-all rounded-xl cursor-pointer group font-medium text-sm text-red-500 hover:bg-[var(--surface-card)] transition-colors"
-              >
-                {{ t('lens.settings.logout') }}
-              </div>
-            </div>
-          </div>
-          <!-- 右边内容区域 -->
-          <div
-            class="w-3/4 bg-[var(--surface-card)] rounded-2xl ml-4 border border-[var(--border-color)] p-3 min-h-0 overflow-hidden"
-          >
-            <transition name="fade" mode="out-in">
-              <div v-if="!isTabSwitching" key="loaded-content" class="h-full">
-                <keep-alive>
-                  <component
-                    v-if="tabs[activeTab]"
-                    :is="tabs[activeTab].component"
-                    :key="activeKey"
-                    class="h-full"
-                    :visible="props.visible && !isTabSwitching"
-                  ></component>
-                </keep-alive>
-              </div>
-              <div v-else key="loading-placeholder" class="flex justify-center items-center h-full">
-                <div class="animate-pulse flex space-x-4">
-                  <div class="flex-1 space-y-4 py-1">
-                    <div class="h-4 bg-[var(--surface-muted)] rounded w-3/4"></div>
-                    <div class="space-y-2">
-                      <div class="h-4 bg-[var(--surface-muted)] rounded"></div>
-                      <div class="h-4 bg-[var(--surface-muted)] rounded w-5/6"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </transition>
-          </div>
-        </div>
-      </div>
-    </div>
-  </transition>
-</template>
-
 <script setup lang="ts">
-import { useBasicLayout } from '@/hooks/useBasicLayout'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { t } from '@/locales'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
 import { dialog } from '@/utils/dialog'
-import { Close } from '@icon-park/vue-next' // Only Close icon needed now
-import { computed, defineAsyncComponent, markRaw, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, markRaw, watch } from 'vue'
 
 const AccountManagement = defineAsyncComponent(() => import('./Settings/AccountManagement.vue'))
 const MemberCenter = defineAsyncComponent(() => import('./Settings/MemberCenter.vue'))
 const NoticeDialog = defineAsyncComponent(() => import('./Settings/NoticeDialog.vue'))
 const UserAgreement = defineAsyncComponent(() => import('./Settings/UserAgreement.vue'))
 
-const useGlobalStore = useGlobalStoreWithOut()
-interface Props {
-  visible: boolean
-}
-const { isMobile } = useBasicLayout() // Still needed for :class binding
-const props = defineProps<Props>()
-
+const props = defineProps<{ visible: boolean }>()
 const authStore = useAuthStore()
-const globalConfig = computed(() => authStore.globalConfig)
+const globalStore = useGlobalStoreWithOut()
 
-// Use markRaw to prevent components from becoming reactive
 const tabs = computed(() => {
-  const baseTabs = [
-    { name: t('lens.settings.accountSecurity'), component: markRaw(AccountManagement) },
-    { name: t('lens.settings.upgradePlan'), component: markRaw(MemberCenter) },
-    // { name: '数据管理', component: markRaw(DataManagement) },
-    { name: t('lens.settings.notice'), component: markRaw(NoticeDialog) },
+  const items = [
+    {
+      id: 'account',
+      name: t('lens.settings.accountSecurity'),
+      icon: 'ri:user-settings-line',
+      component: markRaw(AccountManagement),
+    },
+    {
+      id: 'member',
+      name: t('lens.settings.upgradePlan'),
+      icon: 'ri:award-line',
+      component: markRaw(MemberCenter),
+    },
+    {
+      id: 'notice',
+      name: t('lens.settings.notice'),
+      icon: 'ri:file-list-3-line',
+      component: markRaw(NoticeDialog),
+    },
   ]
 
-  // 只有当 globalConfig.isAutoOpenAgreement === '1' 时才添加用户协议选项
-  if (globalConfig.value.isAutoOpenAgreement === '1') {
-    baseTabs.push({ name: '用户协议', component: markRaw(UserAgreement) })
-  }
-
-  return baseTabs
-})
-
-// Desktop-specific state
-const activeTab = ref(
-  useGlobalStore.settingsActiveTab >= 0 && useGlobalStore.settingsActiveTab < tabs.value.length
-    ? useGlobalStore.settingsActiveTab
-    : 0
-)
-const activeKey = ref(Date.now())
-const isTabSwitching = ref(false)
-
-// Tab switching function (Desktop only)
-function switchTab(index: number) {
-  if (index >= 0 && index < tabs.value.length && index !== activeTab.value) {
-    isTabSwitching.value = true
-    activeTab.value = index
-    useGlobalStore.settingsActiveTab = index
-    nextTick(() => {
-      activeKey.value = Date.now()
-      setTimeout(() => {
-        isTabSwitching.value = false
-      }, 50) // Reduced delay
+  if (String(authStore.globalConfig.isAutoOpenAgreement) === '1') {
+    items.push({
+      id: 'agreement',
+      name: t('lens.settings.agreement'),
+      icon: 'ri:shield-check-line',
+      component: markRaw(UserAgreement),
     })
   }
-}
 
-// Watch for global changes (for desktop sync)
+  return items
+})
+
+const activeTab = computed({
+  get: () => {
+    const index = Number(globalStore.settingsActiveTab)
+    return index >= 0 && index < tabs.value.length ? index : 0
+  },
+  set: value => globalStore.updateSettingsActiveTab(value),
+})
+
+const activeItem = computed(() => tabs.value[activeTab.value] || tabs.value[0])
+
 watch(
-  () => useGlobalStore.settingsActiveTab,
-  newVal => {
-    // Check if the dialog is visible and it's not mobile view
-    if (
-      props.visible &&
-      !isMobile.value &&
-      newVal >= 0 &&
-      newVal < tabs.value.length &&
-      newVal !== activeTab.value
-    ) {
-      switchTab(newVal)
-    }
+  () => tabs.value.length,
+  length => {
+    if (activeTab.value >= length) activeTab.value = 0
   }
 )
 
-// Watch for visibility changes (for desktop refresh)
-watch(
-  () => props.visible,
-  isVisible => {
-    if (isVisible && !isMobile.value) {
-      // Sync with global store on open for desktop
-      const targetTab =
-        useGlobalStore.settingsActiveTab >= 0 &&
-        useGlobalStore.settingsActiveTab < tabs.value.length
-          ? useGlobalStore.settingsActiveTab
-          : 0
-      if (activeTab.value !== targetTab) {
-        activeTab.value = targetTab
-      }
-      activeKey.value = Date.now() // Refresh key on open
-      isTabSwitching.value = false // Ensure not stuck loading
-    } else if (!isVisible) {
-      // Optionally reset tab when closed, or keep last state?
-      // activeTab.value = 0;
-      isTabSwitching.value = false
-    }
-  },
-  { immediate: true } // Run immediately to set initial state
-)
-
-// Close Handler
-function handleClose() {
-  useGlobalStore.updateSettingsDialog(false)
+function close() {
+  globalStore.updateSettingsDialog(false)
 }
 
-// Logout Handler
-function showLogoutConfirmation() {
-  const dialogInstance = dialog()
-  dialogInstance.warning({
-    title: '退出登录',
-    content: '确定要退出登录吗？',
-    positiveText: '确认',
-    negativeText: '取消',
+function requestLogout() {
+  dialog().warning({
+    title: t('lens.settings.logoutTitle'),
+    content: t('lens.settings.logoutConfirm'),
+    positiveText: t('lens.settings.confirm'),
+    negativeText: t('lens.settings.cancel'),
     onPositiveClick: () => {
       authStore.logOut()
-      handleClose() // Close settings after logout
+      close()
     },
   })
 }
-
-// onMounted: Initial state sync handled by immediate watchers
-onMounted(() => {
-  // console.log('Desktop SettingsDialog mounted');
-})
 </script>
 
+<template>
+  <Transition name="lens-settings">
+    <div v-if="props.visible" class="lens-settings" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        class="lens-settings__backdrop"
+        :aria-label="t('lens.header.close')"
+        @click="close"
+      />
+
+      <section class="lens-settings__shell">
+        <header class="lens-settings__mobile-header">
+          <div>
+            <span>Lens</span>
+            <strong>{{ activeItem?.name || t('lens.settings.setting') }}</strong>
+          </div>
+          <button type="button" :aria-label="t('lens.header.close')" @click="close">
+            <SvgIcon icon="ri:close-line" />
+          </button>
+        </header>
+
+        <aside class="lens-settings__nav">
+          <div class="lens-settings__brand">
+            <span>Lens</span>
+            <small>by YutoAI</small>
+            <p>{{ t('lens.header.researchWorkspace') }}</p>
+          </div>
+
+          <nav :aria-label="t('lens.settings.setting')">
+            <button
+              v-for="(item, index) in tabs"
+              :key="item.id"
+              type="button"
+              :class="{ active: activeTab === index }"
+              :aria-current="activeTab === index ? 'page' : undefined"
+              @click="activeTab = index"
+            >
+              <SvgIcon :icon="item.icon" />
+              <span>{{ item.name }}</span>
+            </button>
+          </nav>
+
+          <button type="button" class="lens-settings__logout" @click="requestLogout">
+            <SvgIcon icon="ri:logout-box-r-line" />
+            {{ t('lens.settings.logout') }}
+          </button>
+        </aside>
+
+        <main class="lens-settings__main">
+          <header class="lens-settings__desktop-header">
+            <div>
+              <span>{{ t('lens.settings.setting') }}</span>
+              <h2>{{ activeItem?.name }}</h2>
+            </div>
+            <button type="button" :aria-label="t('lens.header.close')" @click="close">
+              <SvgIcon icon="ri:close-line" />
+            </button>
+          </header>
+
+          <div class="lens-settings__content custom-scrollbar">
+            <component
+              :is="activeItem?.component"
+              v-if="activeItem?.component"
+              :visible="props.visible"
+            />
+          </div>
+        </main>
+      </section>
+    </div>
+  </Transition>
+</template>
+
 <style scoped>
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.5s;
+.lens-settings {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  padding: 28px;
 }
-.modal-fade-enter-from,
-.modal-fade-leave-to {
+
+.lens-settings__backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: color-mix(in srgb, var(--text-main) 28%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.lens-settings__shell {
+  position: relative;
+  display: grid;
+  width: min(1080px, 100%);
+  height: min(760px, calc(100vh - 56px));
+  grid-template-columns: 230px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--paper-border);
+  border-radius: 18px;
+  background: var(--paper-surface);
+  box-shadow: 0 24px 80px rgba(20, 31, 50, 0.22);
+}
+
+.lens-settings__nav {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 26px 18px 18px;
+  border-right: 1px solid var(--paper-border);
+  background: var(--surface-muted);
+}
+
+.lens-settings__brand > span {
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 760;
+  letter-spacing: -0.04em;
+}
+
+.lens-settings__brand > small {
+  margin-left: 7px;
+  color: var(--ink-faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lens-settings__brand > p {
+  margin: 5px 0 24px;
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+
+.lens-settings__nav nav {
+  display: grid;
+  gap: 5px;
+}
+
+.lens-settings__nav nav button,
+.lens-settings__logout {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 620;
+  text-align: left;
+  transition: 150ms ease;
+}
+
+.lens-settings__nav nav button:hover,
+.lens-settings__nav nav button.active {
+  border-color: var(--academic-border);
+  background: var(--paper-surface);
+  color: var(--academic-blue);
+}
+
+.lens-settings__nav svg,
+.lens-settings__logout svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+.lens-settings__logout {
+  margin-top: auto;
+  color: #b43f45;
+}
+
+.lens-settings__logout:hover {
+  background: color-mix(in srgb, #b43f45 8%, transparent);
+}
+
+.lens-settings__main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.lens-settings__desktop-header {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--paper-border);
+}
+
+.lens-settings__desktop-header span {
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lens-settings__desktop-header h2 {
+  margin: 3px 0 0;
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 720;
+}
+
+.lens-settings__desktop-header button,
+.lens-settings__mobile-header button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--paper-border);
+  border-radius: 9px;
+  color: var(--text-sub);
+}
+
+.lens-settings__content {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 22px 26px 30px;
+}
+
+.lens-settings__mobile-header {
+  display: none;
+}
+
+.lens-settings-enter-active,
+.lens-settings-leave-active {
+  transition: opacity 160ms ease;
+}
+
+.lens-settings-enter-from,
+.lens-settings-leave-to {
   opacity: 0;
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+@media (max-width: 720px) {
+  .lens-settings {
+    padding: 0;
+  }
+
+  .lens-settings__shell {
+    width: 100%;
+    height: 100%;
+    grid-template-rows: 60px minmax(0, 1fr) 64px;
+    grid-template-columns: 1fr;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .lens-settings__mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--paper-border);
+  }
+
+  .lens-settings__mobile-header > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .lens-settings__mobile-header span {
+    color: var(--academic-blue);
+    font-size: 15px;
+    font-weight: 760;
+  }
+
+  .lens-settings__mobile-header strong {
+    color: var(--text-main);
+    font-size: 13px;
+  }
+
+  .lens-settings__main {
+    grid-row: 2;
+  }
+
+  .lens-settings__desktop-header {
+    display: none;
+  }
+
+  .lens-settings__content {
+    padding: 14px 12px 24px;
+  }
+
+  .lens-settings__nav {
+    grid-row: 3;
+    padding: 7px 8px max(7px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--paper-border);
+    border-right: 0;
+    background: var(--paper-surface);
+  }
+
+  .lens-settings__brand,
+  .lens-settings__logout {
+    display: none;
+  }
+
+  .lens-settings__nav nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .lens-settings__nav nav button {
+    min-height: 48px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 3px;
+    border: 0;
+    font-size: 9px;
+    text-align: center;
+  }
+
+  .lens-settings__nav nav button:hover,
+  .lens-settings__nav nav button.active {
+    background: var(--academic-blue-soft);
+  }
 }
 </style>

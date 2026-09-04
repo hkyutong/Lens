@@ -6,7 +6,7 @@ uvicorn
 requests          # 核心：用于调用 Claude/OpenAI API
 pydantic>=2.0
 loguru            # 日志
-gradio==3.50.2   # 保留：为了兼容代码中的类型引用，不可删
+gradio==3.50.2   # 学术能力代码兼容依赖
 
 # ========================
 # 2. AI 模型基础

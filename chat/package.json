@@ -1,14 +1,13 @@
 {
-  "name": "yutoscholar-chat",
+  "name": "lens-web",
   "version": "4.3.0",
   "private": true,
-  "description": "Lens chat",
-  "author": "vastxie",
+  "description": "Lens academic research workspace by YutoAI",
+  "author": "YutoAI",
   "keywords": [
     "Lens",
-    "chatgpt",
-    "ChatBox",
-    "ChatWeb"
+    "academic-research",
+    "research-workflow"
   ],
   "main": "electron/main.js",
   "scripts": {
@@ -17,12 +16,16 @@
     "all": "npm-run-all --parallel start:h start:f",
     "dev": "vite",
     "build-check": "run-p type-check build-only",
+    "release-check": "npm run build-check && npm run verify:research-contract && npm run verify:release-candidate",
+    "build-only": "vite build --mode=production",
     "preview": "vite preview",
-    "build": "pnpm format && vite build --mode=production",
+    "build": "npm run build-only",
     "type-check": "vue-tsc --noEmit",
+    "verify:research-contract": "node ./scripts/verify_research_contract.mjs",
+    "verify:release-candidate": "node ./scripts/verify_academic_release_candidate.mjs",
     "bootstrap": "pnpm install && pnpm run common:prepare",
     "common:cleanup": "rimraf node_modules && rimraf pnpm-lock.yaml",
-    "format": "pnpm dlx prettier --write '{src,scripts,config}/**/*.{vue,ts,tsx,js,jsx,css,scss,less,json,md,html,yml,yaml}' '*.{js,ts,json,md,yml}'",
+    "format": "prettier --write '{src,scripts,config}/**/*.{vue,ts,tsx,js,jsx,css,scss,less,json,md,html,yml,yaml}' '*.{js,ts,json,md,yml}'",
     "electron": "electron .",
     "electron:dev": "cross-env ELECTRON_START_URL=http://localhost:9002 electron .",
     "electron:build": "pnpm run build && electron-builder",

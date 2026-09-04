@@ -1,5 +1,8 @@
 /* Tailwind base reset 之外，自定义全局字体/排版 */
 html {
   font-family:
-    'IBM Plex Sans', 'Source Han Sans SC', 'Noto Sans SC', 'PingFang SC', 'SF Pro SC', sans-serif;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'PingFang SC', sans-serif;
+  font-size: 16px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { createShare } from '@/api/share'
-import type { ResData } from '@/api/types'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
@@ -134,7 +133,7 @@ const handleCopy = async () => {
 
 const handleShare = async () => {
   try {
-    const res: ResData = await createShare({
+    const res = await createShare({
       htmlContent: localEditableText.value,
     })
 

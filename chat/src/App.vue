@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { initWechatLogin } from '@/services/wechatLogin' // 导入微信登录相关功能
+import { getShare } from '@/api/share'
+import { t } from '@/locales'
+import { parseShareCode } from '@/domain/research/share'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { ClientJS } from 'clientjs'
@@ -8,11 +11,51 @@ import { ss } from './utils/storage'
 
 const Watermark = defineAsyncComponent(() => import('@/components/common/Watermark/index.vue'))
 const HtmlDialog = defineAsyncComponent(() => import('@/components/HtmlDialog.vue'))
+const SharedHtmlView = defineAsyncComponent(() => import('@/components/SharedHtmlView.vue'))
 
 const client = new ClientJS()
 const authStore = useAuthStore()
 const useGlobalStore = useGlobalStoreWithOut()
 const sharedHtml = ref('')
+const shareCode = ref('')
+const shareRequested = ref(false)
+const shareLoading = ref(false)
+const shareError = ref('')
+try {
+  const rawShareCode = new URL(window.location.href).searchParams.get('shareCode')
+  if (rawShareCode !== null) {
+    shareRequested.value = true
+    const normalizedShareCode = parseShareCode(rawShareCode)
+    if (normalizedShareCode) {
+      shareCode.value = normalizedShareCode
+    } else {
+      shareError.value = t('lens.share.invalidLink')
+    }
+  }
+} catch (error) {
+  shareRequested.value = true
+  shareError.value = t('lens.share.invalidLink')
+}
+
+const isShareView = computed(() => shareRequested.value)
+
+async function loadSharedHtml() {
+  if (!shareCode.value) return
+  shareLoading.value = true
+  shareError.value = ''
+  try {
+    const response = await getShare(shareCode.value)
+    const htmlContent = response?.data?.htmlContent
+    if (typeof htmlContent !== 'string' || !htmlContent.trim()) {
+      throw new Error('empty-share')
+    }
+    sharedHtml.value = htmlContent
+  } catch (error) {
+    shareError.value = t('lens.share.loadFailed')
+  } finally {
+    shareLoading.value = false
+  }
+}
 
 // 获取客户端指纹
 useGlobalStore.updateFingerprint(client.getFingerprint())
@@ -25,16 +68,13 @@ const wechatSilentLoginStatus = computed(
   () => Number(authStore.globalConfig?.wechatSilentLoginStatus) === 1
 )
 const showWatermark = computed(() => Number(authStore.globalConfig?.showWatermark) === 1)
-// 默认不清除缓存，需要在后台配置中设置为1才开启自动清除
-const clearCacheEnabled = computed(() => Number(authStore.globalConfig?.clearCacheEnabled) === 1)
-const siteName = computed(() => authStore.globalConfig?.siteName || 'YutoAI')
 const siteUrl = computed(() => authStore.globalConfig?.siteUrl || '')
+const productName = 'Lens'
+const publisherName = 'YutoAI'
+const brandName = `${productName} by ${publisherName}`
 const brandSeoTitle = 'Lens - YutoAI 科研工作台'
-const siteDescription = computed(
-  () =>
-    authStore.globalConfig?.homeWelcomeContent ||
-    'YutoAI 是面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织的 AI 学术工作台。'
-)
+const siteDescription =
+  'Lens 是 YutoAI 旗下的 AI 学术工作台，面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织。'
 const siteKeywords =
   'AI SEO, 学术AI, AI学术平台, AI科研工作台, 论文速读, PDF理解, Arxiv摘要, LaTeX翻译, 英文润色, BibTeX, YutoAI'
 
@@ -68,17 +108,12 @@ function setOrCreateLink(selector: string, attrs: Record<string, string>, href: 
   el.setAttribute('href', href)
 }
 
-function updateStructuredData(
-  name: string,
-  description: string,
-  canonicalUrl: string,
-  imageUrl: string
-) {
+function updateStructuredData(description: string, canonicalUrl: string, imageUrl: string) {
   const structuredData = [
     {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name,
+      name: brandName,
       url: canonicalUrl,
       description,
       inLanguage: 'zh-CN',
@@ -86,7 +121,11 @@ function updateStructuredData(
     {
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
-      name,
+      name: productName,
+      publisher: {
+        '@type': 'Organization',
+        name: publisherName,
+      },
       applicationCategory: 'ResearchApplication',
       operatingSystem: 'Web',
       url: canonicalUrl,
@@ -109,89 +148,6 @@ function updateStructuredData(
   }
 }
 
-/**
- * 清除所有本地缓存
- * 包括localStorage、sessionStorage和indexedDB缓存
- * @param {boolean} forceClear 强制清除缓存，不考虑配置
- */
-function clearAllCache(forceClear = false) {
-  // 如果未启用清除缓存且未指定强制清除，则跳过
-  if (!clearCacheEnabled.value && !forceClear) {
-    return
-  }
-
-  // 获取当前登录状态
-  const isUserLoggedIn = authStore.isLogin
-  // 如果用户已登录，则不清除缓存
-  if (isUserLoggedIn) {
-    return
-  }
-
-  // 以下是用户未登录时的缓存清除逻辑
-  // 保存所有本地存储的关键数据
-  const savedData: Record<string, string | null> = {}
-
-  // 保存主题
-  savedData['theme'] = localStorage.getItem('theme') || 'light'
-
-  // 保存其他非登录相关但需要保留的数据
-  const preserveKeys = ['appLanguage', 'agreedToUserAgreement']
-
-  // 保存这些数据
-  preserveKeys.forEach(key => {
-    const value = localStorage.getItem(key)
-    if (value) savedData[key] = value
-
-    const ssValue = sessionStorage.getItem(key)
-    if (ssValue) savedData[`ss_${key}`] = ssValue
-  })
-
-  // 清除localStorage
-  localStorage.clear()
-
-  // 清除sessionStorage
-  sessionStorage.clear()
-
-  // 恢复所有保存的数据
-  Object.keys(savedData).forEach(key => {
-    const value = savedData[key]
-    if (value !== null) {
-      if (key.startsWith('ss_')) {
-        // 恢复到sessionStorage
-        sessionStorage.setItem(key.substring(3), value)
-      } else {
-        // 恢复到localStorage
-        localStorage.setItem(key, value)
-      }
-    }
-  })
-
-  // 清除indexedDB数据库
-  if (window.indexedDB.databases) {
-    window.indexedDB
-      .databases()
-      .then(databases => {
-        databases.forEach(database => {
-          if (database.name) {
-            window.indexedDB.deleteDatabase(database.name)
-          }
-        })
-      })
-      .catch(() => {
-        // 如果浏览器不支持databases()方法，使用兼容性方式处理
-        console.warn('无法直接清除IndexedDB数据库')
-      })
-  }
-
-  // 清除应用缓存(如果支持)
-  if ('caches' in window) {
-    caches.keys().then(keys => {
-      keys.forEach(key => {
-        caches.delete(key)
-      })
-    })
-  }
-}
 
 async function loadBaiduCode() {
   const baiduCode = authStore.globalConfig?.baiduCode
@@ -206,8 +162,7 @@ function setDocumentTitle() {
 }
 
 function syncDocumentSeo() {
-  const name = siteName.value
-  const description = siteDescription.value
+  const description = siteDescription
   const baseUrl = toAbsoluteUrl(siteUrl.value) || window.location.origin
   const canonicalUrl = (() => {
     try {
@@ -233,29 +188,23 @@ function syncDocumentSeo() {
   )
   setOrCreateMeta('meta[property="og:type"]', { property: 'og:type' }, 'website')
   setOrCreateMeta('meta[property="og:locale"]', { property: 'og:locale' }, 'zh_CN')
-  setOrCreateMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, name)
+  setOrCreateMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, brandName)
   setOrCreateMeta('meta[property="og:title"]', { property: 'og:title' }, brandSeoTitle)
   setOrCreateMeta('meta[property="og:description"]', { property: 'og:description' }, description)
   setOrCreateMeta('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl)
   setOrCreateMeta('meta[property="og:image"]', { property: 'og:image' }, imageUrl)
   setOrCreateMeta('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary_large_image')
-  setOrCreateMeta(
-    'meta[name="twitter:title"]',
-    { name: 'twitter:title' },
-    brandSeoTitle
-  )
+  setOrCreateMeta('meta[name="twitter:title"]', { name: 'twitter:title' }, brandSeoTitle)
   setOrCreateMeta('meta[name="twitter:description"]', { name: 'twitter:description' }, description)
   setOrCreateMeta('meta[name="twitter:image"]', { name: 'twitter:image' }, imageUrl)
-  setOrCreateMeta('meta[name="application-name"]', { name: 'application-name' }, name)
+  setOrCreateMeta('meta[name="application-name"]', { name: 'application-name' }, productName)
   setOrCreateLink('link[rel="canonical"]', { rel: 'canonical' }, canonicalUrl)
-  updateStructuredData(name, description, canonicalUrl, imageUrl)
+  updateStructuredData(description, canonicalUrl, imageUrl)
 }
 
 watch(
   () => [
-    authStore.globalConfig?.siteName,
     authStore.globalConfig?.siteUrl,
-    authStore.globalConfig?.homeWelcomeContent,
     authStore.globalConfig?.clientLogoPath,
     authStore.globalConfig?.clientFaviconPath,
   ],
@@ -291,6 +240,12 @@ onMounted(async () => {
   // 设置网站标题
   syncDocumentSeo()
 
+  // 分享链接只进入独立只读视图，不初始化登录、缓存清理或聊天壳。
+  if (isShareView.value) {
+    await loadSharedHtml()
+    return
+  }
+
   // 加载百度统计代码（如果有）
   loadBaiduCode()
 
@@ -298,9 +253,6 @@ onMounted(async () => {
   if (wechatSilentLoginStatus.value && isWechatBrowser()) {
     await initWechatLogin() // 初始化微信登录
   }
-
-  // 尝试自动清除缓存
-  clearAllCache()
 
   /* 动态设置网站ico svg格式 */
   const link = document.createElement('link')
@@ -321,14 +273,22 @@ onMounted(async () => {
 
 <template>
   <!-- 水印组件（如果启用） -->
-  <Watermark v-if="showWatermark"></Watermark>
+  <Watermark v-if="showWatermark && !isShareView"></Watermark>
+
+  <!-- 分享链接使用独立的只读展示，不挂载聊天页面 -->
+  <SharedHtmlView
+    v-if="isShareView"
+    :html="sharedHtml"
+    :loading="shareLoading"
+    :error="shareError"
+  />
 
   <!-- 主要内容使用router-view -->
-  <router-view />
+  <router-view v-else />
 
   <!-- 共享内容对话框 -->
-  <HtmlDialog :visible="useGlobalStore.htmlDialog" :html="sharedHtml" />
+  <HtmlDialog v-if="!isShareView" :visible="useGlobalStore.htmlDialog" :html="sharedHtml" />
 
   <!-- 全局图片预览器 -->
-  <GlobalImageViewer />
+  <GlobalImageViewer v-if="!isShareView" />
 </template>

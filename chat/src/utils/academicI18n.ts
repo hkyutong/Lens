@@ -1,11 +1,15 @@
 import { t } from '@/locales'
 
-type AcademicEntity = {
+export type AcademicEntity = {
   name?: string
   displayName?: string
   originName?: string
+  label?: string
   description?: string
   info?: string
+  group?: string
+  advancedArgs?: boolean | number | string
+  disabled?: boolean | number | string
 }
 
 const normalizeAcademicEntityName = (value: unknown) =>
@@ -35,12 +39,9 @@ const academicEntityKeyMap: Record<string, string> = {
   [normalizeAcademicEntityName('Arxiv论文下载')]: 'lens.academicEntities.tool.arxivSummary',
   [normalizeAcademicEntityName('一键下载arxiv论文并翻译摘要（先在input输入编号，如1812.10695）')]:
     'lens.academicEntities.tool.arxivSummary',
-  [normalizeAcademicEntityName('Arxiv 英文摘要')]:
-    'lens.academicEntities.tool.arxivEnglishSummary',
-  [normalizeAcademicEntityName('Arxiv英文摘要')]:
-    'lens.academicEntities.tool.arxivEnglishSummary',
-  [normalizeAcademicEntityName('Arxiv精准翻译')]:
-    'lens.academicEntities.tool.arxivEnglishSummary',
+  [normalizeAcademicEntityName('Arxiv 英文摘要')]: 'lens.academicEntities.tool.arxivEnglishSummary',
+  [normalizeAcademicEntityName('Arxiv英文摘要')]: 'lens.academicEntities.tool.arxivEnglishSummary',
+  [normalizeAcademicEntityName('Arxiv精准翻译')]: 'lens.academicEntities.tool.arxivEnglishSummary',
   [normalizeAcademicEntityName('Arxiv精准翻译（输入arxivID）')]:
     'lens.academicEntities.tool.arxivEnglishSummary',
   [normalizeAcademicEntityName('LaTeX 摘要')]: 'lens.academicEntities.tool.latexSummary',
@@ -49,18 +50,12 @@ const academicEntityKeyMap: Record<string, string> = {
     'lens.academicEntities.tool.latexPreciseTranslation',
   [normalizeAcademicEntityName('LaTeX精准翻译')]:
     'lens.academicEntities.tool.latexPreciseTranslation',
-  [normalizeAcademicEntityName('LaTeX 英文润色')]:
-    'lens.academicEntities.tool.latexEnglishPolish',
-  [normalizeAcademicEntityName('LaTeX英文润色')]:
-    'lens.academicEntities.tool.latexEnglishPolish',
-  [normalizeAcademicEntityName('LaTeX 中文润色')]:
-    'lens.academicEntities.tool.latexChinesePolish',
-  [normalizeAcademicEntityName('LaTeX中文润色')]:
-    'lens.academicEntities.tool.latexChinesePolish',
-  [normalizeAcademicEntityName('LaTeX 高亮纠错')]:
-    'lens.academicEntities.tool.latexProofreading',
-  [normalizeAcademicEntityName('LaTeX高亮纠错')]:
-    'lens.academicEntities.tool.latexProofreading',
+  [normalizeAcademicEntityName('LaTeX 英文润色')]: 'lens.academicEntities.tool.latexEnglishPolish',
+  [normalizeAcademicEntityName('LaTeX英文润色')]: 'lens.academicEntities.tool.latexEnglishPolish',
+  [normalizeAcademicEntityName('LaTeX 中文润色')]: 'lens.academicEntities.tool.latexChinesePolish',
+  [normalizeAcademicEntityName('LaTeX中文润色')]: 'lens.academicEntities.tool.latexChinesePolish',
+  [normalizeAcademicEntityName('LaTeX 高亮纠错')]: 'lens.academicEntities.tool.latexProofreading',
+  [normalizeAcademicEntityName('LaTeX高亮纠错')]: 'lens.academicEntities.tool.latexProofreading',
 }
 
 const resolveAcademicEntityKey = (entity: AcademicEntity | null | undefined) => {
@@ -76,11 +71,7 @@ const resolveAcademicEntityKey = (entity: AcademicEntity | null | undefined) => 
   return ''
 }
 
-const translateAcademicField = (
-  key: string,
-  field: 'label' | 'description',
-  fallback: string
-) => {
+const translateAcademicField = (key: string, field: 'label' | 'description', fallback: string) => {
   if (!key) return fallback
   const translationKey = `${key}.${field}`
   const translated = t(translationKey)
@@ -99,9 +90,7 @@ export const getAcademicEntityDisplayLabel = (entity: AcademicEntity | null | un
   return translateAcademicField(key, 'label', fallback)
 }
 
-export const getAcademicEntityDisplayDescription = (
-  entity: AcademicEntity | null | undefined
-) => {
+export const getAcademicEntityDisplayDescription = (entity: AcademicEntity | null | undefined) => {
   const fallback = String(entity?.info || entity?.description || '').trim()
   const key = resolveAcademicEntityKey(entity)
   return translateAcademicField(key, 'description', fallback)

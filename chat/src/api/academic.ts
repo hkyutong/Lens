@@ -1,15 +1,19 @@
 import { post } from '@/utils/request'
 import { fetchStream } from '@/utils/request/fetch'
-import type { AxiosProgressEvent, GenericAbortSignal } from 'axios'
+import type { AxiosProgressEvent } from 'axios'
+import {
+  ACADEMIC_ENDPOINTS,
+  type AcademicChatRequest,
+  type AcademicProcessParams,
+  type AcademicWorkflowRequest,
+} from '@/domain/research/contracts'
 
-export function fetchAcademicChatAPIProcess<T = any>(params: {
-  data: any
-  signal?: GenericAbortSignal
-  onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
-}) {
+export function fetchAcademicChatAPIProcess<T = any>(
+  params: AcademicProcessParams<AcademicChatRequest>
+) {
   if (!params.onDownloadProgress) {
     return post<T>({
-      url: '/academic/chat-process',
+      url: ACADEMIC_ENDPOINTS.chat,
       data: params.data,
       signal: params.signal,
     })
@@ -28,7 +32,7 @@ export function fetchAcademicChatAPIProcess<T = any>(params: {
       fetchOptions.signal = params.signal as any
     }
 
-    fetchStream('/academic/chat-process', fetchOptions, chunk => {
+    fetchStream(ACADEMIC_ENDPOINTS.chat, fetchOptions, chunk => {
       if (params.onDownloadProgress) {
         const progressEvent: AxiosProgressEvent = {
           event: {
@@ -56,14 +60,12 @@ export function fetchAcademicChatAPIProcess<T = any>(params: {
   })
 }
 
-export function fetchAcademicWorkflowAPIProcess<T = any>(params: {
-  data: any
-  signal?: GenericAbortSignal
-  onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
-}) {
+export function fetchAcademicWorkflowAPIProcess<T = any>(
+  params: AcademicProcessParams<AcademicWorkflowRequest>
+) {
   if (!params.onDownloadProgress) {
     return post<T>({
-      url: '/academic/workflow-process',
+      url: ACADEMIC_ENDPOINTS.workflow,
       data: params.data,
       signal: params.signal,
     })
@@ -82,7 +84,7 @@ export function fetchAcademicWorkflowAPIProcess<T = any>(params: {
       fetchOptions.signal = params.signal as any
     }
 
-    fetchStream('/academic/workflow-process', fetchOptions, chunk => {
+    fetchStream(ACADEMIC_ENDPOINTS.workflow, fetchOptions, chunk => {
       if (params.onDownloadProgress) {
         const progressEvent: AxiosProgressEvent = {
           event: {
@@ -112,14 +114,14 @@ export function fetchAcademicWorkflowAPIProcess<T = any>(params: {
 
 export function fetchAcademicCoreFunctionList<T = any>() {
   return post<T>({
-    url: '/academic/core-function-list',
+    url: ACADEMIC_ENDPOINTS.coreFunctions,
     data: {},
   })
 }
 
 export function fetchAcademicPluginList<T = any>() {
   return post<T>({
-    url: '/academic/plugin-list',
+    url: ACADEMIC_ENDPOINTS.plugins,
     data: {},
   })
 }

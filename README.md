@@ -29,12 +29,20 @@ Lens 昱镜把「多模型对话」「学术插件」「报告生成」「后台
 ## 项目结构
 
 - `service/`：后端 API 服务（NestJS）
-- `chat/`：用户前端（Vite + Vue）
+- `chat/`：Lens 用户前端（Vue/Vite，采用 Gradio 式学术研究工作台，默认端口 9002）
+- `academic-4.0/main.py`：学术执行 API（FastAPI，默认端口 38000）
 - `admin/`：管理后台（Vite + Vue）
 - `academic-4.0/`：学术能力引擎（Python）
 - `docs/`：部署、开发与功能文档
 
 ## 快速开始
+
+本地启动 Lens Vue 前端：
+
+```bash
+cd chat
+npm run dev -- --host 127.0.0.1 --port 9002
+```
 
 请先阅读部署指南：  
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)

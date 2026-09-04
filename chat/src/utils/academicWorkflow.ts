@@ -1,22 +1,23 @@
 import { t } from '@/locales'
-import { getAcademicEntityDisplayLabel } from '@/utils/academicI18n'
+import { getAcademicEntityDisplayLabel, type AcademicEntity } from '@/utils/academicI18n'
 
-export const normalizeAcademicWorkflowText = (value: any) =>
+export const normalizeAcademicWorkflowText = (value: unknown) =>
   String(value || '')
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '')
 
-const getSelectorText = (item: any) =>
+const getSelectorText = (item: AcademicEntity | null | undefined) =>
   `${item?.displayName || ''} ${item?.name || ''} ${item?.originName || ''}`
 
-export const findAcademicWorkflowSelector = (list: any[], selectorGroups: string[][]) => {
+export const findAcademicWorkflowSelector = (
+  list: AcademicEntity[],
+  selectorGroups: string[][]
+) => {
   for (const selectors of selectorGroups) {
     const matched = list.find(item => {
       const haystack = normalizeAcademicWorkflowText(getSelectorText(item))
-      return selectors.every(selector =>
-        haystack.includes(normalizeAcademicWorkflowText(selector))
-      )
+      return selectors.every(selector => haystack.includes(normalizeAcademicWorkflowText(selector)))
     })
     if (matched) return matched
   }
@@ -29,9 +30,21 @@ export const buildAcademicWorkflowTemplates = (): Chat.AcademicWorkflowTemplate[
     title: t('lens.workflow.templates.paperPolishMindMap'),
     prompt: t('lens.workflow.templates.paperPolishMindMapPrompt'),
     steps: [
-      { kind: 'plugin', name: '论文速读', displayName: t('lens.academicEntities.tool.paperSummary.label') },
-      { kind: 'core', name: '中文润色', displayName: t('lens.academicEntities.core.chinesePolish.label') },
-      { kind: 'core', name: '绘制脑图', displayName: t('lens.academicEntities.core.mindMap.label') },
+      {
+        kind: 'plugin',
+        name: '论文速读',
+        displayName: t('lens.academicEntities.tool.paperSummary.label'),
+      },
+      {
+        kind: 'core',
+        name: '中文润色',
+        displayName: t('lens.academicEntities.core.chinesePolish.label'),
+      },
+      {
+        kind: 'core',
+        name: '绘制脑图',
+        displayName: t('lens.academicEntities.core.mindMap.label'),
+      },
     ],
   },
   {
@@ -39,8 +52,16 @@ export const buildAcademicWorkflowTemplates = (): Chat.AcademicWorkflowTemplate[
     title: t('lens.workflow.templates.pdfEnglishPolish'),
     prompt: t('lens.workflow.templates.pdfEnglishPolishPrompt'),
     steps: [
-      { kind: 'plugin', name: 'PDF 深度理解', displayName: t('lens.academicEntities.tool.pdfDeepRead.label') },
-      { kind: 'core', name: '英文润色', displayName: t('lens.academicEntities.core.englishPolish.label') },
+      {
+        kind: 'plugin',
+        name: 'PDF 深度理解',
+        displayName: t('lens.academicEntities.tool.pdfDeepRead.label'),
+      },
+      {
+        kind: 'core',
+        name: '英文润色',
+        displayName: t('lens.academicEntities.core.englishPolish.label'),
+      },
     ],
   },
   {
@@ -48,8 +69,16 @@ export const buildAcademicWorkflowTemplates = (): Chat.AcademicWorkflowTemplate[
     title: t('lens.workflow.templates.arxivChinesePolish'),
     prompt: t('lens.workflow.templates.arxivChinesePolishPrompt'),
     steps: [
-      { kind: 'plugin', name: 'Arxiv摘要', displayName: t('lens.academicEntities.tool.arxivSummary.label') },
-      { kind: 'core', name: '中文润色', displayName: t('lens.academicEntities.core.chinesePolish.label') },
+      {
+        kind: 'plugin',
+        name: 'Arxiv摘要',
+        displayName: t('lens.academicEntities.tool.arxivSummary.label'),
+      },
+      {
+        kind: 'core',
+        name: '中文润色',
+        displayName: t('lens.academicEntities.core.chinesePolish.label'),
+      },
     ],
   },
   {
@@ -57,15 +86,23 @@ export const buildAcademicWorkflowTemplates = (): Chat.AcademicWorkflowTemplate[
     title: t('lens.workflow.templates.codePolish'),
     prompt: t('lens.workflow.templates.codePolishPrompt'),
     steps: [
-      { kind: 'core', name: '学术型代码解释', displayName: t('lens.academicEntities.core.codeExplain.label') },
-      { kind: 'core', name: '中文润色', displayName: t('lens.academicEntities.core.chinesePolish.label') },
+      {
+        kind: 'core',
+        name: '学术型代码解释',
+        displayName: t('lens.academicEntities.core.codeExplain.label'),
+      },
+      {
+        kind: 'core',
+        name: '中文润色',
+        displayName: t('lens.academicEntities.core.chinesePolish.label'),
+      },
     ],
   },
 ]
 
 export const getAcademicWorkflowChainLabel = (steps: Chat.AcademicWorkflowStep[]) => {
   const labels = (Array.isArray(steps) ? steps : [])
-    .map(step => getAcademicEntityDisplayLabel(step as any) || step?.displayName || step?.name || '')
+    .map(step => getAcademicEntityDisplayLabel(step) || step?.displayName || step?.name || '')
     .filter(Boolean)
   return labels.join(' → ')
 }

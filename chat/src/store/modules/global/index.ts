@@ -14,7 +14,6 @@ export const DIALOG_TABS = {
 export const useGlobalStore = defineStore('global-store', {
   state: (): GlobalState => ({
     loading: false,
-    showAppListComponent: false,
     settingsDialog: false,
     showLoginDialog: false,
     showBadWordsDialog: false,
@@ -34,17 +33,12 @@ export const useGlobalStore = defineStore('global-store', {
     textContent: '',
     pythonContent: '',
     full_json: '',
-    externalLinkDialog: false,
-    currentExternalLink: null,
-    mobileSettingsDialog: false,
     goodsDialog: false,
     fingerprint: 0,
     noticeDialog: false,
     bindWxDialog: false,
     signInDialog: false,
     appDialog: false,
-    identityDialog: false,
-    phoneIdentityDialog: false,
     userAgreementDialog: false,
     BadWordsDialog: false,
     isCacheEnabled: false,
@@ -82,7 +76,6 @@ export const useGlobalStore = defineStore('global-store', {
     iframeUrl: '',
     clipboardText: '',
     mjImageData: {},
-    mobileInitialTab: undefined,
     workflowContent: [],
     markdownContent: '',
     isMarkdownPreviewerVisible: false,
@@ -148,10 +141,6 @@ export const useGlobalStore = defineStore('global-store', {
         this.previewImageUrls = imageUrls
         this.initialImageIndex = initialIndex
         this.mjImageData = mjData || {}
-        // 当图片预览器启用时，自动清空正在使用的插件
-        void import('../chat').then(({ useChatStore }) => {
-          useChatStore().setUsingPlugin(null)
-        })
       }
     },
 
@@ -179,14 +168,6 @@ export const useGlobalStore = defineStore('global-store', {
       this.appDialog = appDialog
     },
 
-    updateIdentityDialog(identityDialog: boolean) {
-      this.identityDialog = identityDialog
-    },
-
-    updatePhoneDialog(phoneIdentityDialog: boolean) {
-      this.phoneIdentityDialog = phoneIdentityDialog
-    },
-
     updateHtmlDialog(htmlDialog: boolean) {
       this.htmlDialog = htmlDialog
     },
@@ -209,43 +190,10 @@ export const useGlobalStore = defineStore('global-store', {
       this.pythonContent = content
     },
 
-    updateExternalLinkDialog(visible: boolean, url: string | null = null) {
-      this.externalLinkDialog = visible
-      this.currentExternalLink = url
-    },
-
     updateSettingsDialog(settingsDialog: boolean, activeTab?: number) {
       this.settingsDialog = settingsDialog
       if (settingsDialog && activeTab !== undefined) {
         this.settingsActiveTab = activeTab
-      }
-    },
-
-    updateMobileSettingsDialog(mobileSettingsDialog: boolean, activeTab?: number | string) {
-      this.mobileSettingsDialog = mobileSettingsDialog
-
-      if (activeTab !== undefined) {
-        // 如果是数字索引，转换为对应的tabId
-        if (typeof activeTab === 'number') {
-          const tabIds = ['account', 'member', 'notice', 'agreement']
-          this.mobileInitialTab = tabIds[activeTab] || undefined
-        } else {
-          // 如果直接传入了tabId字符串
-          this.mobileInitialTab = activeTab
-        }
-      } else {
-        this.mobileInitialTab = undefined
-      }
-    },
-
-    updateShowAppListComponent(showAppListComponent: boolean) {
-      this.showAppListComponent = showAppListComponent
-    },
-
-    setCurrentExternalLink(link: string | null) {
-      this.currentExternalLink = link
-      if (link) {
-        this.externalLinkDialog = true
       }
     },
 

@@ -22,6 +22,7 @@ export * from './maskIpAddress';
 export * from './removeSpecialCharacters';
 export * from './removeThinkTags';
 export * from './sanitizeClientErrorMessage';
+export * from './sanitizePublicNotice';
 export * from './tools';
 export * from './utcformatTime';
 export * from './correctApiBaseUrl';

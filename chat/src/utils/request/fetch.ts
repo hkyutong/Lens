@@ -1,6 +1,7 @@
 import { useAuthStore, useGlobalStore } from '@/store'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from './sanitizeErrorMessage'
+import { readTextStream } from '@/domain/research/textStream'
 
 // 基本配置
 const BASE_URL = import.meta.env.VITE_GLOB_API_URL || ''
@@ -145,40 +146,8 @@ export const fetchStream = async (
 ) => {
   const response = await fetchClient(url, options)
 
-  // 获取响应的reader
-  const reader = response.body?.getReader()
-  if (!reader) {
-    throw new FetchError('Failed to get reader from response', 0, 'Reader Error')
-  }
-
-  // 用于保存响应文本
-  let responseText = ''
-
-  // 用于解码二进制数据
-  const decoder = new TextDecoder()
-
   try {
-    // 循环读取数据
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      // 解码二进制数据
-      const chunk = decoder.decode(value, { stream: true })
-
-      // 追加到完整响应文本
-      responseText += chunk
-
-      // 调用进度回调
-      if (onProgress) {
-        try {
-          onProgress(chunk)
-        } catch (err) {
-          // 进度回调异常不应中断网络流，否则会导致后端流被意外中止。
-          console.error('[fetchStream] onProgress error:', err)
-        }
-      }
-    }
+    return await readTextStream(response.body, onProgress)
   } catch (error: any) {
     throw new FetchError(
       sanitizeUserFacingErrorMessage(error?.message || '', 0, '网络异常，请稍后重试'),
@@ -186,8 +155,6 @@ export const fetchStream = async (
       'Network Error'
     )
   }
-
-  return responseText
 }
 
 /**

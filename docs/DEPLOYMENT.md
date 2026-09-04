@@ -105,6 +105,32 @@ QUICK_DEPLOY_ONLY=1 ./build.sh
 - 本文档不预设你必须使用 `root`、`www` 或其他特定用户，按你的服务器规范执行即可
 - 如果你不是用宝塔，也可以在 `AIWebQuickDeploy/` 目录手工执行 `pnpm install --prod --frozen-lockfile` 后再用你自己的 PM2/守护方案启动 `dist/main.js`
 
+### 3.4 Lens 学术前台发布闸门
+
+`public/chat/` 必须来自当前 `chat/dist/` 候选包，不能从旧服务器目录或历史压缩包直接复制。构建机在交付前执行：
+
+```bash
+cd chat
+npm run release-check
+node ./scripts/verify_academic_release_candidate.mjs \
+  --candidate ./dist \
+  --mirror ../service/public/chat
+node ./scripts/verify_academic_release_candidate.mjs \
+  --candidate ./dist \
+  --mirror ../AIWebQuickDeploy/public/chat
+```
+
+必须确认输出中的 `legacyUiIncluded: false`，且两个镜像的 `indexSha256` 与候选一致。发布器会在替换入口前保留唯一最新回滚备份；不要手工删除整个 `public/chat`，也不要把 `service/public/chat` 与其他项目目录混用。
+
+线上切换后，先用只读请求确认根入口的 `index.html` 已指向本次候选哈希资源，再用浏览器完成以下 smoke check：
+
+- 新建会话显示 `Lens · by YutoAI`，不出现 `AppList`、`应用广场` 或旧三栏侧栏。
+- “比较多篇论文”“整理研究笔记”“生成教学材料”入口可见并提交 Academic 请求。
+- 登录、历史会话、论文上传、只读分享和退出登录各执行一条最小路径。
+- 发现入口或资源异常时，立即停止继续发布，使用 `service` 目录的 `npm run rollback:chat-static` 恢复最新备份，再回查入口哈希。
+
+以上线上切换、回滚和 smoke check 都属于有副作用的生产操作，必须在明确的动作级授权、回滚负责人和观察窗口确认后执行。
+
 ## 4. 配置 service/.env
 
 ```bash

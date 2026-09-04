@@ -3,7 +3,16 @@ import { generateCramiCode, maskCrami, maskEmail } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
-import { In, LessThanOrEqual, Like, MoreThan, Not, Repository } from 'typeorm';
+import {
+  FindManyOptions,
+  FindOptionsSelect,
+  In,
+  LessThanOrEqual,
+  Like,
+  MoreThan,
+  Not,
+  Repository,
+} from 'typeorm';
 import { UserEntity } from '../user/user.entity';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { CramiEntity } from './crami.entity';
@@ -63,9 +72,62 @@ export class CramiService {
     };
   }
 
+  private readonly legacyPackageSelect: FindOptionsSelect<CramiPackageEntity> = {
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+    deletedAt: true,
+    name: true,
+    des: true,
+    coverImg: true,
+    price: true,
+    order: true,
+    status: true,
+    weight: true,
+    days: true,
+    model3Count: true,
+    model4Count: true,
+    drawMjCount: true,
+    appCats: true,
+  };
+
+  private isMissingUsdPriceColumn(error: unknown) {
+    const message = String((error as Error)?.message || '');
+    return (
+      /usdPrice|usd_price/i.test(message) &&
+      /(unknown column|doesn't exist|no such column|not found)/i.test(message)
+    );
+  }
+
+  private async findPackageWithLegacySchemaFallback(id: number) {
+    try {
+      return await this.cramiPackageEntity.findOne({ where: { id } });
+    } catch (error) {
+      if (!this.isMissingUsdPriceColumn(error)) throw error;
+      return this.cramiPackageEntity.findOne({
+        where: { id },
+        select: this.legacyPackageSelect,
+      });
+    }
+  }
+
+  private async findPackagesWithLegacySchemaFallback(
+    options: FindManyOptions<CramiPackageEntity>,
+  ) {
+    try {
+      return await this.cramiPackageEntity.findAndCount(options);
+    } catch (error) {
+      if (!this.isMissingUsdPriceColumn(error)) throw error;
+      return this.cramiPackageEntity.findAndCount({
+        ...options,
+        select: this.legacyPackageSelect,
+      });
+    }
+  }
+
   /* 查询单个套餐 */
   async queryOnePackage(id) {
-    const pkg = await this.cramiPackageEntity.findOne({ where: { id } });
+    const pkg = await this.findPackageWithLegacySchemaFallback(id);
     return pkg ? withPackageBillingOptions(pkg) : null;
   }
 
@@ -83,7 +145,7 @@ export class CramiService {
           Object.assign(where, { days: LessThanOrEqual(0) });
         }
       }
-      const [rows, count] = await this.cramiPackageEntity.findAndCount({
+      const [rows, count] = await this.findPackagesWithLegacySchemaFallback({
         skip: (page - 1) * size,
         take: size,
         where,
@@ -91,7 +153,7 @@ export class CramiService {
       });
       return { rows: rows.map(item => withPackageBillingOptions(item)), count };
     } catch (error) {
-      console.log('error: ', error);
+      throw new HttpException('套餐列表暂时不可用，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

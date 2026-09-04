@@ -25,7 +25,6 @@ export type Language = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP' | 'ko-KR'
 export type Env = 'electron' | 'wechat' | 'web' | 'mobile'
 
 export interface AppState {
-  siderCollapsed: boolean
   theme: Theme
   language: Language
   env: Env
@@ -65,7 +64,6 @@ export function resolvePreferredLanguage(): Language {
 
 export function defaultSetting(): AppState {
   return {
-    siderCollapsed: false,
     theme: 'light',
     language: resolvePreferredLanguage(),
     env: detectEnvironment(),
@@ -74,7 +72,11 @@ export function defaultSetting(): AppState {
 
 export function getLocalSetting(): AppState {
   const localSetting: AppState | undefined = ss.get(LOCAL_NAME)
-  return { ...defaultSetting(), ...localSetting }
+  if (!localSetting) return defaultSetting()
+  const { siderCollapsed: _legacySiderCollapsed, ...savedSetting } = localSetting as AppState & {
+    siderCollapsed?: boolean
+  }
+  return { ...defaultSetting(), ...savedSetting }
 }
 
 export function setLocalSetting(setting: AppState): void {
