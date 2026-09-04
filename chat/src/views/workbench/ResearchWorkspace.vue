@@ -2569,11 +2569,11 @@ provide('onOpenImagePreviewer', openImagePreviewer)
   min-height: 0;
   flex: none;
   display: flex;
-  width: min(460px, 40vw);
+  width: min(420px, 38vw);
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   overflow: hidden;
-  padding: 16px;
+  padding: 12px;
   border-left: 1px solid var(--paper-border);
   background: var(--bg-body);
 }
@@ -2594,12 +2594,13 @@ provide('onOpenImagePreviewer', openImagePreviewer)
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 18px;
+  padding: 16px;
+  scrollbar-gutter: auto;
 }
 
 @media (max-width: 1180px) {
   .lens-shell__tools {
-    width: min(380px, 38vw);
+    width: min(360px, 36vw);
   }
 }
 

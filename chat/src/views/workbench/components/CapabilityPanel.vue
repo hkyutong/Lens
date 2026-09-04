@@ -63,11 +63,6 @@ const activeSelectionLabel = computed(() => {
     t('lens.academicPanel.workflowFallbackLabel')
   )
 })
-const activeSelectionNote = computed(() =>
-  activeSelectionLabel.value === t('lens.academicPanel.workflowFallbackLabel')
-    ? t('lens.academicPanel.workflowFallbackDesc')
-    : t('lens.academicPanel.selectedReadyHint')
-)
 const openMemberDialog = () => {
   useGlobalStore.updateSettingsDialog(true, DIALOG_TABS.MEMBER)
 }
@@ -367,50 +362,11 @@ const pluginArgs = computed({
   set: (value: string) => chatStore.setAcademicPluginArgs(sanitizePluginArgs(value)),
 })
 
-const quickPluginCandidates = computed(() => pluginList.value.slice(0, 4))
-const quickCoreCandidates = computed(() => coreFunctions.value.slice(0, 4))
-
 const isPluginArgsEnabled = computed(() => Boolean(activePlugin.value))
 const pluginArgsPlaceholder = computed(() => {
   if (!activePlugin.value) return t('lens.academicPanel.customInstructionPlaceholderInactive')
   return props.pluginArgsPlaceholder || t('lens.academicPanel.customInstructionPlaceholder')
 })
-
-const selectQuickCore = (core: AcademicEntity) => {
-  if (workflowEnabled.value) {
-    const nextIndex = workflowSteps.value.length
-    if (!workflowMemberAvailable.value) {
-      openMemberDialog()
-      return
-    }
-    if (nextIndex >= workflowStepLimit.value) return
-    chatStore.addAcademicWorkflowStep({
-      kind: 'core',
-      name: String(core?.name || '').trim(),
-      displayName: getAcademicEntityDisplayLabel(core),
-    })
-    return
-  }
-  chatStore.setAcademicCore(core)
-}
-
-const selectQuickPlugin = (plugin: AcademicEntity) => {
-  if (workflowEnabled.value) {
-    const nextIndex = workflowSteps.value.length
-    if (!workflowMemberAvailable.value) {
-      openMemberDialog()
-      return
-    }
-    if (nextIndex >= workflowStepLimit.value) return
-    chatStore.addAcademicWorkflowStep({
-      kind: 'plugin',
-      name: String(plugin?.name || '').trim(),
-      displayName: getAcademicEntityDisplayLabel(plugin),
-    })
-    return
-  }
-  chatStore.setAcademicPlugin(plugin)
-}
 
 const toggleWorkflowMode = (enabled: boolean) => {
   if (enabled && !workflowMemberAvailable.value) {
@@ -511,7 +467,6 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
             {{ step.displayName || step.name || t('lens.workflow.stepSelectPlaceholder') }}
           </span>
         </div>
-        <p class="research-controls__overview-note">{{ activeSelectionNote }}</p>
       </div>
 
       <div class="research-controls__mode-switch">
@@ -690,47 +645,6 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
         </button>
       </div>
 
-      <div v-if="!workflowEnabled" class="research-controls__presets">
-        <div class="research-controls__preset-block">
-          <div class="research-controls__preset-title">
-            {{ t('lens.academicPanel.quickCoreTitle') }}
-          </div>
-          <div v-if="quickCoreCandidates.length" class="research-controls__chips">
-            <button
-              v-for="core in quickCoreCandidates"
-              :key="core.name"
-              type="button"
-              class="research-controls__chip-btn"
-              @click="selectQuickCore(core)"
-            >
-              {{ getCoreDisplayLabel(core) }}
-            </button>
-          </div>
-          <div v-else class="research-controls__preset-empty">
-            {{ t('lens.academicPanel.quickCoreEmpty') }}
-          </div>
-        </div>
-        <div class="research-controls__preset-block">
-          <div class="research-controls__preset-title">
-            {{ t('lens.academicPanel.quickToolTitle') }}
-          </div>
-          <div v-if="quickPluginCandidates.length" class="research-controls__chips">
-            <button
-              v-for="plugin in quickPluginCandidates"
-              :key="plugin.name"
-              type="button"
-              class="research-controls__chip-btn"
-              @click="selectQuickPlugin(plugin)"
-            >
-              {{ getPluginDisplayLabel(plugin) }}
-            </button>
-          </div>
-          <div v-else class="research-controls__preset-empty">
-            {{ t('lens.academicPanel.quickToolEmpty') }}
-          </div>
-        </div>
-      </div>
-
       <div v-if="showAdvanced && !workflowEnabled" class="research-controls__advanced-panel">
         <div class="research-controls__field">
           <label>{{ props.groupLabel || t('lens.academicPanel.groupLabel') }}</label>
@@ -758,7 +672,7 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 .research-controls {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   padding: 0;
   border-radius: 0;
   border: none;
@@ -768,8 +682,7 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 
 .research-controls__header,
 .research-controls__header-actions,
-.research-controls__group-row,
-.research-controls__chips {
+.research-controls__group-row {
   display: flex;
   align-items: center;
 }
@@ -802,8 +715,7 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 }
 
 .research-controls__eyebrow,
-.research-controls__workflow-label,
-.research-controls__preset-title {
+.research-controls__workflow-label {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0;
@@ -832,8 +744,7 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 
 .research-controls__toggle,
 .research-controls__close,
-.research-controls__advanced,
-.research-controls__chip-btn {
+.research-controls__advanced {
   border: 1px solid transparent;
   background: var(--surface-muted);
   color: var(--text-main);
@@ -869,16 +780,11 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   font-size: 16px;
 }
 
-.research-controls__chips {
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .research-controls__overview {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 16px;
+  padding: 12px;
   border-radius: 16px;
   border: 1px solid var(--paper-border);
   background: var(--surface-card);
@@ -902,13 +808,6 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   color: var(--text-sub);
   font-size: 12px;
   font-weight: 500;
-}
-
-.research-controls__overview-note {
-  margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-sub);
 }
 
 .research-controls__workflow-builder {
@@ -1070,40 +969,6 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
 }
 
-.research-controls__presets {
-  display: grid;
-  gap: 8px;
-}
-
-.research-controls__preset-block {
-  padding: 0;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-}
-
-.research-controls__preset-title {
-  margin-bottom: 10px;
-}
-
-.research-controls__preset-empty {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px dashed var(--paper-border);
-  background: var(--surface-muted);
-  color: var(--text-sub);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.research-controls__chip-btn {
-  border-radius: 9999px;
-  min-height: 40px;
-  padding: 8px 12px;
-  font-size: 12px;
-}
-
-.research-controls__chip-btn:hover,
 .research-controls__toggle:hover,
 .research-controls__advanced:hover,
 .research-controls__close:hover {
@@ -1152,16 +1017,6 @@ html.dark .research-controls__overview-chip {
   border-color: rgba(255, 255, 255, 0.08) !important;
   background: rgba(255, 255, 255, 0.05) !important;
   color: rgba(238, 242, 248, 0.82) !important;
-}
-
-html.dark .research-controls__overview-note,
-html.dark .research-controls__preset-empty {
-  color: rgba(223, 229, 240, 0.74) !important;
-}
-
-html.dark .research-controls__preset-empty {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  background: rgba(255, 255, 255, 0.04) !important;
 }
 
 html.dark .research-controls__toggle--active {

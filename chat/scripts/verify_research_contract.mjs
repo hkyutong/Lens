@@ -287,7 +287,16 @@ assert.match(academicRegressionSource, /state\.shareCreateRequests/)
 assert.match(academicRegressionSource, /sandbox', 'allow-same-origin'/)
 assert.match(workspaceHomeSource, /:aria-pressed="isStarterActive\(item\)"/)
 assert.match(workspaceHomeSource, /t\('lens\.workspace\.importedFilesLabel'\)/)
+assert.match(
+  workspaceHomeSource,
+  /@media \(max-width: 800px\)[\s\S]*\.academic-home__task-grid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/
+)
+assert.match(workspaceHomeSource, /\.academic-home__task-grid button span \{\s*display: none;/)
 assert.match(academicPanelSource, /:aria-pressed="workflowEnabled"/)
+assert.doesNotMatch(
+  academicPanelSource,
+  /research-controls__presets|quickCoreCandidates|quickPluginCandidates/
+)
 assert.match(messageTextSource, /role="status"/)
 assert.match(messageTextSource, /workflowStatusAborted/)
 assert.match(messageTextSource, /lens\.message\.browsedWebSources/)
