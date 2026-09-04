@@ -189,12 +189,7 @@ async function startCustomWorkflow() {
 
 <template>
   <section class="academic-home">
-    <div class="academic-home__masthead">
-      <div class="academic-home__status"><i></i>{{ t('lens.workspace.academicReady') }}</div>
-    </div>
-
     <div class="academic-home__intro">
-      <p class="academic-home__eyebrow">研究工作台</p>
       <h1>{{ t('lens.workspace.startAcademicWork') }}</h1>
       <p>{{ t('lens.workspace.startAcademicWorkDesc') }}</p>
     </div>
@@ -263,26 +258,6 @@ async function startCustomWorkflow() {
   padding: clamp(48px, 8vh, 96px) 0 64px;
   color: var(--text-main);
 }
-.academic-home__masthead {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-.academic-home__status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-sub);
-  font-size: 13px;
-  font-weight: 500;
-}
-.academic-home__status i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--academic-green);
-  box-shadow: 0 0 0 4px var(--academic-green-soft);
-}
 .academic-home__intro h1 {
   max-width: 620px;
   margin: 0;
@@ -298,13 +273,6 @@ async function startCustomWorkflow() {
   color: var(--text-sub);
   font-size: 17px;
   line-height: 1.55;
-}
-.academic-home__eyebrow {
-  margin: 0 0 12px;
-  color: var(--academic-blue);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
 }
 .academic-home__tasks > header {
   display: flex;
