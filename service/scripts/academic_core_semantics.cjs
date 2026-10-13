@@ -76,6 +76,40 @@ function coreFixture(name) {
   return fixture ? { category: fixture.category, input: fixture.input } : null;
 }
 
+function revisedEnglishText(text) {
+  const plain = value => value.replace(/[*_`]/g, '').trim();
+  const cells = line => line.includes('|')
+    ? line.trim().replace(/^\||\|$/g, '').split('|').map(plain)
+    : null;
+  const lines = text.split('\n');
+
+  const revised = [];
+  let index = 0;
+  while (index < lines.length) {
+    const header = cells(lines[index]);
+    const separator = cells(lines[index + 1] || '');
+    const originalColumn = header?.findIndex(cell => /original|原文|原句|原始/i.test(cell)) ?? -1;
+    const revisedColumn = header?.findIndex(cell =>
+      /revised|corrected|polished|improved|修改后|修订后|润色后|修订句|改写后/i.test(cell)
+      && !/reason|explanation|原因|解释|说明/i.test(cell)) ?? -1;
+    const isComparison = originalColumn >= 0 && revisedColumn >= 0 && originalColumn !== revisedColumn
+      && separator?.every(cell => /^:?-{3,}:?$/.test(cell));
+    if (!isComparison) {
+      revised.push(lines[index++]);
+      continue;
+    }
+
+    index += 2;
+    while (index < lines.length) {
+      const row = cells(lines[index]);
+      if (!row) break;
+      revised.push(row[revisedColumn] || lines[index]);
+      index++;
+    }
+  }
+  return plain(revised.join('\n'));
+}
+
 function validateCoreAnswer(fixture, answer) {
   const contract = fixtures.find(value => value.category === fixture?.category);
   if (!contract || typeof answer !== 'string') {
@@ -85,7 +119,7 @@ function validateCoreAnswer(fixture, answer) {
   const checks = {
     answerPresent: text.length > 0,
     fullPromptNotEchoed: !text.includes(fixture.input),
-    ...contract.checks(text),
+    ...contract.checks(contract.category === 'english_polish' ? revisedEnglishText(text) : text),
   };
   return { passed: Object.values(checks).every(Boolean), checks };
 }

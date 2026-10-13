@@ -118,12 +118,8 @@ def model_request(spec: TaskSpec, task_input: TaskInput) -> str:
 
 
 def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
-    """Request a second attempt when the model returned non-parseable JSON."""
-    schema = {
-        field: (0 if field in {"comment_id", "step_id"} else [] if field == "depends_on" else "文本")
-        for field in spec.fields
-    }
-    schema.update(status="supported|proposal|missing", refs=[{"source_id": "D1", "quote": "原文逐字引文"}])
+    """Retry with examples that satisfy the same task and source contract."""
+    document_ids = [key for key in task_input.sources if key != "Q"]
     minimum_rows = {
         "Lens｜生成教学材料": 3,
         "Lens｜研究问题拆解": 2,
@@ -132,11 +128,11 @@ def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
     }.get(spec.name, 1)
     row_rule = f"rows 不可为空，至少输出 {minimum_rows} 行。"
     if spec.name == "Lens｜研究设计体检":
-        row_rule = "rows 不可为空，必须恰好输出六行，dimension 依次覆盖问题、方法、样本、测量、分析、证据。"
+        row_rule = "rows 不可为空，必须恰好输出六行，dimension 依次为 " + ", ".join(DESIGN_DIMENSIONS) + "。"
     elif spec.name == "Lens｜审稿意见应答":
         row_rule = f"rows 不可为空，必须逐条覆盖 {len(task_input.comments)} 条意见，comment_id 从 1 连续编号。"
     elif spec.name in {"Lens｜比较多篇论文", "Lens｜文献综述工作台"}:
-        count = len([key for key in task_input.sources if key != "Q"])
+        count = len(document_ids)
         row_rule = f"rows 不可为空，必须覆盖 {count} 份资料。"
     elif spec.name == "Lens｜研究方案设计":
         row_rule = "rows 不可为空，必须输出三行，step_id 从 1 到 3 连续编号。"
@@ -150,6 +146,12 @@ def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
             else:
                 item[field] = "待核验"
         item.update(status="missing", refs=[])
+        if spec.name == "Lens｜比较多篇论文":
+            item["paper_id"] = document_ids[index - 1]
+        elif spec.name == "Lens｜文献综述工作台":
+            item["relation"] = "缺口"
+        elif spec.name == "Lens｜研究方案设计":
+            item["status"] = "proposal"
         return item
 
     if spec.name == "Lens｜研究设计体检":
@@ -160,7 +162,7 @@ def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
     else:
         count = {
             "Lens｜审稿意见应答": max(len(task_input.comments), 1),
-            "Lens｜比较多篇论文": max(len([key for key in task_input.sources if key != "Q"]), 1),
+            "Lens｜比较多篇论文": len(document_ids),
             "Lens｜生成教学材料": 3,
             "Lens｜研究问题拆解": 2,
             "Lens｜文献综述工作台": 2,
@@ -175,14 +177,23 @@ def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
         "inclusion": ["相关研究"],
         "exclusion": ["无关研究"],
     }
+    field_rule = (
+        "顶层只能有 rows；每行必须且只能包含字段 "
+        + ", ".join((*spec.fields, "status", "refs"))
+        + "。字段名必须原样保留，不得翻译或另加包装层。"
+        if spec.fields else "顶层必须且只能包含 groups、inclusion、exclusion。"
+    )
     return (
         "你上一轮的结构化输出格式不合法。请重新生成，必须只输出一个可被 "
         "JSON.parse 直接解析的 JSON 对象，禁止 Markdown、前后说明和尾随逗号。"
         f"保持原任务字段、状态和来源引用规则不变。{row_rule}"
-        "完整输出示例（必须保留 rows 数量，不能返回空数组）：\n"
+        + field_rule
+        + "完整输出示例（必须保留 rows 数量，不能返回空数组）：\n"
         + json.dumps(example, ensure_ascii=False)
         + "\n任务："
         + spec.title
+        + "\n任务约束："
+        + spec.instruction
         + "\n问题："
         + task_input.question
         + "\n资料："

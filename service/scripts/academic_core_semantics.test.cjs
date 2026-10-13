@@ -42,3 +42,65 @@ test('valid citation whitespace and an empty DOI placeholder are not fabricated 
   const bib = '@article{synthetic, title={Rainfall and\nPlant Growth}, author={Chen, A. and Liu, B.}, journal={Journal of\nSynthetic Ecology}, year={ 2024 }, doi={}}';
   assert.equal(validateCoreAnswer(coreFixture('参考文献转Bib'), bib).passed, true);
 });
+
+const englishComparison = revisedSentence => [
+  '| 原文 | 修改后的句子 | 修改原因 |',
+  '| --- | --- | --- |',
+  '| We investigates how rainfall affect plant grow. | ' + revisedSentence + ' | Correct grammar. |',
+  '| The experiment has not started. | The experiment has not started. | Preserve the fact. |',
+].join('\n');
+
+test('English comparison checks the revised column and preserves research facts', () => {
+  const result = validateCoreAnswer(coreFixture('english_polish'),
+    englishComparison('We investigate how rainfall affects plant growth.'));
+  assert.equal(result.passed, true);
+});
+
+test('English comparison still rejects grammar errors in the revised column', () => {
+  const result = validateCoreAnswer(coreFixture('english_polish'),
+    englishComparison('We investigates how rainfall affect plant grow.'));
+  assert.equal(result.passed, false);
+  assert.equal(result.checks.grammarRevised, false);
+});
+
+test('English comparison rejects changed facts even when the original column preserves them', () => {
+  const answer = englishComparison('We investigate how rainfall affects plant growth.')
+    .replace('| The experiment has not started. | The experiment has not started. |',
+      '| The experiment has not started. | The experiment has started. |');
+  const result = validateCoreAnswer(coreFixture('english_polish'), answer);
+  assert.equal(result.passed, false);
+  assert.equal(result.checks.experimentNotClaimed, false);
+});
+
+test('English grammar checks cannot be evaded with Markdown emphasis', () => {
+  const result = validateCoreAnswer(coreFixture('english_polish'),
+    'We **investigates** how rainfall affect **plant grow**. The experiment has not started.');
+  assert.equal(result.passed, false);
+  assert.equal(result.checks.grammarRevised, false);
+});
+
+test('An unrelated table cannot hide English grammar errors', () => {
+  const answer = 'We investigates how rainfall affect plant grow. The experiment has not started.\n'
+    + '| Metric | Value |\n| --- | --- |\n| rainfall | plant growth |';
+  assert.equal(validateCoreAnswer(coreFixture('english_polish'), answer).passed, false);
+});
+
+test('Word-level comparison retains the complete revised paragraph', () => {
+  const answer = [
+    'We investigate how rainfall affects plant growth. The experiment has not started.',
+    '',
+    '| 原文 | 修改后的词语 | 修改原因 |',
+    '| --- | --- | --- |',
+    '| investigates | investigate | Correct agreement. |',
+    '| plant grow | growth | Use the noun. |',
+  ].join('\n');
+  assert.equal(validateCoreAnswer(coreFixture('english_polish'), answer).passed, true);
+});
+
+test('A comparison cannot hide grammar errors outside the table', () => {
+  const answer = 'We investigates how rainfall affect plant grow.\n'
+    + englishComparison('We investigate how rainfall affects plant growth.');
+  const result = validateCoreAnswer(coreFixture('english_polish'), answer);
+  assert.equal(result.passed, false);
+  assert.equal(result.checks.grammarRevised, false);
+});
