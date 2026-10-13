@@ -5165,7 +5165,8 @@ export class AcademicService {
       async item => this.readAcademicAttachment(item as { url: string; name?: string }, req),
       async (source: AcademicAttachmentContextSource) => {
         const extension = this.getAcademicFileExtension('', source.fileName);
-        if (extension === 'pdf') return String((await pdf(source.buffer))?.text || '');
+        // PDF.js expects standard Uint8Array slicing; Node Buffer slices are views.
+        if (extension === 'pdf') return String((await pdf(new Uint8Array(source.buffer)))?.text || '');
         if (extension === 'docx') {
           return String((await mammoth.extractRawText({ buffer: source.buffer }))?.value || '');
         }
