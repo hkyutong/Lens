@@ -1,4 +1,4 @@
-import { post } from '@/utils/request'
+import { get, post } from '@/utils/request'
 import { fetchStream } from '@/utils/request/fetch'
 import type { AxiosProgressEvent } from 'axios'
 import {
@@ -123,5 +123,12 @@ export function fetchAcademicPluginList<T = any>() {
   return post<T>({
     url: ACADEMIC_ENDPOINTS.plugins,
     data: {},
+  })
+}
+
+export function fetchAcademicHealth<T = any>(params?: { model?: string; modelName?: string }) {
+  return get<T>({
+    url: '/academic/health',
+    data: params,
   })
 }

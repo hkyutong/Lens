@@ -46,6 +46,7 @@ const chatStore = useChatStore()
 const ms = message()
 
 const isMenuOpen = ref(false)
+const props = withDefaults(defineProps<{ position?: 'top-left' | 'bottom-left'; navigation?: boolean }>(), { position: 'top-left' })
 const modelOptions = ref<ModelOption[]>([])
 
 const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
@@ -74,6 +75,11 @@ const currentModelLabel = computed(() => {
   )
 })
 
+const getModelDisplayLabel = (model: Model) =>
+  ['deepseek-chat', 'deepseek-v3.2'].includes(model.model.toLowerCase())
+    ? 'DeepSeek V3.2'
+    : model.modelName
+
 const notSwitchModel = computed(() => {
   const modelInfo = (configObj.value as any)?.modelInfo
   return (
@@ -94,7 +100,7 @@ async function queryModelsList() {
     )
 
     modelOptions.value = modelsToUse.map(model => ({
-      label: model.modelName,
+      label: getModelDisplayLabel(model),
       value: model.model,
       deductType: model.deductType,
       keyType: model.keyType,
@@ -112,6 +118,11 @@ async function queryModelsList() {
     if (chatStore.preferredModel?.value) {
       const exists = modelOptions.value.some(option => option.value === chatStore.preferredModel.value)
       if (!exists) chatStore.setPreferredModel(null)
+    } else {
+      const preferredAcademicModel = modelOptions.value.find(
+        option => ['deepseek-chat', 'deepseek-v3.2'].includes(option.value.toLowerCase()),
+      )
+      if (preferredAcademicModel) chatStore.setPreferredModel(preferredAcademicModel)
     }
   } catch (error) {}
 }
@@ -185,15 +196,16 @@ onMounted(() => {
   <DropdownMenu
     v-if="!notSwitchModel"
     v-model="isMenuOpen"
-    position="top-left"
+    :position="props.position"
     max-height="40vh"
-    min-width="16rem"
+    min-width="0"
   >
     <template #trigger>
       <button
         type="button"
         class="btn-pill btn-sm research-chip-button"
         :aria-label="t('lens.modelSelector.switchModel')"
+        :aria-expanded="isMenuOpen" aria-haspopup="menu"
       >
         <span class="research-chip-button__label" :title="currentModelLabel">
           {{ currentModelLabel }}
@@ -207,11 +219,12 @@ onMounted(() => {
       </button>
     </template>
     <template #menu="{ close }">
-      <div class="min-w-[16rem] max-w-[22rem]">
+      <div class="research-model-menu" :class="{ 'research-model-menu--navigation': props.navigation }">
         <div v-if="modelOptions.length === 0" class="px-4 pb-4 text-sm text-gray-500">
           {{ t('lens.modelSelector.noModels') }}
         </div>
-        <div
+        <button
+          type="button"
           v-for="(option, index) in modelOptions"
           :key="index"
           class="menu-item menu-item-md"
@@ -248,7 +261,7 @@ onMounted(() => {
           <div class="flex-shrink-0" v-if="currentModelValue === option.value">
             <CheckOne theme="filled" size="16" class="text-gray-500" aria-hidden="true" />
           </div>
-        </div>
+        </button>
       </div>
     </template>
   </DropdownMenu>
@@ -261,6 +274,36 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.research-model-menu { width: max-content;
+  padding: 6px;
+  min-width: min(12rem, calc(100vw - 48px));
+  max-width: min(15rem, calc(100vw - 48px)); }
+.research-model-menu--navigation { min-width: min(12rem, calc(100vw - 112px));
+  max-width: min(15rem, calc(100vw - 112px)); }
+.research-model-menu .menu-item {
+  width: 100%;
+  gap: 8px;
+  padding-inline: 10px;
+  border-radius: var(--radius-small);
+}
+
+.research-model-menu .menu-item-content {
+  min-width: 0;
+  text-align: left;
+}
+
+.research-model-menu .menu-item-title {
+  width: 100%;
+  text-align: left;
+}
+
+.research-model-menu .menu-item-description {
+  text-align: left;
+  max-width: 10rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .research-chip-button {
   display: inline-flex;
   align-items: center;
@@ -273,8 +316,8 @@ onMounted(() => {
 }
 
 .research-chip-button:hover {
-  border-color: #cdcdcd;
-  background: var(--surface-panel);
+  border-color: transparent;
+  background: var(--academic-surface);
 }
 
 .research-chip-button:disabled {
@@ -303,6 +346,7 @@ onMounted(() => {
   .research-chip-button {
     max-width: 8.75rem;
     min-width: 0;
+    padding-inline: 8px;
   }
 
   .research-chip-button__label {

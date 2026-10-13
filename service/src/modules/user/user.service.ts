@@ -3,7 +3,7 @@ import { VerificationEnum } from '@/common/constants/verification.constant';
 import { createRandomUid, getClientIp, maskEmail, maskIpAddress } from '@/common/utils';
 import { MailerService } from '../mailer/mailer.service';
 
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Request } from 'express';
@@ -22,6 +22,14 @@ import { UpdateUserDto } from './dto/updateUser.dto';
 import { UpdateUserStatusDto } from './dto/updateUserStatus.dto';
 import { UserRechargeDto } from './dto/userRecharge.dto';
 import { UserEntity } from './user.entity';
+
+// User identity, contact, network, and profile fields must never enter logs.
+// Keep legacy call sites harmless while preserving their surrounding control flow.
+const userLogger = {
+  debug: (_message?: unknown, _context?: string) => undefined,
+  log: (_message?: unknown, _context?: string) => undefined,
+  error: (_message?: unknown, _context?: string) => undefined,
+};
 
 @Injectable()
 export class UserService {
@@ -116,9 +124,9 @@ export class UserService {
         );
         const { email } = v;
 
-        console.log('configMap: ', configMap);
+        userLogger.log('configMap: ', configMap);
 
-        console.log(`尝试发送邮件到: ${email}`); // 在尝试发送邮件之前打印日志
+        userLogger.log(`尝试发送邮件到: ${email}`); // 在尝试发送邮件之前打印日志
       } else {
         /* 如果没有邮箱验证则 则直接主动注册验证通过逻辑 */
         const { id } = n;
@@ -127,7 +135,7 @@ export class UserService {
       }
       return n;
     } catch (error) {
-      console.log('error: ', error);
+      userLogger.log('error: ', error);
       throw error;
     }
   }
@@ -219,13 +227,13 @@ export class UserService {
 
   /* 获取用户基础信息 */
   async getUserInfo(userId: number) {
-    console.log('getUserInfo', userId.toString());
+    userLogger.log('getUserInfo', userId.toString());
 
     // 检查userId是否是游客指纹ID (大于用户表中通常ID范围)
     const isVisitor = userId > 100000000; // 假设正常用户ID不会超过这个范围
 
     if (isVisitor) {
-      Logger.debug(`检测到游客用户访问: ${userId}`, 'UserService-getUserInfo');
+      userLogger.debug(`检测到游客用户访问: ${userId}`, 'UserService-getUserInfo');
 
       // 为游客创建默认用户信息
       const visitorInfo: any = {
@@ -250,7 +258,7 @@ export class UserService {
       try {
         userBalance = await this.userBalanceService.queryUserBalance(userId);
       } catch (error) {
-        Logger.debug(`游客余额查询失败，使用默认值: ${error.message}`, 'UserService-getUserInfo');
+        userLogger.debug(`游客余额查询失败，使用默认值: ${error.message}`, 'UserService-getUserInfo');
         // 如果查询余额失败，提供默认余额
         userBalance = {
           packageId: null,
@@ -494,7 +502,7 @@ export class UserService {
       return;
     }
     const { nickname, sex, headimgurl } = userInfo;
-    Logger.log('更新用户信息: ', userInfo);
+    userLogger.log('更新用户信息: ', userInfo);
     return await this.userEntity.update(
       { id },
       { sex: sex, nickname: nickname, avatar: headimgurl },
@@ -582,7 +590,7 @@ export class UserService {
   /* 专门用于迁移场景：直接更新用户OpenID，允许清空或者修改为任意值 */
   async updateUserOpenId(userId: number, openId: string | null) {
     try {
-      Logger.log(
+      userLogger.log(
         `执行迁移OpenID操作 - 用户ID: ${userId}, 目标OpenID: ${openId || '(清空)'}`,
         'UserService',
       );
@@ -590,7 +598,7 @@ export class UserService {
       // 检查用户是否存在
       const user = await this.userEntity.findOne({ where: { id: userId } });
       if (!user) {
-        Logger.log(`迁移失败: 用户不存在 - ID: ${userId}`, 'UserService');
+        userLogger.log(`迁移失败: 用户不存在 - ID: ${userId}`, 'UserService');
         return { status: false, msg: '用户不存在' };
       }
 
@@ -601,11 +609,11 @@ export class UserService {
       const res = await this.userEntity.update({ id: userId }, { openId });
 
       if (res.affected <= 0) {
-        Logger.log(`迁移失败: 数据库更新失败 - ID: ${userId}`, 'UserService');
+        userLogger.log(`迁移失败: 数据库更新失败 - ID: ${userId}`, 'UserService');
         return { status: false, msg: '数据库更新失败' };
       }
 
-      Logger.log(
+      userLogger.log(
         `迁移成功 - 用户ID: ${userId}, 旧OpenID: ${oldOpenId || '(无)'}, 新OpenID: ${
           openId || '(已清空)'
         }`,
@@ -620,7 +628,7 @@ export class UserService {
         userId,
       };
     } catch (error) {
-      Logger.log(`迁移过程异常: ${error.message}`, 'UserService');
+      userLogger.log(`迁移过程异常: ${error.message}`, 'UserService');
       return { status: false, msg: `更新OpenID时出错: ${error.message}` };
     }
   }
@@ -689,7 +697,7 @@ export class UserService {
   /* 校验邮箱注册 */
   async verifyUserRegisterByEmail(params: any) {
     const { username, email } = params;
-    console.log(`校验邮箱注册: 开始 - 用户名: ${username}, 邮箱: ${email}`);
+    userLogger.log(`校验邮箱注册: 开始 - 用户名: ${username}, 邮箱: ${email}`);
 
     // 查找数据库中是否存在该用户名或邮箱
     const user = await this.userEntity.findOne({
@@ -698,18 +706,18 @@ export class UserService {
 
     // 校验用户名是否已存在
     if (user && user.username === username) {
-      console.error(`校验失败: 用户名 "${username}" 已存在`);
+      userLogger.error(`校验失败: 用户名 "${username}" 已存在`);
       throw new HttpException('用户名已存在、请更换用户名！', HttpStatus.BAD_REQUEST);
     }
 
     // 校验邮箱是否已被注册
     // 注意：这里应检查user.email而不是user.phone，除非你的数据模型是这样设计的
     if (user && user.email === email) {
-      console.error(`校验失败: 邮箱 "${email}" 已被注册`);
+      userLogger.error(`校验失败: 邮箱 "${email}" 已被注册`);
       throw new HttpException('当前邮箱已注册、请勿重复注册！', HttpStatus.BAD_REQUEST);
     }
 
-    console.log(`校验邮箱注册: 成功 - 用户名: ${username}, 邮箱: ${email} 未被占用`);
+    userLogger.log(`校验邮箱注册: 成功 - 用户名: ${username}, 邮箱: ${email} 未被占用`);
   }
 
   /* 创建基础用户 */
@@ -721,7 +729,7 @@ export class UserService {
   async saveRealNameInfo(userId: number, realName: string, idCard: string) {
     const user = await this.userEntity.findOne({ where: { id: userId } });
     if (!user) {
-      Logger.error('用户不存在');
+      userLogger.error('用户不存在');
     }
     await this.userEntity.update({ id: userId }, { realName, idCard });
     return;
@@ -738,7 +746,7 @@ export class UserService {
     const user = await this.userEntity.findOne({ where: { id: userId } });
     const hashedPassword = bcrypt.hashSync(password, 10);
     if (!user) {
-      Logger.error('用户不存在');
+      userLogger.error('用户不存在');
     }
     if (!phone || !username || !hashedPassword) {
       throw new HttpException('参数错误！', HttpStatus.BAD_REQUEST);

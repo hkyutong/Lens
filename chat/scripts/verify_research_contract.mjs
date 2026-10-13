@@ -184,6 +184,8 @@ const activeUiSources = [
   'src/views/workbench/components/ResearchComposer.vue',
   'src/views/workbench/components/CapabilityPanel.vue',
   'src/views/workbench/components/ResearchStart.vue',
+  'src/views/workbench/components/ResearchCapabilities.vue',
+  'src/views/workbench/components/ResearchShortcuts.vue',
   'src/views/workbench/components/ResearchProjects/index.vue',
   'src/views/workbench/components/ResearchProjects/ProjectListItem.vue',
   'src/store/modules/index.ts',
@@ -282,10 +284,9 @@ assert.match(academicRegressionSource, /state\.shareRequests/)
 assert.match(academicRegressionSource, /state\.shareCreateRequests/)
 assert.match(academicRegressionSource, /sandbox', 'allow-same-origin'/)
 assert.match(workspaceHomeSource, /t\('lens\.workspace\.importedFilesLabel'\)/)
-assert.match(
-  workspaceHomeSource,
-  /@media \(max-width: 800px\)[\s\S]*\.academic-home__actions \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/
-)
+assert.match(workspaceHomeSource, /id="research-home-input"/)
+assert.match(researchWorkspaceSource, /id="research-conversation-input"/)
+assert.match(researchWorkspaceSource, /<Teleport\s+v-if="composerHostReady"\s+:to="renderDataSources.length/)
 assert.doesNotMatch(
   workspaceHomeSource,
   /RESEARCH_STARTER_TASKS|academic-home__task-grid|academic-home__workspace-grid/
@@ -297,7 +298,11 @@ assert.equal(
   false,
   'the retired starter dashboard domain must not return'
 )
-assert.match(academicPanelSource, /:aria-pressed="workflowEnabled"/)
+assert.doesNotMatch(
+  academicPanelSource,
+  /research-controls__mode-switch|:aria-pressed="workflowEnabled"/,
+  'capability settings must stay single-capability and not expose workflow orchestration'
+)
 assert.doesNotMatch(
   academicPanelSource,
   /research-controls__presets|quickCoreCandidates|quickPluginCandidates/
@@ -305,7 +310,9 @@ assert.doesNotMatch(
 assert.match(messageTextSource, /role="status"/)
 assert.match(messageTextSource, /workflowStatusAborted/)
 assert.match(messageTextSource, /lens\.message\.browsedWebSources/)
-assert.match(messageTextSource, /lens\.message\.deepThinking/)
+assert.match(messageTextSource, /workspace-record__thinking/)
+assert.match(messageTextSource, /thinkingElapsedSeconds/)
+assert.doesNotMatch(messageTextSource, /reasoning-pill|lens\.message\.deepThinking|lens\.message\.thoughtComplete/)
 assert.match(messageTextSource, /import \{ createShare \} from ['"]@\/api\/share['"]/)
 assert.match(messageTextSource, /createShareDocument\(sanitizeShareFragment\(text\.value\)\)/)
 assert.match(messageTextSource, /normalizeShareResultUrl\(response\?\.data\?\.shareCode/)
@@ -399,7 +406,7 @@ assert.match(researchStorageSource, /const normalizeNumberListMap = \(value: unk
 assert.match(researchStorageSource, /hiddenReplyChatIdsByGroup: normalizeNumberListMap\(/)
 assert.match(researchStorageSource, /hiddenReplyTailAnchorByGroup: normalizeNumberMap\(/)
 assert.match(researchWorkspaceSource, /@keydown\.enter\.prevent="handleScrollBtm"/)
-assert.match(researchWorkspaceSource, /t\('lens\.academicPanel\.infoLabel'\)/)
+assert.ok(!/props\.listMode|research-controls__advanced|groupFilter/.test(academicPanelSource), 'new and existing research conversations must use the same capability list without legacy category controls')
 for (const key of [
   'serviceUnavailableTitle',
   'serviceUnavailableDesc',

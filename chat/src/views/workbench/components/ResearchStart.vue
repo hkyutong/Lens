@@ -3,45 +3,31 @@ import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { parseResearchFiles } from '@/domain/research/files'
 import { t } from '@/locales'
 import { useChatStore } from '@/store'
-import { computed, nextTick } from 'vue'
+import { computed } from 'vue'
+import ResearchCapabilities from './ResearchCapabilities.vue'
+import ResearchShortcuts from './ResearchShortcuts.vue'
 
 const chatStore = useChatStore()
+const props = withDefaults(defineProps<{ showCapabilities?: boolean }>(), {
+  showCapabilities: true,
+})
 const emit = defineEmits<{ import: [] }>()
 const researchFiles = computed(() => parseResearchFiles(chatStore.activeGroupFileUrl))
-
-async function focusComposer() {
-  await nextTick()
-  const composer = document.getElementById('workspace-composer') as HTMLTextAreaElement | null
-  composer?.focus()
-}
-
-async function startBlankResearch() {
-  chatStore.setAcademicMode(true)
-  await chatStore.setPrompt('')
-  await focusComposer()
-}
 </script>
 
 <template>
-  <section class="academic-home">
-    <div class="academic-home__intro">
-      <span class="academic-home__symbol" aria-hidden="true">
-        <SvgIcon icon="ri:book-open-line" />
-      </span>
-      <h1>{{ t('lens.workspace.heroTitle') }}</h1>
-      <p>{{ t('lens.workspace.introDesc') }}</p>
-    </div>
-
-    <div class="academic-home__actions">
+  <section class="academic-home" aria-labelledby="research-start-title">
+    <div class="academic-home__heading">
+      <div class="academic-home__intro">
+        <h1 id="research-start-title">{{ t('lens.workspace.capabilityTitle') }}</h1>
+      </div>
       <button type="button" class="academic-home__import" @click="emit('import')">
         <SvgIcon icon="ri:inbox-line" />
         {{ t('lens.workspace.importData') }}
       </button>
-      <button type="button" class="academic-home__direct" @click="startBlankResearch">
-        <SvgIcon icon="ri:chat-quote-line" />
-        {{ t('lens.workspace.heroPrimaryAction') }}
-      </button>
     </div>
+
+    <div id="research-home-input" class="academic-home__composer"></div>
 
     <section v-if="researchFiles.length" class="academic-home__files">
       <strong>{{ t('lens.workspace.importedFilesLabel') }}</strong>
@@ -49,116 +35,89 @@ async function startBlankResearch() {
         <SvgIcon icon="ri:file-text-line" />{{ file.name }}
       </span>
     </section>
+
+    <ResearchShortcuts class="academic-home__shortcuts" />
+    <ResearchCapabilities v-if="props.showCapabilities" class="academic-home__capabilities" />
+
   </section>
 </template>
 
 <style scoped>
 .academic-home {
+  position: relative;
+  isolation: isolate;
   display: flex;
-  height: 100%;
-  min-height: 0;
   max-width: 680px;
   margin: 0 auto;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  padding: 24px 0;
   color: var(--text-main);
-  text-align: center;
 }
+
+.academic-home__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 24px;
+}
+
+.academic-home__import {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--academic-accent);
+  font-size: 13px;
+  font-weight: 500;
+}
+.academic-home__import:hover { background: var(--accent-soft); }
 
 .academic-home__intro {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.academic-home__symbol {
-  display: inline-flex;
-  width: 48px;
-  height: 48px;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-  border: 1px solid var(--paper-border);
-  border-radius: 14px;
-  background: var(--surface-card);
-  color: var(--academic-blue);
-  box-shadow: var(--shadow-card);
-}
-
-.academic-home__symbol > svg {
-  width: 22px;
-  height: 22px;
+  min-width: 0;
 }
 
 .academic-home__intro h1 {
   margin: 0;
-  font-size: clamp(32px, 4vw, 44px);
+  max-width: 560px;
+  color: var(--academic-ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  font-size: clamp(28px, 2.4vw, 32px);
   font-weight: 650;
-  letter-spacing: -0.035em;
-  line-height: 1.08;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  text-wrap: balance;
 }
 
-.academic-home__intro p {
-  max-width: 580px;
-  margin: 14px 0 0;
-  color: var(--text-sub);
-  font-size: 16px;
-  line-height: 1.55;
+.academic-home__capabilities {
+  width: 100%;
+  margin-top: 32px;
 }
 
-.academic-home__actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 28px;
+.academic-home__shortcuts {
+  width: 100%;
+  margin-top: 24px;
 }
 
-.academic-home__actions button {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 0 18px;
-  border: 1px solid var(--paper-border);
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 550;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    transform 180ms ease;
-}
-
-.academic-home__import {
-  border-color: var(--academic-blue) !important;
-  background: var(--academic-blue);
-  color: #fff;
-}
-
-.academic-home__direct {
-  background: var(--surface-card);
-  color: var(--text-main);
-}
-
-.academic-home__actions button:hover {
-  transform: translateY(-1px);
-}
-
-.academic-home__actions button:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
+.academic-home__composer {
+  width: 100%;
+  min-width: 0;
 }
 
 .academic-home__files {
   display: flex;
-  max-width: 640px;
+  max-width: 100%;
+  margin-top: 12px;
   max-height: 96px;
-  margin-top: 22px;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 7px;
   overflow-y: auto;
 }
@@ -179,7 +138,7 @@ async function startBlankResearch() {
   padding: 5px 9px;
   overflow: hidden;
   border: 1px solid var(--paper-border);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--surface-muted);
   color: var(--text-sub);
   font-size: 11px;
@@ -187,39 +146,38 @@ async function startBlankResearch() {
   white-space: nowrap;
 }
 
-@media (max-width: 800px) {
+@media (min-width: 1024px) {
   .academic-home {
-    height: auto;
     min-height: 100%;
-    padding: 32px 8px;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 760px) {
+  .academic-home__capabilities {
+    margin-top: 16px;
   }
 
-  .academic-home__symbol {
-    width: 44px;
-    height: 44px;
-    margin-bottom: 16px;
-    border-radius: 13px;
+}
+
+@media (min-width: 1024px) and (max-height: 700px) {
+  .academic-home {
+    padding-block: 16px;
+  }
+  .academic-home__heading { margin-bottom: 16px; }
+  .academic-home__shortcuts { margin-top: 12px; }
+}
+
+@media (max-width: 1023px) {
+  .academic-home {
+    min-height: auto;
+    padding: 20px 12px 24px;
   }
 
   .academic-home__intro h1 {
     font-size: 30px;
   }
 
-  .academic-home__intro p {
-    margin-top: 10px;
-    font-size: 14px;
-  }
-
-  .academic-home__actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-    margin-top: 22px;
-  }
-
-  .academic-home__actions button {
-    width: 100%;
-    padding: 0 12px;
-  }
 }
+
 </style>

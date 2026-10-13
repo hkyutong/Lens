@@ -100,9 +100,7 @@ const taskRules = [
 
 function openDrawerAfter() {
   // 刷新全局配置数据，确保获取最新的公告信息
-  authStore.getGlobalConfig().catch(error => {
-    console.error('获取最新公告信息失败:', error)
-  })
+  authStore.getGlobalConfig().catch(() => { /* Retain the already loaded public notice. */ })
 }
 
 watch(
@@ -123,49 +121,41 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="overflow-y-auto custom-scrollbar p-1" :class="{ 'max-h-[70vh]': !isMobile }">
+  <div class="research-guide" :class="{ 'max-h-[70vh]': !isMobile }">
     <!-- 公告信息卡片 -->
     <div
-      class="mb-4 flex flex-col space-y-4 rounded-xl border border-[var(--border-color)] bg-[var(--surface-card)] p-4"
+      class="research-guide__article"
     >
       <!-- 卡片标题 -->
-      <div
-        class="border-b border-[var(--border-color)] pb-2 text-base font-semibold text-[var(--text-main)]"
-      >
-        {{
-          isLensPlanNotice
-            ? t('lens.usageNotice.title')
-            : globalConfig.noticeTitle || t('lens.settings.notice')
-        }}
-      </div>
 
-      <div class="overflow-y-auto" :class="{ 'max-h-[calc(70vh-120px)]': !isMobile }">
-        <div v-if="isLensPlanNotice" class="usage-notice">
-          <section class="usage-notice__intro">
-            <span class="usage-notice__eyebrow">{{ t('lens.usageNotice.eyebrow') }}</span>
+
+      <div class="research-guide__body" :class="{ 'max-h-[calc(70vh-120px)]': !isMobile }">
+        <div v-if="isLensPlanNotice" class="research-guide__content">
+          <section class="research-guide__intro">
+
             <h2>{{ t('lens.usageNotice.heroTitle') }}</h2>
             <p>
               {{ t('lens.usageNotice.heroDesc') }}
             </p>
           </section>
 
-          <section class="usage-notice__plans" aria-label="套餐能力对比">
-            <article v-for="plan in usagePlans" :key="plan.key" class="usage-notice__plan">
-              <div class="usage-notice__plan-head">
-                <div>
-                  <span class="usage-notice__plan-name">{{ t(plan.nameKey) }}</span>
+          <section class="research-guide__tiers" aria-label="套餐能力对比">
+            <details v-for="plan in usagePlans" :key="plan.key" class="research-guide__tier">
+              <summary class="research-guide__tier-heading">
+                <div class="research-guide__tier-name">
+                  <span class="research-guide__tier-badge">{{ t(plan.nameKey) }}</span>
                   <p>{{ t(plan.summaryKey) }}</p>
                 </div>
                 <strong>{{ t(plan.workflowKey) }}</strong>
-              </div>
+              </summary>
               <ul>
                 <li v-for="item in plan.availableKeys" :key="item">{{ t(item) }}</li>
               </ul>
-              <p class="usage-notice__plan-note">{{ t(plan.noteKey) }}</p>
-            </article>
+              <p class="research-guide__tier-note">{{ t(plan.noteKey) }}</p>
+            </details>
           </section>
 
-          <section class="usage-notice__rule-grid">
+          <section class="research-guide__notes">
             <div class="usage-notice__rule-block">
               <h3>{{ t('lens.usageNotice.billingTitle') }}</h3>
               <ol>
@@ -194,188 +184,229 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+.research-guide {
+  color: inherit;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
+.research-guide .research-guide__article, .research-guide .research-guide__body, .research-guide .research-guide__content {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
   background: transparent;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(155, 155, 155, 0.5);
-  border-radius: 20px;
-  border: transparent;
+.research-guide .research-guide__intro {
+  margin: 0 0 22px;
 }
 
-/* 暗黑模式下滚动条样式 */
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 100, 100, 0.5);
+.research-guide .research-guide__intro h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+  line-height: 1.4;
+  letter-spacing: -.3px;
+  font-weight: 600;
 }
 
-.dark .custom-scrollbar {
-  scrollbar-color: rgba(100, 100, 100, 0.5) transparent;
-}
-
-.usage-notice {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  color: var(--text-main);
-}
-
-.usage-notice__intro {
-  max-width: 840px;
-  padding: 6px 2px 2px;
-}
-
-.usage-notice__eyebrow {
-  display: inline-flex;
-  margin-bottom: 12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--text-sub);
-}
-
-.usage-notice__intro h2 {
+.research-guide .research-guide__intro p {
   margin: 0;
-  font-size: clamp(28px, 4vw, 44px);
-  font-weight: 800;
-  line-height: 1.08;
-  letter-spacing: -0.04em;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+  font-size: 14px;
+  line-height: 1.8;
 }
 
-.usage-notice__intro p {
-  margin: 16px 0 0;
-  max-width: 780px;
-  font-size: 15px;
-  line-height: 1.9;
-  color: var(--text-sub);
-}
-
-.usage-notice__plans {
+.research-guide .research-guide__tiers {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(0,1fr);
+  gap: 6px;
+  margin: 0 0 26px;
 }
 
-.usage-notice__plan {
+.research-guide .research-guide__tier {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+}
+
+.research-guide .research-guide__tier-heading {
+  position: relative;
   display: flex;
-  min-height: 280px;
-  flex-direction: column;
-  gap: 18px;
-  border: 1px solid var(--border-color);
-  border-radius: 24px;
-  padding: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0)), var(--surface-card);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  padding: 12px 26px 12px 0;
+  border: 0;
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--radius-control);
 }
 
-.usage-notice__plan-head {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.research-guide .research-guide__tier-heading::-webkit-details-marker {
+  display: none;
 }
 
-.usage-notice__plan-name {
-  display: block;
-  font-size: 26px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.04em;
+.research-guide .research-guide__tier-heading::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: calc(50% - 5px);
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid color-mix(in srgb, currentColor 65%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, currentColor 65%, transparent);
+  transform: rotate(45deg);
 }
 
-.usage-notice__plan-head p {
-  margin: 8px 0 0;
+.research-guide .research-guide__tier[open] > .research-guide__tier-heading::after {
+  transform: rotate(225deg);
+  top: calc(50% - 1px);
+}
+
+.research-guide .research-guide__tier-heading:hover .research-guide__tier-badge {
+  color: var(--academic-blue);
+}
+
+.research-guide .research-guide__tier-heading:focus-visible {
+  outline: 2px solid var(--academic-blue);
+  outline-offset: 3px;
+}
+
+.research-guide .research-guide__tier-name {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.research-guide .research-guide__tier-name p {
+  margin: 0;
   font-size: 13px;
-  color: var(--text-sub);
+  font-weight: 400;
+  line-height: 1.6;
+  color: color-mix(in srgb, currentColor 65%, transparent);
 }
 
-.usage-notice__plan-head strong {
-  width: fit-content;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  padding: 6px 10px;
+.research-guide .research-guide__tier-badge {
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--academic-blue);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.research-guide .research-guide__tier-heading > :last-child:not(.research-guide__tier-name) {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: color-mix(in srgb, currentColor 65%, transparent);
   font-size: 12px;
-  font-weight: 700;
-  color: var(--text-main);
+  font-weight: 400;
+  line-height: 1.6;
 }
 
-.usage-notice__plan ul,
-.usage-notice__rule-block ol {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.research-guide .research-guide__tier ul {
+  margin: 4px 0 12px;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+.research-guide .research-guide__tier li {
+  margin: 4px 0;
+  padding: 0;
+}
+
+.research-guide .research-guide__tier li::marker {
+  color: var(--academic-blue);
+}
+
+.research-guide .research-guide__tier-note {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.research-guide .research-guide__notes {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.research-guide .research-guide__notes > * {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.research-guide .research-guide__notes :is(h2,h3,h4) {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.research-guide .research-guide__notes p {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+@media (max-width: 720px) {
+  .research-guide .research-guide__intro {
+    margin-bottom: 18px;
+  }
+
+  .research-guide .research-guide__intro h2 {
+    font-size: 18px;
+  }
+
+  .research-guide .research-guide__tiers {
+    gap: 4px;
+    margin-bottom: 24px;
+  }
+
+  .research-guide .research-guide__tier-heading {
+    gap: 10px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .research-guide .research-guide__tier-heading > :last-child:not(.research-guide__tier-name) {
+    max-width: 78px;
+    text-align: right;
+  }
+
+  .research-guide .research-guide__notes {
+    grid-template-columns: minmax(0,1fr);
+    gap: 24px;
+  }
+}
+
+.research-guide .research-guide__notes :is(ul,ol) {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.usage-notice__plan li,
-.usage-notice__rule-block li {
-  position: relative;
-  padding-left: 16px;
   font-size: 13px;
-  line-height: 1.65;
-  color: var(--text-main);
+  line-height: 1.8;
 }
 
-.usage-notice__plan li::before,
-.usage-notice__rule-block li::before {
-  position: absolute;
-  top: 0.75em;
-  left: 0;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: currentColor;
-  content: '';
-  opacity: 0.45;
-}
-
-.usage-notice__plan-note {
-  margin: auto 0 0;
-  border-top: 1px solid var(--border-color);
-  padding-top: 14px;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--text-sub);
-}
-
-.usage-notice__rule-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.usage-notice__rule-block {
-  border-radius: 22px;
-  border: 1px solid var(--border-color);
-  padding: 20px 22px;
-  background: var(--surface-card);
-}
-
-.usage-notice__rule-block h3 {
-  margin: 0 0 14px;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-@media (max-width: 960px) {
-  .usage-notice__plans,
-  .usage-notice__rule-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .usage-notice__plan {
-    min-height: 0;
-  }
+.research-guide .research-guide__notes li {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.8;
 }
 </style>

@@ -39,9 +39,83 @@ def get_crazy_functions():
     from crazy_functions.SourceCode_Comment_Wrap import SourceCodeComment_Wrap
     from crazy_functions.Document_Conversation import 批量文件询问
     from crazy_functions.Document_Conversation_Wrap import Document_Conversation_Wrap
+    from crazy_functions.Lens_Featured_Tasks import (
+        研究设计体检,
+        审稿意见应答,
+        文献检索策略,
+        整理研究笔记,
+        比较多篇论文,
+        生成教学材料,
+        研究问题拆解,
+        文献综述工作台,
+        研究方案设计,
+    )
 
 
     function_plugins = {
+        "Lens｜研究设计体检": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "检查研究问题、方法、样本、测量、分析与证据是否匹配，并给出可执行修正项",
+            "Function": HotReload(研究设计体检),
+        },
+        "Lens｜审稿意见应答": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "把审稿意见拆成逐条回应、修改位置和证据计划，不捏造修改结果",
+            "Function": HotReload(审稿意见应答),
+        },
+        "Lens｜文献检索策略": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "从研究主题生成布尔检索式、同义词扩展和数据库执行步骤",
+            "Function": HotReload(文献检索策略),
+        },
+        "Lens｜整理研究笔记": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "将散乱研究笔记整理为问题、证据、判断与下一步行动",
+            "Function": HotReload(整理研究笔记),
+        },
+        "Lens｜比较多篇论文": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "按统一维度比较多篇论文并标出来源缺口",
+            "Function": HotReload(比较多篇论文),
+        },
+        "Lens｜生成教学材料": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "把研究主题转成学习目标、课堂活动、练习与评价标准",
+            "Function": HotReload(生成教学材料),
+        },
+        "Lens｜研究问题拆解": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "把宽泛主题拆成可研究问题、变量、假设和证据需求",
+            "Function": HotReload(研究问题拆解),
+        },
+        "Lens｜文献综述工作台": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "按范围、共识、争议、证据缺口和未来方向组织综述草稿",
+            "Function": HotReload(文献综述工作台),
+        },
+        "Lens｜研究方案设计": {
+            "Group": "学术",
+            "Color": "primary",
+            "AsButton": True,
+            "Info": "将研究目标转成步骤、资源、风险和可验收里程碑",
+            "Function": HotReload(研究方案设计),
+        },
         "解析整个Python项目": {
             "Group": "编程",
             "Color": "stop",

@@ -1,17 +1,23 @@
 <script setup lang="ts">
 // ============== 组件导入 ==============
-import { fetchAcademicChatAPIProcess, fetchAcademicWorkflowAPIProcess } from '@/api/academic'
+import {
+  fetchAcademicChatAPIProcess,
+  fetchAcademicHealth,
+  fetchAcademicWorkflowAPIProcess,
+} from '@/api/academic'
 import {
   fetchDeleteGroupChatsAfterIdAPI,
   fetchQuerySingleChatLogAPI,
   fetchSyncDisplayContentAPI,
 } from '@/api/chatLog'
 import { openImageViewer } from '@/components/common/ImageViewer/useImageViewer'
+import { useNativeDialog } from '@/hooks/useNativeDialog'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
+import { isAcademicFeaturedPlugin } from '@/utils/academicCapabilityCatalog'
 import DownSmall from '@icon-park/vue-next/es/icons/DownSmall'
 import type { AxiosProgressEvent } from 'axios'
 import CapabilityPanel from './components/CapabilityPanel.vue'
@@ -19,6 +25,8 @@ import ResearchComposer from './components/ResearchComposer.vue'
 import WorkbenchHeader from './components/WorkbenchHeader.vue'
 import ResearchProjects from './components/ResearchProjects/index.vue'
 import ResearchStart from './components/ResearchStart.vue'
+import ResearchCapabilities from './components/ResearchCapabilities.vue'
+import ResearchShortcuts from './components/ResearchShortcuts.vue'
 // 移除不再直接使用的异步组件导入
 // const TextEditor = defineAsyncComponent(() => import('./components/Previewer/TextEditor.vue'))
 // const ImagePreviewer = defineAsyncComponent(() => import('./components/Previewer/ImagePreviewer.vue'))
@@ -35,8 +43,7 @@ import {
   ref,
   watch,
 } from 'vue'
-import { DIALOG_TABS } from '@/store/modules/global'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useResearchSession } from './hooks/useResearchSession'
 import { useScroll } from './hooks/useScroll'
 import { NdjsonStreamDecoder } from '@/domain/research/ndjson'
@@ -54,7 +61,12 @@ const ResearchRecord = defineAsyncComponent(() => import('./components/ResearchR
 // ============== 接口定义 ==============
 // ============== 组合式函数 ==============
 const ms = message()
-const { isMobile } = useBasicLayout()
+const { isSmallLg } = useBasicLayout()
+const isCompactWorkspace = computed(() => isSmallLg.value)
+const composerHostReady = ref(false)
+onMounted(() => {
+  composerHostReady.value = true
+})
 const {
   scrollRef,
   scrollToBottom,
@@ -71,7 +83,7 @@ const toUserFacingRequestError = (rawMessage: string, statusCode = 0) =>
 const triggerUpgradeIfNeeded = (messageText: string) => {
   if (!messageText) return
   if (!/积分不足|选购套餐|升级套餐/i.test(messageText)) return
-  useGlobalStore.updateSettingsDialog(true, DIALOG_TABS.MEMBER)
+  void router.push('/pricing')
 }
 
 const clearLastError = () => {
@@ -130,6 +142,7 @@ const closeMobileAcademicPanel = () => {
 
 // ============== 响应式状态 ==============
 const route = useRoute()
+const router = useRouter()
 const bottomContainer = ref()
 const footerRef = ref<{ openFilePicker?: (accept?: string) => void } | null>(null)
 const firstScroll = ref<boolean>(true)
@@ -157,13 +170,31 @@ const token = computed(() => {
   return route?.query?.token ? String(route.query.token) : ''
 })
 const isLogin = computed(() => authStore?.isLogin ?? false)
+// The desktop navigation keeps one stable geometry for guests and members.
+// Authentication changes capability access, not the shell layout.
+const sidebarExpanded = ref(true)
+const sidebarCollapsed = computed(() => !sidebarExpanded.value)
 const showDetailedErrorBanner = computed(() => enableDetailedErrorUi && !!lastError.value)
 const academicMode = computed(() => chatStore.academicMode)
 const mobileAcademicPanelVisible = computed(() => chatStore.mobileAcademicPanelVisible)
+const mobileToolsDialog = ref<HTMLDialogElement | null>(null)
+const projectsDialog = ref<HTMLDialogElement | null>(null)
+const desktopToolsDialog = ref<HTMLDialogElement | null>(null)
+useNativeDialog(
+  mobileToolsDialog,
+  () => isCompactWorkspace.value && mobileAcademicPanelVisible.value
+)
+useNativeDialog(projectsDialog, () => researchProjectsVisible.value)
+useNativeDialog(
+  desktopToolsDialog,
+  () => !isCompactWorkspace.value && desktopAcademicPanelVisible.value
+)
+
 const academicPlugin = computed(() => chatStore.currentAcademicPlugin)
 const academicCore = computed(() => chatStore.currentAcademicCore)
-const academicWorkflowEnabled = computed(() => Boolean(chatStore.academicWorkflowEnabled))
-const academicWorkflowSteps = computed(() => chatStore.academicWorkflowSteps || [])
+// Lens 当前仅提供单能力研究入口；保留 store 和历史结果兼容，但新请求不再进入编排链路。
+const academicWorkflowEnabled = computed(() => false)
+const academicWorkflowSteps = computed<any[]>(() => [])
 const academicPluginArgs = computed(() => chatStore.academicPluginArgs)
 const academicPluginKwargs = computed(() => {
   if (!academicPlugin.value?.advancedArgs) return {}
@@ -182,8 +213,10 @@ const getAcademicPluginRequestName = (item: any) => {
   const displayName = String(item?.displayName || '').trim()
   const name = String(item?.name || '').trim()
   if (isAcademicDisabledOption(displayName) || isAcademicDisabledOption(name)) return ''
-  // 优先发送当前展示所对应的新插件名，避免退回旧名导致命中过时后端分支。
-  const candidates = [item?.name, item?.originName]
+  // Lens 特色插件的内部名称只用于前端排序，研究服务按展示名路由；旧插件继续沿用内部名称。
+  const candidates = isAcademicFeaturedPlugin(item)
+    ? [displayName, name, item?.originName]
+    : [name, item?.originName, displayName]
     .map(value => String(value || '').trim())
     .filter(value => value && !isAcademicDisabledOption(value))
   const selected = candidates[0] || ''
@@ -300,18 +333,42 @@ const initializeWorkspace = async () => {
   workspaceServiceState.value = 'unknown'
   workspaceServiceError.value = ''
 
-  try {
-    await authStore.getUserInfo()
-  } catch (error) {
-    unavailable = true
-    console.error('获取用户信息失败:', error)
+  if (authStore.isLogin) {
+    try {
+      await authStore.getUserInfo()
+    } catch (error) {
+      unavailable = true
+    }
+  }
+
+  if (!authStore.isLogin) {
+    chatStore.clearChat()
+    workspaceServiceState.value = 'ready'
+    return true
+  }
+
+  if (!unavailable) {
+    try {
+      const selectedModel = activeModel.value.trim()
+      const response = await fetchAcademicHealth<{ status?: string }>(
+        selectedModel
+          ? {
+              model: selectedModel,
+              modelName: activeModelName.value.trim(),
+            }
+          : undefined
+      )
+      if (response?.data?.status !== 'ready') unavailable = true
+    } catch (error) {
+      unavailable = true
+    }
   }
 
   try {
+    await chatStore.queryMyGroup()
     await chatStore.queryActiveChatLogList()
-  } catch (error) {
+  } catch {
     unavailable = true
-    console.error('获取研究会话失败:', error)
   }
 
   workspaceServiceState.value = unavailable ? 'unavailable' : 'ready'
@@ -362,6 +419,7 @@ const hasRenderableAssistantState = (item: Chat.Chat | undefined) => {
 }
 
 const renderDataSources = computed(() => {
+  if (!isLogin.value) return []
   const rows = dataSources.value || []
   if (rows.length < 2) return rows
   return rows.filter((item, index) => {
@@ -577,7 +635,7 @@ const createNewChatGroup = inject('createNewChatGroup', () =>
 ) as () => Promise<void>
 
 const openDesktopAcademicPanel = () => {
-  if (isMobile.value) {
+  if (isCompactWorkspace.value) {
     chatStore.setMobileAcademicPanelVisible(true)
     return
   }
@@ -1541,9 +1599,7 @@ const onConversation = async ({
         })
 
         return true
-      } catch (recoverError) {
-        console.error('[workflow] recover latest assistant failed:', recoverError)
-      }
+      } catch (recoverError) {}
     }
     return false
   }
@@ -1743,9 +1799,7 @@ const onConversation = async ({
   const flushNdjsonBuffer = () => {
     try {
       ndjsonDecoder.flush()
-    } catch (err) {
-      console.error('[stream] failed to process tail:', err)
-    }
+    } catch (err) {}
   }
 
   const handleStreamProgress = (progressEvent: AxiosProgressEvent) => {
@@ -1849,12 +1903,6 @@ const onConversation = async ({
     const requestId = errData?.requestId || streamRequestId || ''
     const statusCode = Number(errData?.code || errData?.status || error?.response?.status || 0)
     if (!requestWasAborted) {
-      console.error('[chat request failed]', {
-        statusCode,
-        rawErrorMessage,
-        requestId,
-        error,
-      })
     }
     if (!requestWasAborted) {
       if (isWorkflowConversation && (await recoverWorkflowAssistantFromServer())) {
@@ -2027,9 +2075,7 @@ const onConversation = async ({
           content: displayedText,
           reasoningText: displayedReasoningText || undefined,
         })
-      } catch (syncError) {
-        console.error('[academic] sync display content failed:', syncError)
-      }
+      } catch (syncError) {}
     }
 
     patchCurrentAssistant({
@@ -2067,9 +2113,7 @@ const otherLoginByToken = async (tokenValue: string) => {
     authStore.setToken(tokenValue)
     ms.success(t('login.loginSuccess'))
     await authStore.getUserInfo()
-  } catch (error) {
-    console.error('登录过程中发生错误:', error)
-  }
+  } catch (error) {}
 }
 
 // 支付回调处理
@@ -2230,17 +2274,9 @@ provide('onOpenImagePreviewer', openImagePreviewer)
         }"
       ></div>
 
-      <div class="relative z-10 flex h-full min-h-0 lens-shell">
+      <WorkbenchHeader v-if="isCompactWorkspace" part="mobile" />
+      <div class="relative z-10 flex flex-1 min-h-0 lens-shell">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <WorkbenchHeader
-            :class="[
-              'relative z-10 flex-shrink-0',
-              activeChatBackgroundImg
-                ? 'bg-[var(--bg-body)]/92 backdrop-blur-sm'
-                : 'bg-[var(--bg-body)] backdrop-blur-sm',
-            ]"
-          />
-
           <main class="relative z-10 flex-1 overflow-hidden">
             <div class="h-full w-full">
               <div class="mx-auto flex h-full min-h-0 min-w-0 w-full">
@@ -2251,7 +2287,7 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                       ref="scrollRef"
                       class="relative h-full overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar"
                       :class="{
-                        'workspace-scroll--home': !isMobile && !renderDataSources.length,
+                        'workspace-scroll--home': !isCompactWorkspace && !renderDataSources.length,
                       }"
                       style="background-color: transparent; position: relative; z-index: 5"
                       @scroll="handleWorkspaceScroll"
@@ -2260,34 +2296,37 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                         id="image-wrapper"
                         class="w-full h-full pb-8"
                         :class="[
-                          isMobile ? 'px-3 py-3' : 'px-6 py-6',
-                          { 'workspace-home-frame': !isMobile && !renderDataSources.length },
+                          isCompactWorkspace ? 'px-3 py-3' : 'px-6 py-6',
+                          {
+                            'workspace-home-frame':
+                              !isCompactWorkspace && !renderDataSources.length,
+                          },
                         ]"
                       >
                         <div
                           class="mx-auto w-full"
                           :class="
-                            !isMobile && !renderDataSources.length
+                            !isCompactWorkspace && !renderDataSources.length
                               ? 'h-full max-w-[1048px]'
                               : 'max-w-[920px]'
                           "
                         >
                           <div
                             v-if="workspaceServiceState === 'unavailable'"
-                            class="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100"
+                            class="workspace-service-banner mb-4"
                             role="status"
                           >
-                            <div class="min-w-0 text-sm leading-6">
-                              <div class="font-semibold">
+                            <div class="workspace-service-banner__copy">
+                              <div class="workspace-service-banner__title">
                                 {{ t('lens.workspace.serviceUnavailableTitle') }}
                               </div>
-                              <div class="text-amber-800/80 dark:text-amber-100/80">
+                              <div class="workspace-service-banner__desc">
                                 {{ workspaceServiceError }}
                               </div>
                             </div>
                             <button
                               type="button"
-                              class="btn-pill btn-sm shrink-0"
+                              class="workspace-service-banner__retry btn-pill btn-sm shrink-0"
                               @click="retryWorkspaceInitialization"
                             >
                               {{ t('lens.workspace.retry') }}
@@ -2313,7 +2352,11 @@ provide('onOpenImagePreviewer', openImagePreviewer)
 
                           <template v-if="!renderDataSources.length">
                             <div class="workspace-surface h-full">
-                              <ResearchStart @import="handleImportFiles" />
+                              <ResearchStart
+                                :service-state="workspaceServiceState"
+                                :show-capabilities="isCompactWorkspace && isLogin"
+                                @import="handleImportFiles"
+                              />
                             </div>
                           </template>
                           <template v-if="renderDataSources.length">
@@ -2417,118 +2460,167 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                       </div>
                     </div>
                   </div>
-                  <div v-if="isMobile" class="relative z-20 w-full px-2 pb-3 pt-2">
-                    <ResearchComposer
-                      ref="footerRef"
-                      class="relative z-20 pb-safe"
-                      @pause-request="pauseRequest"
-                    >
-                    </ResearchComposer>
-                  </div>
+                  <div
+                    id="research-conversation-input"
+                    v-show="renderDataSources.length"
+                    class="lens-conversation-composer"
+                  ></div>
                 </div>
               </div>
             </div>
           </main>
         </div>
         <aside
-          v-if="!isMobile"
+          v-if="!isCompactWorkspace"
           class="lens-shell__tools"
-          :aria-label="t('lens.academicPanel.title')"
+          :class="{ 'lens-shell__tools--collapsed': sidebarCollapsed }"
+          :aria-label="t('lens.academicPanel.settingsTitle')"
         >
-          <div class="lens-shell__composer">
-            <ResearchComposer ref="footerRef" class="relative z-20" @pause-request="pauseRequest" />
+          <WorkbenchHeader
+            part="brand"
+            :collapsible="true"
+            :collapsed="sidebarCollapsed"
+            @toggle-sidebar="sidebarExpanded = !sidebarExpanded"
+          />
+          <div
+            id="research-sidebar-content"
+            v-show="!sidebarCollapsed"
+            class="lens-shell__tool-content"
+          >
+            <div class="lens-shell__configuration">
+              <ResearchCapabilities v-if="!isLogin && !renderDataSources.length" sidebar fill-container />
+              <div v-else class="lens-shell__capabilities">
+                <CapabilityPanel
+                  :title-label="
+                    !isLogin && !renderDataSources.length
+                      ? t('lens.workspace.starterTitle')
+                      : undefined
+                  "
+                  :service-state="workspaceServiceState"
+                  :embedded="false"
+                  :show-close="false"
+                  fill-container
+                />
+              </div>
+              <ResearchShortcuts
+                class="lens-shell__featured"
+                featured
+                compact
+                fill-container
+                :include-research="isLogin"
+              />
+            </div>
           </div>
-          <div class="lens-shell__capabilities custom-scrollbar">
-            <CapabilityPanel
-              :core-label="t('lens.academicPanel.coreLabel')"
-              :plugin-label="t('lens.academicPanel.pluginLabel')"
-              :core-placeholder="t('lens.academicPanel.corePlaceholder')"
-              :plugin-placeholder="t('lens.academicPanel.pluginPlaceholder')"
-              :plugin-args-label="t('lens.academicPanel.customInstructionLabel')"
-              :plugin-args-placeholder="t('lens.academicPanel.customInstructionPlaceholder')"
-              :info-label="t('lens.academicPanel.infoLabel')"
-              :embedded="false"
-              :show-close="false"
-            />
-          </div>
+          <WorkbenchHeader part="preferences" :collapsed="sidebarCollapsed" />
         </aside>
       </div>
+      <Teleport
+        v-if="composerHostReady"
+        :to="renderDataSources.length ? '#research-conversation-input' : '#research-home-input'"
+      >
+        <ResearchComposer
+          ref="footerRef"
+          :compact-layout="isCompactWorkspace"
+          class="lens-main-composer relative z-20 pb-safe"
+          @pause-request="pauseRequest"
+        />
+      </Teleport>
       <teleport to="body">
         <transition name="fade">
-          <div
-            v-if="isMobile && mobileAcademicPanelVisible"
-            class="fixed inset-0 z-[100] flex items-end bg-[var(--modal-overlay)] backdrop-blur-[8px]"
+          <dialog
+            v-if="isCompactWorkspace && mobileAcademicPanelVisible"
+            ref="mobileToolsDialog"
+            :aria-label="t('lens.academicPanel.settingsTitle')"
+            @cancel.prevent="closeMobileAcademicPanel"
+            class="lens-dialog fixed inset-0 z-[100] flex items-end bg-[var(--modal-overlay)] backdrop-blur-[8px]"
             @click.self="closeMobileAcademicPanel"
           >
             <div
-              class="w-full rounded-t-[22px] bg-[var(--surface-panel)] px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 shadow-[var(--shadow-panel)]"
+              class="lens-mobile-controls-sheet w-full rounded-t-[24px] bg-[var(--surface-panel)] px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-4 shadow-[var(--shadow-panel)]"
             >
               <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[var(--accent-soft)]"></div>
               <div class="max-h-[78vh] overflow-y-auto custom-scrollbar">
                 <CapabilityPanel
-                  :core-label="t('lens.academicPanel.coreLabel')"
-                  :plugin-label="t('lens.academicPanel.pluginLabel')"
-                  :core-placeholder="t('lens.academicPanel.corePlaceholder')"
-                  :plugin-placeholder="t('lens.academicPanel.pluginPlaceholder')"
-                  :plugin-args-label="t('lens.academicPanel.customInstructionLabel')"
-                  :plugin-args-placeholder="t('lens.academicPanel.customInstructionPlaceholder')"
-                  :info-label="t('lens.academicPanel.infoLabel')"
+                  :title-label="
+                    !isLogin && !renderDataSources.length
+                      ? t('lens.workspace.starterTitle')
+                      : undefined
+                  "
+                  :service-state="workspaceServiceState"
                   :embedded="false"
                   :show-close="true"
+                  :scrollable="false"
                   @close="closeMobileAcademicPanel"
+                />
+                <ResearchShortcuts
+                  v-if="isLogin"
+                  class="mt-5"
+                  featured
+                  compact
+                  include-research
+                  :scrollable="false"
                 />
               </div>
             </div>
-          </div>
+          </dialog>
         </transition>
       </teleport>
       <teleport to="body">
         <transition name="research-drawer">
-          <div
+          <dialog
             v-if="researchProjectsVisible"
-            class="fixed inset-0 z-[100] flex justify-start bg-[var(--modal-overlay)] backdrop-blur-[3px]"
+            ref="projectsDialog"
+            :aria-label="t('lens.header.projects')"
+            @cancel.prevent="closeResearchProjects"
+            class="lens-dialog fixed inset-0 z-[100] flex justify-start bg-[var(--modal-overlay)] backdrop-blur-[3px]"
             @click.self="closeResearchProjects"
           >
             <aside
-              class="research-projects-drawer h-full w-full max-w-[360px] border-r border-[var(--paper-border)] bg-[var(--surface-panel)] shadow-[var(--dialog-shadow)]"
-              role="dialog"
-              aria-modal="true"
+              class="research-projects-drawer h-full w-full max-w-[320px] bg-[var(--surface-card)] shadow-[var(--dialog-shadow)]"
               :aria-label="t('lens.header.projects')"
             >
               <ResearchProjects @close="closeResearchProjects" />
             </aside>
-          </div>
+          </dialog>
         </transition>
       </teleport>
       <teleport to="body">
         <transition name="research-drawer">
-          <div
-            v-if="!isMobile && desktopAcademicPanelVisible"
-            class="fixed inset-0 z-[100] flex justify-end bg-[var(--modal-overlay)] backdrop-blur-[3px]"
+          <dialog
+            v-if="!isCompactWorkspace && desktopAcademicPanelVisible"
+            ref="desktopToolsDialog"
+            :aria-label="t('lens.academicPanel.settingsTitle')"
+            @cancel.prevent="closeDesktopAcademicPanel"
+            class="lens-dialog fixed inset-0 z-[100] flex justify-end bg-[var(--modal-overlay)] backdrop-blur-[3px]"
             @click.self="closeDesktopAcademicPanel"
           >
             <aside
               class="research-tool-drawer flex h-full w-full max-w-[420px] flex-col border-l border-[var(--paper-border)] bg-[var(--surface-panel)] shadow-[var(--dialog-shadow)]"
-              role="dialog"
-              aria-modal="true"
-              :aria-label="t('lens.academicPanel.title')"
+              :aria-label="t('lens.academicPanel.settingsTitle')"
             >
               <div class="min-h-0 flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
                 <CapabilityPanel
-                  :core-label="t('lens.academicPanel.coreLabel')"
-                  :plugin-label="t('lens.academicPanel.pluginLabel')"
-                  :core-placeholder="t('lens.academicPanel.corePlaceholder')"
-                  :plugin-placeholder="t('lens.academicPanel.pluginPlaceholder')"
-                  :plugin-args-label="t('lens.academicPanel.customInstructionLabel')"
-                  :plugin-args-placeholder="t('lens.academicPanel.customInstructionPlaceholder')"
-                  :info-label="t('lens.academicPanel.infoLabel')"
+                  :title-label="
+                    !isLogin && !renderDataSources.length
+                      ? t('lens.workspace.starterTitle')
+                      : undefined
+                  "
                   :embedded="false"
                   :show-close="true"
+                  :scrollable="false"
                   @close="closeDesktopAcademicPanel"
+                />
+                <ResearchShortcuts
+                  v-if="isLogin"
+                  class="mt-5"
+                  featured
+                  compact
+                  include-research
+                  :scrollable="false"
                 />
               </div>
             </aside>
-          </div>
+          </dialog>
         </transition>
       </teleport>
     </div>
@@ -2575,64 +2667,249 @@ provide('onOpenImagePreviewer', openImagePreviewer)
 }
 
 .lens-shell {
-  background: var(--bg-body);
+  background: var(--surface-panel);
+}
+
+.lens-workbench {
+  --control-height: 44px;
+  --control-height-compact: 44px;
+  --btn-bg-ghost-hover: var(--academic-surface);
+  --btn-bg-ghost-active: var(--academic-accent-soft);
 }
 
 .lens-shell__tools {
   min-height: 0;
+  max-height: 100%;
+  align-self: stretch;
   flex: none;
+  order: -1;
   display: flex;
-  width: min(420px, 38vw);
+  width: clamp(264px, 20vw, 288px);
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   overflow: hidden;
-  padding: 12px;
-  border-left: 1px solid var(--paper-border);
-  background: var(--bg-body);
-}
-
-.lens-shell__capabilities {
-  border: 1px solid var(--paper-border);
-  border-radius: 20px;
+  padding: 24px 20px;
+  border-right: 1px solid color-mix(in srgb, var(--paper-border) 68%, transparent);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-card);
 }
 
-.lens-shell__composer {
-  flex: none;
+.lens-shell__tools--collapsed {
+  position: relative;
+  z-index: 30;
+  width: 64px;
+  padding-inline: 10px;
+  overflow: visible;
+}
+
+.lens-shell__tools--collapsed > .workspace-navigation--preferences {
+  margin-top: auto;
+}
+
+/* 两组标题保持可见；只有各自列表滚动，外层不叠加滚动轨道。 */
+.lens-shell__configuration {
+  display: grid;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.lens-shell__tool-content {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.lens-shell__featured {
+  min-height: 0;
+  margin: 0;
   padding: 0;
+}
+
+.lens-conversation-composer {
+  flex: none;
+  width: 100%;
+  max-width: 920px;
+  margin-inline: auto;
+  padding: 8px 24px 20px;
+}
+
+.lens-main-composer .research-composer__frame {
+  padding-inline: 0;
+}
+
+.academic-home__composer .research-composer__input-row {
+  min-height: 96px;
+}
+
+.lens-main-composer .research-composer__attachments {
+  max-height: min(120px, 18vh);
+  overflow-y: auto;
 }
 
 .lens-shell__capabilities {
   min-height: 0;
-  flex: 0 1 auto;
-  max-height: calc(100% - 210px);
-  overflow-y: auto;
-  padding: 16px;
-  scrollbar-gutter: auto;
+  flex: none;
+  border-top: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-@media (min-width: 801px) and (min-height: 680px) {
-  .workspace-scroll--home {
-    overflow-y: hidden !important;
-    scrollbar-gutter: auto;
+.lens-mobile-controls-sheet {
+  max-height: 84vh;
+  border-top: 1px solid color-mix(in srgb, var(--paper-border) 72%, transparent);
+}
+
+@media (min-width: 1024px) {
+  .lens-shell {
+    background: var(--bg-body);
+    width: 100%;
   }
 
   .workspace-home-frame {
-    padding-top: 20px !important;
+    padding-top: 8px !important;
     padding-bottom: 20px !important;
+  }
+
+  .workspace-home-frame > div {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .workspace-home-frame .workspace-surface {
+    height: auto;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .workspace-home-frame .workspace-service-banner {
+    flex: none;
   }
 }
 
-@media (max-width: 1180px) {
+@media (min-width: 1024px) and (max-height: 760px) {
+  .lens-shell__configuration {
+    gap: 16px;
+  }
+
+  .lens-shell__tool-content {
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 700px) {
+  .academic-home__composer .research-composer__input-row {
+    min-height: 72px;
+  }
+
   .lens-shell__tools {
-    width: min(360px, 36vw);
+    padding-block: 16px;
+  }
+
+  .lens-shell__configuration {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .lens-conversation-composer {
+    padding: 8px 12px 12px;
+  }
+
+  .lens-mobile-controls-sheet {
+    max-height: 86vh;
+    padding-inline: 18px;
+  }
+}
+
+.workspace-home-frame {
+  background: var(--bg-body);
+}
+
+.workspace-service-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 48px;
+  padding: 9px 12px 9px 14px;
+  border: 1px solid color-mix(in srgb, #9b7444 25%, var(--paper-border));
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, #b28a58 8%, var(--surface-card));
+  color: color-mix(in srgb, #704f2d 84%, var(--text-main));
+}
+
+.workspace-service-banner__copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.workspace-service-banner__title {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-service-banner__desc {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, #704f2d 70%, var(--text-sub));
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-service-banner__retry {
+  min-height: 32px !important;
+  border-color: color-mix(in srgb, #9b7444 28%, var(--paper-border)) !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+
+@media (max-width: 640px) {
+  .workspace-service-banner {
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+    min-height: 42px;
+    padding: 8px 10px 8px 12px;
+  }
+
+  .workspace-service-banner__copy {
+    align-items: baseline;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .workspace-service-banner__desc {
+    max-width: 18ch;
+    white-space: normal;
+  }
+
+  .workspace-service-banner__retry {
+    min-height: 34px !important;
+    padding-inline: 10px !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .lens-shell__tools {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface-panel);
   }
 }
 
 /* 宽度变化动画效果 */
 .transform {
-  transition-property: transform, width, opacity;
+  transition-property: transform, opacity;
 }
 
 /* 缩放动画 */

@@ -1,13 +1,15 @@
 <script lang="ts" setup>
+import { renderMermaidWithRecovery } from '@/utils/mermaidRecovery'
+
 import { fetchTtsAPIProcess } from '@/api'
 import { createShare } from '@/api/share'
-import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import { copyText } from '@/utils/format'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { parseAcademicSources } from '@/domain/research/sources'
+import EvidenceCards from '../EvidenceCards.vue'
 import {
   createShareDocument,
   normalizeShareResultUrl,
@@ -25,7 +27,6 @@ import {
 } from '@/domain/research/downloads'
 import {
   ArrowRight,
-  Close,
   Copy,
   Delete,
   Down,
@@ -34,11 +35,9 @@ import {
   PauseOne,
   Refresh,
   Rotation,
-  Send,
   Sound,
   Share,
   Sphere,
-  TwoEllipses,
   Up,
   VoiceMessage,
 } from '@icon-park/vue-next'
@@ -160,7 +159,6 @@ interface TtsResponse {
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()
-const { isMobile } = useBasicLayout()
 const onConversation = inject<any>('onConversation')
 const handleRegenerate = inject<any>('handleRegenerate')
 const handleEditConversation = inject<any>('handleEditConversation')
@@ -399,7 +397,7 @@ const renderMermaidBlocks = async () => {
 
     const renderId = `mermaid-${props.chatId || 'tmp'}-${props.index}-${i}-${Date.now()}`
     try {
-      const result = await mermaid.render(renderId, raw, node)
+      const result = await renderMermaidWithRecovery(mermaid, renderId, raw, node)
       node.innerHTML = result.svg
       result.bindFunctions?.(node)
       bindMermaidDownload(node)
@@ -450,6 +448,11 @@ const parsedFileVectorFiles = computed<AcademicDownloadFile[]>(() => {
 
 const parsedUserUploadedFiles = computed<UserUploadedFile[]>(() => {
   if (!props.isUserMessage || !props.fileUrl) return []
+  return parseUserUploadedFiles(props.fileUrl)
+})
+
+const parsedEvidenceFiles = computed<UserUploadedFile[]>(() => {
+  if (props.isUserMessage || !props.fileUrl) return []
   return parseUserUploadedFiles(props.fileUrl)
 })
 
@@ -581,12 +584,6 @@ const downloadUserUploadedFile = async (file: UserUploadedFile) => {
   }
 }
 
-const buttonGroupClass = computed(() => {
-  return playbackState.value !== 'paused' || isEditable.value
-    ? 'opacity-100'
-    : 'opacity-0 group-hover:opacity-100'
-})
-
 const handlePlay = async () => {
   if (playbackState.value === 'loading' || playbackState.value === 'playing') return
   if (localTtsUrl.value) {
@@ -660,7 +657,6 @@ function handleBrowserTts() {
 
 function playBrowserTts() {
   if (!('speechSynthesis' in window)) {
-    console.error('浏览器不支持语音合成API')
     return
   }
 
@@ -1749,13 +1745,11 @@ function handleCodeCopy(blockId: string, element: HTMLElement) {
 
   const codeBlock = document.getElementById(blockId)
   if (!codeBlock) {
-    console.error('未找到代码块:', blockId)
     return
   }
 
   const codeElement = codeBlock.querySelector('code')
   if (!codeElement || !codeElement.textContent) {
-    console.error('未找到代码内容')
     return
   }
 
@@ -1769,7 +1763,6 @@ function handleCodeCopy(blockId: string, element: HTMLElement) {
           updateCopyButtonState(element, blockId)
         })
         .catch(err => {
-          console.error('navigator.clipboard复制失败:', err)
           // 尝试回退方法
           fallbackCopy(codeElement.textContent, element, blockId)
         })
@@ -1778,7 +1771,6 @@ function handleCodeCopy(blockId: string, element: HTMLElement) {
       fallbackCopy(codeElement.textContent, element, blockId)
     }
   } catch (error) {
-    console.error('复制过程出错:', error)
     message()?.error(t('lens.message.copyFailed'))
   }
 }
@@ -1786,7 +1778,6 @@ function handleCodeCopy(blockId: string, element: HTMLElement) {
 // 回退复制方法
 function fallbackCopy(text: string | null, element: HTMLElement, blockId: string) {
   if (!text) {
-    console.error('复制内容为空')
     message()?.error(t('lens.message.copyFailed'))
     return
   }
@@ -1795,7 +1786,6 @@ function fallbackCopy(text: string | null, element: HTMLElement, blockId: string
     copyText({ text: text, origin: true })
     updateCopyButtonState(element, blockId)
   } catch (error) {
-    console.error('fallback复制失败:', error)
     message()?.error(t('lens.message.copyFailed'))
   }
 }
@@ -2033,13 +2023,14 @@ const reasoningTips = [
   '正在为用户提供学术支持',
 ]
 const reasoningTipIndex = ref(0)
+const thinkingElapsedSeconds = ref(0)
 let reasoningTipTimer: ReturnType<typeof setInterval> | null = null
+let thinkingElapsedTimer: ReturnType<typeof setInterval> | null = null
 
 const hasReasoning = computed(() => Boolean(props.reasoningText))
-const showThinkingPill = computed(
+const showThinkingLine = computed(
   () => !props.isUserMessage && (props.loading || hasReasoning.value)
 )
-const shouldAnimateThinking = computed(() => props.loading)
 const promptReferenceItems = computed(() =>
   props.promptReference
     ? props.promptReference
@@ -2048,16 +2039,8 @@ const promptReferenceItems = computed(() =>
         .slice(0, 3) || []
     : []
 )
-const recordEyebrow = computed(() =>
-  props.isUserMessage ? t('lens.message.requestEyebrow') : t('lens.message.resultEyebrow')
-)
-const recordTitle = computed(() => {
-  if (props.isUserMessage) return t('lens.message.yourInput')
-  return ''
-})
 const recordStatus = computed(() => {
   if (props.isUserMessage) return ''
-  if (props.loading || Number(props.status) === 1) return t('lens.message.workflowStatusRunning')
   if (props.aborted) return t('lens.message.workflowStatusAborted')
   if (Number(props.status) === 4) return t('lens.message.workflowStatusError')
   if (Number(props.status) === 3) return t('lens.message.workflowStatusDone')
@@ -2066,7 +2049,7 @@ const recordStatus = computed(() => {
 const recordSummary = computed(() => {
   if (props.isUserMessage) return ''
 
-  if (props.usingNetwork && searchResult.value.length) {
+  if (searchResult.value.length) {
     return t('lens.message.citedWebSourcesSummary', { count: searchResult.value.length })
   }
   if (parsedFileVectorFiles.value.length) {
@@ -2078,12 +2061,10 @@ const recordMeta = computed(() => {
   const items: string[] = []
   if (props.isUserMessage) return items
 
-  if (props.usingNetwork) {
-    items.push(
-      searchResult.value.length
-        ? t('lens.message.sourcesMeta', { count: searchResult.value.length })
-        : t('lens.message.networkSearchMeta')
-    )
+  if (searchResult.value.length) {
+    items.push(t('lens.message.sourcesMeta', { count: searchResult.value.length }))
+  } else if (props.usingNetwork) {
+    items.push(t('lens.message.networkSearchMeta'))
   }
   if (props.usingDeepThinking || hasReasoning.value) {
     items.push(t('lens.footer.reasoning'))
@@ -2167,12 +2148,7 @@ const workflowLiveProgressText = computed(() => {
   if (runningText) return runningText
 
   const stageName = workflowCurrentStageLabel.value
-  if (!stageName) {
-    if (props.fileUrl) return '正在接收上传资料，准备能力编排'
-    return '正在准备能力编排'
-  }
-  const progress = workflowProgressValue.value ? ` · ${workflowProgressValue.value}%` : ''
-  return `正在执行：${stageName}${progress}`
+  return stageName
 })
 
 const normalizeThinkingPreview = (value: string) => {
@@ -2192,70 +2168,37 @@ const liveThinkingPreview = computed(() => normalizeThinkingPreview(props.thinki
 const reasoningTextPreview = computed(() => normalizeThinkingPreview(props.reasoningText || ''))
 const reasoningPreview = computed(
   () =>
-    workflowLiveProgressText.value ||
-    liveThinkingPreview.value ||
+    // 后端已经提供的思考内容是最有价值的上下文，优先于通用状态文案。
     reasoningTextPreview.value ||
+    liveThinkingPreview.value ||
+    workflowLiveProgressText.value ||
     reasoningTips[reasoningTipIndex.value]
 )
 
 const workflowSummaryLabel = computed(() => {
   if (!hasWorkflowStageList.value) {
-    return props.loading && props.isWorkflowMessage ? '正在准备能力编排' : ''
+    return ''
   }
   if (workflowCurrentStageLabel.value && props.loading) {
-    return t('lens.message.workflowRunningAt', { name: workflowCurrentStageLabel.value })
+    return workflowCurrentStageLabel.value
   }
   const failed = workflowStageList.value.find(stage => stage.status === 'error')
   if (failed) {
-    return t('lens.message.workflowFailedAt', { name: failed.displayName })
+    return `失败：${failed.displayName}`
   }
   if ((parsedWorkflowTask.value?.status || '') === 'done') {
-    return t('lens.message.workflowFinished')
+    return '已完成'
   }
-  return t('lens.message.workflowQueued')
+  return ''
 })
 
-const workflowProgressValue = computed(() => {
-  if (typeof props.workflowProgress === 'number' && props.workflowProgress > 0) {
-    return Math.max(0, Math.min(100, Math.round(props.workflowProgress)))
-  }
-  const total = workflowStageList.value.length
-  if (!total) return 0
-  const runningStage = workflowStageList.value.find(stage => stage.status === 'running')
-  if (runningStage) {
-    const stageBase = Math.round(((Math.max(runningStage.index, 1) - 1) / total) * 100)
-    return Math.min(99, stageBase + 5)
-  }
-  const doneCount = workflowStageList.value.filter(stage => stage.status === 'done').length
-  return Math.round((doneCount / total) * 100)
-})
-
-const workflowStageStats = computed(() => {
-  const total = workflowStageList.value.length
-  const done = workflowStageList.value.filter(stage => stage.status === 'done').length
-  const running = workflowStageList.value.find(stage => stage.status === 'running') || null
-  const error = workflowStageList.value.find(stage => stage.status === 'error') || null
-  const pending = Math.max(0, total - done - (running ? 1 : 0) - (error ? 1 : 0))
-  return { total, done, pending, running, error }
-})
-
-const workflowMetricChips = computed(() => {
-  const { total, done, pending, running, error } = workflowStageStats.value
-  if (!total) return [] as string[]
-  const chips = [t('lens.message.workflowMetricDone', { done, total })]
-  if (running?.displayName) {
-    chips.push(t('lens.message.workflowMetricCurrent', { name: running.displayName }))
-  } else if (error?.displayName) {
-    chips.push(t('lens.message.workflowMetricError', { name: error.displayName }))
-  } else if (pending > 0) {
-    chips.push(t('lens.message.workflowMetricPending', { count: pending }))
-  }
-  return chips
-})
+const workflowInlineLabel = computed(
+  () => workflowLiveProgressText.value || workflowSummaryLabel.value || reasoningPreview.value
+)
 
 const workflowStatusText = (status: string) => {
   if (status === 'done') return t('lens.message.workflowStatusDone')
-  if (status === 'running') return t('lens.message.workflowStatusRunning')
+  if (status === 'running') return ''
   if (status === 'error') return t('lens.message.workflowStatusError')
   return t('lens.message.workflowStatusPending')
 }
@@ -2275,6 +2218,12 @@ const recordStatusClass = computed(() => ({
 }))
 
 const startReasoningTips = () => {
+  thinkingElapsedSeconds.value = 0
+  if (!thinkingElapsedTimer) {
+    thinkingElapsedTimer = setInterval(() => {
+      thinkingElapsedSeconds.value += 1
+    }, 1000)
+  }
   if (reasoningTipTimer || reasoningTips.length === 0) return
   reasoningTipIndex.value = reasoningTipIndex.value % reasoningTips.length
   reasoningTipTimer = setInterval(() => {
@@ -2286,6 +2235,10 @@ const stopReasoningTips = () => {
   if (reasoningTipTimer) {
     clearInterval(reasoningTipTimer)
     reasoningTipTimer = null
+  }
+  if (thinkingElapsedTimer) {
+    clearInterval(thinkingElapsedTimer)
+    thinkingElapsedTimer = null
   }
 }
 
@@ -2427,10 +2380,15 @@ const cancelEdit = () => {
 }
 
 const adjustTextareaHeight = () => {
-  if (textarea.value) {
-    textarea.value.style.height = 'auto'
-    textarea.value.style.height = `${textarea.value.scrollHeight}px`
-  }
+  const element = textarea.value
+  if (!element) return
+
+  // 先归零再读取 scrollHeight，避免 max-height 的布局高度被误写回。
+  // 单行内容应保持紧凑，多行内容再自然增长到视口上限。
+  element.style.height = '0px'
+  const maxHeight = Math.floor(window.innerHeight * 0.4)
+  const contentHeight = Math.max(element.scrollHeight, 28)
+  element.style.height = `${Math.min(contentHeight, maxHeight)}px`
 }
 
 // 新增：监听 loading 状态改变以控制代码块高度
@@ -2519,7 +2477,7 @@ watch(
 )
 
 watch(
-  shouldAnimateThinking,
+  () => props.loading,
   active => {
     if (active) {
       startReasoningTips()
@@ -2696,17 +2654,16 @@ function openSingleImagePreview(src: string) {
     class="workspace-record group"
     :class="{
       'workspace-record--user': isUserMessage,
+      'workspace-record--editing': isUserMessage && isEditable,
       'workspace-record--assistant': !isUserMessage,
       'workspace-record--loading': loading,
     }"
   >
-    <header v-if="!isUserMessage && !showWorkflowCard" class="workspace-record__header">
+    <div class="workspace-record__message-shell" :class="{ 'workspace-record__message-shell--user': isUserMessage }">
+      <header v-if="!isUserMessage && !showWorkflowCard" class="workspace-record__header">
       <div class="workspace-record__header-main">
-        <div class="workspace-record__eyebrow">{{ recordEyebrow }}</div>
-        <div v-if="recordTitle || recordStatus" class="workspace-record__title-row">
-          <h3 v-if="recordTitle" class="workspace-record__title">{{ recordTitle }}</h3>
+        <div v-if="recordStatus" class="workspace-record__title-row">
           <span
-            v-if="recordStatus"
             class="workspace-record__status"
             :class="recordStatusClass"
             role="status"
@@ -2718,10 +2675,19 @@ function openSingleImagePreview(src: string) {
         <p v-if="recordSummary && !loading" class="workspace-record__summary">
           {{ recordSummary }}
         </p>
-        <div v-if="recordMeta.length" class="workspace-record__meta">
-          <span v-for="item in recordMeta" :key="item" class="workspace-record__meta-chip">
-            {{ item }}
+        <div
+          v-if="recordMeta.length"
+          class="workspace-record__evidence"
+          :aria-label="t('lens.message.evidenceLabel')"
+        >
+          <span class="workspace-record__evidence-label">
+            {{ t('lens.message.evidenceLabel') }}
           </span>
+          <div class="workspace-record__meta">
+            <span v-for="item in recordMeta" :key="item" class="workspace-record__meta-chip">
+              {{ item }}
+            </span>
+          </div>
         </div>
       </div>
     </header>
@@ -2733,34 +2699,10 @@ function openSingleImagePreview(src: string) {
         @click="hasWorkflowStageList && (showWorkflowDetails = !showWorkflowDetails)"
       >
         <div class="workspace-record__toggle-copy">
-          <ArrowRight theme="outline" size="18" class="flex" />
-          <span>{{ t('lens.message.workflowTitle') }}</span>
-          <span class="workspace-record__workflow-summary">{{ workflowSummaryLabel }}</span>
+          <span class="workspace-record__workflow-summary">{{ workflowInlineLabel }}</span>
         </div>
-        <div class="workspace-record__toggle-icons">
-          <span class="workspace-record__workflow-progress">{{ workflowProgressValue }}%</span>
-          <Down v-if="hasWorkflowStageList && !showWorkflowDetails" size="18" class="flex" />
-          <Up v-else-if="hasWorkflowStageList" size="18" class="flex" />
-        </div>
+        <ArrowRight v-if="hasWorkflowStageList" theme="outline" size="16" class="workspace-record__workflow-arrow" />
       </button>
-
-      <div v-if="hasWorkflowStageList" class="workspace-record__workflow-overview">
-        <div class="workspace-record__workflow-meter" aria-hidden="true">
-          <div
-            class="workspace-record__workflow-meter-fill"
-            :style="{ width: `${workflowProgressValue}%` }"
-          />
-        </div>
-        <div class="workspace-record__workflow-metrics">
-          <span
-            v-for="chip in workflowMetricChips"
-            :key="chip"
-            class="workspace-record__workflow-metric-chip"
-          >
-            {{ chip }}
-          </span>
-        </div>
-      </div>
 
       <transition name="fold">
         <div v-if="showWorkflowDetails" class="workspace-record__workflow-list">
@@ -2779,6 +2721,7 @@ function openSingleImagePreview(src: string) {
               <div class="workspace-record__workflow-copy">
                 <div class="workspace-record__workflow-name">{{ stage.displayName }}</div>
                 <div
+                  v-if="workflowStatusText(stage.status)"
                   class="workspace-record__workflow-state"
                   :class="workflowStateClass(stage.status)"
                 >
@@ -2809,15 +2752,6 @@ function openSingleImagePreview(src: string) {
       </transition>
     </div>
 
-    <div v-if="isUserMessage" class="workspace-record__request-head">
-      <div class="workspace-record__eyebrow">{{ recordEyebrow }}</div>
-      <div v-if="recordMeta.length" class="workspace-record__meta">
-        <span v-for="item in recordMeta" :key="item" class="workspace-record__meta-chip">
-          {{ item }}
-        </span>
-      </div>
-    </div>
-
     <div
       v-if="!isUserMessage && (searchResult.length || (loading && usingNetwork))"
       class="workspace-record__section"
@@ -2835,7 +2769,6 @@ function openSingleImagePreview(src: string) {
           <span v-else-if="loading && usingNetwork">{{ t('lens.message.networkSearching') }}</span>
         </div>
         <div class="workspace-record__toggle-icons">
-          <LoadingOne v-if="loading && usingNetwork" class="rotate-icon flex" />
           <Down v-if="!showSearchResult && searchResult.length" size="18" class="flex" />
           <Up v-else-if="searchResult.length" size="18" class="flex" />
         </div>
@@ -2861,38 +2794,25 @@ function openSingleImagePreview(src: string) {
       </transition>
     </div>
 
-    <div v-if="showThinkingPill" class="workspace-record__section">
-      <div
-        :class="[
-          'reasoning-pill glow-container',
-          { 'reasoning-pill--active': shouldAnimateThinking },
-        ]"
-      >
-        <TwoEllipses theme="outline" size="18" class="flex icon" />
-        <span class="label">
-          {{ loading ? t('lens.message.deepThinking') : t('lens.message.thoughtComplete') }}
-        </span>
-        <LoadingOne
-          v-if="
-            (loading && usingDeepThinking && !hasReasoning) || (!text && loading && hasReasoning)
-          "
-          class="rotate-icon flex mx-1 text-base"
-        />
-        <div class="reasoning-preview" v-text="reasoningPreview"></div>
-      </div>
+    <div v-if="showThinkingLine" class="workspace-record__thinking" role="status" aria-live="polite">
+      <span class="workspace-record__thinking-copy" :title="reasoningPreview">{{ reasoningPreview }}</span>
+      <span v-if="loading" class="workspace-record__thinking-elapsed">{{ thinkingElapsedSeconds }}s</span>
     </div>
 
     <div class="workspace-record__body">
       <div ref="textRef" class="workspace-record__content">
-        <div v-if="!isUserMessage" class="workspace-record__assistant">
-          <span
-            v-if="loading && !text && !hasReasoning"
-            class="inline-block h-3.5 w-3.5 align-middle rounded-full animate-breathe bg-gray-950 dark:bg-gray-100"
-          ></span>
+        <div
+          v-if="!isUserMessage"
+          class="workspace-record__assistant"
+          :class="{ 'workspace-record__assistant--streaming': isStreamIn || loading }"
+        >
           <div
             :class="[
-              'markdown-body workspace-record__markdown text-gray-950 dark:text-gray-100',
-              { 'markdown-body-generate': loading || !text },
+              'markdown-body workspace-record__markdown',
+              {
+                'markdown-body-generate': loading || !text,
+                'workspace-record__markdown--streaming': isStreamIn || loading,
+              },
             ]"
             v-html="text"
           ></div>
@@ -2904,27 +2824,26 @@ function openSingleImagePreview(src: string) {
               ref="textarea"
               v-model="editableContent"
               class="workspace-record__editor-textarea"
-              style="max-height: 60vh"
+              rows="1"
+              :aria-label="t('common.edit')"
               @input="adjustTextareaHeight"
             ></textarea>
             <div class="workspace-record__editor-actions">
               <button
                 type="button"
-                class="btn-pill btn-md"
+                class="workspace-record__edit-action"
                 @click="cancelEdit"
                 :aria-label="t('common.cancel')"
               >
-                <Close size="16" />
-                <span class="ml-1">{{ t('common.cancel') }}</span>
+                <span>{{ t('common.cancel') }}</span>
               </button>
               <button
                 type="button"
-                class="btn btn-primary btn-md"
+                class="workspace-record__edit-action workspace-record__edit-action--primary"
                 @click="handleEditMessage"
                 :aria-label="t('common.update')"
               >
-                <Send size="16" />
-                <span class="ml-1">{{ t('common.update') }}</span>
+                <span>{{ t('common.update') }}</span>
               </button>
             </div>
           </div>
@@ -2986,6 +2905,14 @@ function openSingleImagePreview(src: string) {
       </div>
     </div>
 
+    <EvidenceCards
+      v-if="!isUserMessage && (searchResult.length || parsedEvidenceFiles.length)"
+      :sources="searchResult"
+      :files="parsedEvidenceFiles"
+      :ownerId="authStore.userInfo.id"
+      :groupId="chatStore.active"
+    />
+
     <div
       v-if="!isUserMessage && parsedFileVectorFiles.length"
       class="workspace-record__section workspace-record__section--downloads"
@@ -3028,44 +2955,43 @@ function openSingleImagePreview(src: string) {
       </div>
     </div>
 
-    <div class="workspace-record__footer" :class="buttonGroupClass">
+    </div>
+
+    <div class="workspace-record__footer">
       <div class="workspace-record__actions">
         <div v-if="!isEditable" class="relative group-btn">
           <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
+            class="btn-icon btn-sm btn-icon-action"
             @click="handleCopy"
             :aria-label="t('chat.copy')"
           >
-            <Copy />
+            <Copy size="16" />
           </button>
-          <div v-if="!isMobile" class="tooltip tooltip-top">{{ t('chat.copy') }}</div>
         </div>
 
         <div v-if="!isEditable" class="relative group-btn">
           <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
+            class="btn-icon btn-sm btn-icon-action"
             @click="handleDelete"
             :aria-label="t('chat.delete')"
           >
-            <Delete />
+            <Delete size="16" />
           </button>
-          <div v-if="!isMobile" class="tooltip tooltip-top">{{ t('chat.delete') }}</div>
         </div>
 
         <div v-if="isUserMessage && !isEditable" class="relative group-btn">
           <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
+            class="btn-icon btn-sm btn-icon-action"
             @click="handleEditMessage"
             :aria-label="t('common.edit')"
           >
-            <Edit />
+            <Edit size="16" />
           </button>
-          <div v-if="!isMobile" class="tooltip tooltip-top">{{ t('common.edit') }}</div>
         </div>
 
         <div v-if="!isUserMessage" class="relative group-btn">
           <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
+            class="btn-icon btn-sm btn-icon-action"
             :class="{ 'opacity-60 cursor-not-allowed': isStreamIn || loading }"
             :disabled="isStreamIn || loading"
             @click="triggerRegenerate"
@@ -3073,12 +2999,11 @@ function openSingleImagePreview(src: string) {
           >
             <Refresh />
           </button>
-          <div v-if="!isMobile" class="tooltip tooltip-top">{{ t('chat.regenerate') }}</div>
         </div>
 
         <div v-if="!isUserMessage && !isHideTts" class="relative group-btn">
           <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
+            class="btn-icon btn-sm btn-icon-action"
             @click="playOrPause"
             :aria-label="t('chat.readAloud')"
           >
@@ -3086,34 +3011,22 @@ function openSingleImagePreview(src: string) {
             <Rotation v-if="playbackState === 'loading'" class="rotate-icon" />
             <PauseOne v-else-if="playbackState === 'playing'" />
           </button>
-          <div v-if="!isMobile" class="tooltip tooltip-top">
-            {{
-              playbackState === 'playing'
-                ? t('chat.pause')
-                : playbackState === 'loading'
-                  ? t('chat.loading')
-                  : t('chat.readAloud')
-            }}
-          </div>
         </div>
 
         <div v-if="!isUserMessage && isHideTts" class="relative group-btn">
           <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
+            class="btn-icon btn-sm btn-icon-action"
             @click="handleBrowserTts"
             :aria-label="t('chat.readAloud')"
           >
             <Sound v-if="browserTtsState === 'paused'" />
             <PauseOne v-else-if="browserTtsState === 'playing'" />
           </button>
-          <div v-if="!isMobile" class="tooltip tooltip-top">
-            {{ browserTtsState === 'playing' ? t('chat.pause') : t('chat.readAloud') }}
-          </div>
         </div>
 
         <div v-if="!isUserMessage && !loading && text" class="relative group-btn">
           <button
-            class="btn-icon btn-sm btn-icon-action mx-1"
+            class="btn-icon btn-sm btn-icon-action"
             :class="{ 'opacity-60 cursor-not-allowed': isSharing }"
             :disabled="isSharing"
             @click="handleShareResult"
@@ -3121,9 +3034,6 @@ function openSingleImagePreview(src: string) {
           >
             <Share />
           </button>
-          <div v-if="!isMobile" class="tooltip tooltip-top">
-            {{ isSharing ? t('lens.message.shareLoading') : t('lens.message.share') }}
-          </div>
         </div>
       </div>
     </div>
@@ -3170,27 +3080,6 @@ function openSingleImagePreview(src: string) {
   display: inline;
 }
 
-@keyframes breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    /* 原始尺寸 */
-    opacity: 1;
-    /* 完全不透明 */
-  }
-
-  50% {
-    transform: scale(0.5);
-    /* 缩小到50%的尺寸 */
-    opacity: 0.5;
-    /* 半透明 */
-  }
-}
-
-.animate-breathe {
-  animation: breathe 2s infinite ease-in-out;
-}
-
 /* 折叠/展开动画 */
 .fold-enter-active,
 .fold-leave-active {
@@ -3226,35 +3115,65 @@ pre.fold-leave-to {
 /* 使用全局样式配置，在global.less中定义 */
 
 .workspace-record {
+  position: relative;
   width: 100%;
   overflow: visible;
   margin: 0 0 1.25rem;
-  padding: 1.35rem 1.5rem;
-  border: 1px solid var(--paper-border);
-  border-radius: 18px;
-  background: var(--surface-card);
-  box-shadow: var(--shadow-card);
+  padding: 20px 24px;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: transparent;
+  box-shadow: none;
 }
 
 .workspace-record:first-child {
   margin-top: 0.2rem;
 }
 
-.workspace-record--user {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  background: var(--surface-muted);
+.workspace-record__message-shell {
+  width: 100%;
+}
+
+.workspace-record__message-shell--user {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
   box-shadow: none;
 }
 
-.workspace-record__request-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.55rem;
+.workspace-record__assistant--streaming {
+  opacity: 1;
 }
+
+.workspace-record--user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+  margin-left: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workspace-record--user .workspace-record__message-shell--user {
+  width: max-content;
+  max-width: min(78%, 58rem);
+  min-width: 0;
+}
+
+.workspace-record--assistant {
+  border-radius: 0;
+  padding-inline: 24px;
+}
+
+.workspace-record--assistant .workspace-record__message-shell {
+  max-width: 74ch;
+}
+.workspace-record--editing { padding: 0; background: transparent; }
+.workspace-record--editing .workspace-record__footer { display: none; }
 
 .workspace-record__header,
 .workspace-record__section,
@@ -3287,7 +3206,7 @@ pre.fold-leave-to {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 600;
-  color: var(--ink-faint);
+  color: var(--text-sub);
 }
 
 .workspace-record__title-row {
@@ -3296,14 +3215,6 @@ pre.fold-leave-to {
   gap: 0.5rem;
   margin-top: 0.1rem;
   flex-wrap: wrap;
-}
-
-.workspace-record__title {
-  margin: 0;
-  font-size: 1rem;
-  line-height: 1.2;
-  font-weight: 650;
-  color: var(--text-main);
 }
 
 .workspace-record__status {
@@ -3355,7 +3266,7 @@ pre.fold-leave-to {
   max-width: 58ch;
   font-size: 0.8125rem;
   line-height: 1.55;
-  color: var(--ink-faint);
+  color: var(--text-sub);
 }
 
 .workspace-record__meta {
@@ -3365,11 +3276,29 @@ pre.fold-leave-to {
   align-items: center;
 }
 
+.workspace-record__evidence {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--paper-border);
+}
+
+.workspace-record__evidence-label {
+  flex: none;
+  color: var(--text-sub);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
 .workspace-record__meta-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  color: var(--ink-faint);
+  color: var(--text-sub);
   font-size: 0.75rem;
   line-height: 1.4;
 }
@@ -3461,7 +3390,7 @@ html.dark .workspace-record__toggle span {
   align-items: flex-start;
   padding: 0.76rem 0.9rem;
   min-height: 44px;
-  border-radius: 14px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--paper-border);
   background: var(--surface-card);
   color: var(--ink-soft);
@@ -3511,21 +3440,11 @@ html.dark .workspace-record__toggle span {
   width: 100%;
 }
 
-.workspace-record--user .workspace-record__request-head,
 .workspace-record--user .workspace-record__body,
 .workspace-record--user .workspace-record__section {
   width: 100%;
+  max-width: 100%;
   margin-left: 0;
-}
-
-.workspace-record--user .workspace-record__request-head {
-  justify-content: flex-start;
-  gap: 0.75rem;
-}
-
-.workspace-record--user .workspace-record__eyebrow,
-.workspace-record--user .workspace-record__section-label {
-  text-align: left;
 }
 
 .workspace-record--user .workspace-record__meta {
@@ -3533,7 +3452,11 @@ html.dark .workspace-record__toggle span {
 }
 
 .workspace-record--user .workspace-record__file-tags {
-  justify-content: flex-start;
+  justify-content: flex-end;
+}
+
+.workspace-record--user .workspace-record__footer {
+  justify-content: flex-end;
 }
 
 .workspace-record__markdown,
@@ -3549,56 +3472,107 @@ html.dark .workspace-record__toggle span {
 }
 
 .workspace-record__user-text {
-  display: block;
-  width: 100%;
-  max-width: none;
-  padding: 0.2rem 0 0.1rem;
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 1.65rem;
+  padding: 0.9rem 1rem;
   border: none;
-  background: transparent;
+  background: var(--surface-muted);
   white-space: pre-wrap;
   font-size: 1rem;
   line-height: 1.65;
   color: var(--text-main);
-  border-radius: 0;
+  border-radius: 1.2rem;
+  border-top-right-radius: 0.45rem;
   box-shadow: none;
 }
 
 .dark .workspace-record__user-text {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .workspace-record__editor {
-  max-width: none;
-  margin-left: 0;
-  padding: 0.95rem;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px 8px;
   border: 1px solid var(--paper-border);
-  background: var(--surface-panel);
-  border-radius: 8px;
+  background: var(--surface-card);
+  border-radius: 16px;
 }
 
 .workspace-record__user {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .workspace-record__editor-textarea {
+  display: block;
+  box-sizing: border-box;
   width: 100%;
-  min-height: 7rem;
+  min-height: 1.75em;
+  max-height: 40vh;
+  padding: 1px 2px;
   resize: none;
   border: none;
   outline: none;
   background: transparent;
   color: var(--text-main);
   font-size: 1rem;
-  line-height: 1.75;
+  line-height: 1.55;
 }
 
 .workspace-record__editor-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.9rem;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 4px;
 }
+
+.workspace-record__editor:focus-within { border-color: var(--academic-border); }
+.workspace-record__edit-action {
+  display: inline-flex;
+  min-width: 56px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.workspace-record__edit-action span {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: inherit;
+  background: var(--surface-muted);
+}
+.workspace-record__edit-action--primary span {
+  background: var(--btn-bg-primary);
+  color: var(--btn-text-primary);
+}
+.workspace-record__edit-action:hover span { background: var(--academic-accent-soft); }
+.workspace-record__edit-action--primary:hover span { background: var(--btn-bg-primary-hover); }
+.workspace-record__edit-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-record__markdown { color: var(--text-main); }
+.workspace-record__markdown table { --color-border-default: var(--paper-border); }
+.workspace-record__markdown table tr { background: transparent; border-color: var(--paper-border); }
+.workspace-record__markdown table tr:nth-child(2n) { background: var(--academic-surface); }
+.workspace-record__markdown table th { background: var(--academic-accent-soft); }
+.workspace-record__markdown table td,
+.workspace-record__markdown table th { border-color: var(--paper-border); }
 
 .workspace-record__section--files,
 .workspace-record__section--downloads {
@@ -3711,23 +3685,75 @@ html.dark .workspace-record__file-badge {
   margin-top: 0.75rem;
 }
 
+.workspace-record--user .workspace-record__footer {
+  width: auto;
+  align-self: flex-end;
+}
+
 .workspace-record__footer {
+  position: static;
+  width: 100%;
+  height: 28px;
+  flex-shrink: 0;
+  margin-top: 6px;
   display: flex;
   justify-content: flex-start;
-  padding-top: 0.45rem;
-  padding-bottom: 0.4rem;
+  padding: 0;
+  pointer-events: none;
+  opacity: 0;
+  overflow: visible;
+  transition: none;
+}
+
+.workspace-record--assistant .workspace-record__footer {
+  justify-content: flex-start;
+}
+
+.workspace-record:hover .workspace-record__footer,
+.workspace-record:focus-within .workspace-record__footer {
+  pointer-events: auto;
+  opacity: 1;
+  transition: none;
 }
 
 .workspace-record__actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .workspace-record__actions button {
-  min-width: 36px;
-  min-height: 36px;
-  border-radius: 999px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-sub);
+}
+
+.workspace-record__actions button:hover:not(:disabled) {
+  background: var(--academic-surface) !important;
+  color: var(--academic-accent-strong);
+}
+.workspace-record__actions button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.workspace-record__actions button svg { width: 16px; height: 16px; }
+
+.reasoning-elapsed {
+  margin-left: 0.35rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-sub);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-record__footer { transition: none; }
 }
 
 @media (max-width: 960px) {
@@ -3738,19 +3764,35 @@ html.dark .workspace-record__file-badge {
 
 @media (max-width: 640px) {
   .workspace-record {
-    padding: 1.1rem;
-    border-radius: 16px;
+    padding: 16px;
+    border-radius: var(--radius-panel);
   }
 
-  .workspace-record__title {
-    font-size: 0.9rem;
+  .workspace-record--user {
+    width: 100%;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .workspace-record--user .workspace-record__message-shell--user {
+    width: max-content;
+    max-width: 92%;
+  }
+  .workspace-record--user .workspace-record__footer {
+    width: auto;
+    height: 28px;
+  }
+
+  .workspace-record--editing { padding: 0; }
+  .workspace-record--assistant {
+    border-radius: 0;
+    padding-inline: 16px;
   }
 
   .workspace-record__summary {
     font-size: 0.8rem;
   }
 
-  .workspace-record--user .workspace-record__request-head,
   .workspace-record--user .workspace-record__body,
   .workspace-record--user .workspace-record__section,
   .workspace-record__user-text,
@@ -3778,13 +3820,26 @@ html.dark .workspace-record__file-badge {
     height: auto !important;
   }
 
-  .workspace-record__footer {
+  .workspace-record__footer,
+  .workspace-record--assistant .workspace-record__footer {
+    position: static;
     justify-content: flex-start;
+    width: 100%;
+    height: 28px;
+    margin-top: 6px;
+    padding: 0;
+    pointer-events: auto;
+    opacity: 1;
+    visibility: visible;
+    z-index: auto;
+    transition: none;
   }
 
   .workspace-record__actions button {
-    min-width: 44px;
-    min-height: 44px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
   }
 }
 
@@ -3952,13 +4007,14 @@ html.dark .markdown-body pre,
 html.dark .markdown-body code,
 html.dark .markdown-body .code-block-wrapper,
 html.dark .markdown-body .mermaid-fallback,
-html.dark .markdown-body blockquote,
-html.dark .workspace-record__markdown,
-html.dark .workspace-record__assistant {
-  background: rgba(18, 24, 34, 0.96) !important;
+html.dark .markdown-body blockquote {
+  background: var(--surface-muted) !important;
   color: var(--text-main) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: var(--paper-border) !important;
 }
+
+html.dark .workspace-record__markdown,
+html.dark .workspace-record__assistant { background: transparent; color: var(--text-main); }
 
 html.dark .markdown-body,
 html.dark .markdown-body p,
@@ -3970,7 +4026,7 @@ html.dark .markdown-body em {
 }
 
 html.dark .markdown-body a {
-  color: #bcd0ff !important;
+  color: var(--academic-accent-light) !important;
 }
 
 html.dark .markdown-body .mermaid-download-btn {
@@ -4009,168 +4065,87 @@ html.dark .markdown-body .mermaid-download-btn {
 
 /* 加载动画样式 */
 
-/* 深度思考胶囊样式 */
-.reasoning-pill {
-  position: relative;
-  display: inline-flex;
+/* 深度思考行内状态：保持与消息正文同一层级，不制造额外卡片 */
+.workspace-record__thinking {
+  display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 10px 14px;
-  min-height: 44px;
-  max-width: min(620px, 80vw);
-  overflow: hidden;
-  border-radius: 999px;
-  border: 1px solid var(--paper-border);
-  background: var(--surface-card);
-  box-shadow: 0 8px 18px rgba(8, 8, 8, 0.06);
-  color: var(--text-main);
+  gap: 0.45rem;
+  max-width: 78ch;
+  padding-top: 0.45rem;
+  color: var(--text-sub);
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
-.reasoning-pill--active {
-  border-color: var(--input-border-focus);
-  background: var(--surface-card);
-  animation: reasoningPulse 1.9s ease-in-out infinite;
-}
-
-.reasoning-pill--active::after {
-  content: '';
-  position: absolute;
-  inset: -30% 0;
-  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.6), transparent);
-  transform: translateX(-120%);
-  animation: reasoningSweep 3.2s linear infinite;
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.dark .reasoning-pill--active::after {
-  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-}
-
-.reasoning-pill .icon {
-  color: inherit;
-}
-
-.reasoning-pill .label {
-  font-weight: 600;
-  color: inherit;
-}
-
-.reasoning-preview {
-  flex: 1;
+.workspace-record__thinking-copy {
   min-width: 0;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  color: rgba(8, 8, 8, 0.6);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dark .reasoning-preview {
-  color: rgba(255, 255, 255, 0.7);
+.workspace-record__thinking-elapsed {
+  flex: 0 0 auto;
+  color: var(--text-sub);
+  font-variant-numeric: tabular-nums;
+}
+
+.dark .workspace-record__thinking,
+.dark .workspace-record__thinking-elapsed {
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .workspace-record__workflow {
   padding: 0;
 }
 
-html.dark .workspace-record__workflow {
+.workspace-record__workflow .workspace-record__toggle {
+  width: fit-content;
+  min-height: 0;
+  padding: 0.35rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-sub);
+  box-shadow: none;
+}
+
+.workspace-record__workflow .workspace-record__toggle:hover {
+  background: transparent;
   color: var(--text-main);
 }
 
+.workspace-record__workflow .workspace-record__toggle-copy {
+  gap: 0.45rem;
+}
+
 .workspace-record__workflow-summary {
-  color: var(--text-sub);
+  color: inherit;
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
-.workspace-record__workflow-progress {
-  margin-right: 4px;
-  font-size: 12px;
-  color: var(--text-sub);
-}
-
-.dark .workspace-record__workflow-summary,
-.dark .workspace-record__workflow-progress {
-  color: rgba(238, 242, 248, 0.72);
-}
-
-html.dark .workspace-record__workflow-summary,
-html.dark .workspace-record__workflow-progress {
-  color: rgba(238, 242, 248, 0.78) !important;
-}
-
-.workspace-record__workflow-overview {
-  margin-top: 10px;
-  padding: 12px 12px 0;
-  border: 1px solid var(--paper-border);
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(8, 8, 8, 0.02) 0%, transparent 100%);
-}
-
-html.dark .workspace-record__workflow-overview {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.01) 100%
-  ) !important;
-}
-
-.workspace-record__workflow-meter {
-  position: relative;
-  height: 6px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(8, 8, 8, 0.08);
-}
-
-html.dark .workspace-record__workflow-meter {
-  background: rgba(255, 255, 255, 0.08) !important;
-}
-
-.workspace-record__workflow-meter-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #080808 0%, #5a7dff 100%);
-  transition: width 0.24s ease;
-}
-
-html.dark .workspace-record__workflow-meter-fill {
-  background: linear-gradient(90deg, #f3f6fb 0%, #7ea5ff 100%) !important;
-}
-
-.workspace-record__workflow-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.workspace-record__workflow-metric-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(8, 8, 8, 0.08);
-  background: rgba(8, 8, 8, 0.04);
-  color: var(--text-sub);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-}
-
-html.dark .workspace-record__workflow-metric-chip {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: rgba(238, 242, 248, 0.84) !important;
+.workspace-record__workflow-arrow {
+  color: currentColor;
+  opacity: 0.7;
 }
 
 .workspace-record__workflow-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 6px;
+  padding-left: 0.9rem;
+  border-left: 1px solid var(--paper-border);
+}
+
+html.dark .workspace-record__workflow {
+  color: var(--text-main);
+}
+
+html.dark .workspace-record__workflow .workspace-record__toggle {
+  background: transparent !important;
+  border-color: transparent !important;
 }
 
 .workspace-record__workflow-item {
@@ -4181,13 +4156,13 @@ html.dark .workspace-record__workflow-metric-chip {
 }
 
 .dark .workspace-record__workflow-item {
-  background: rgba(18, 24, 34, 0.94);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--surface-card);
+  border-color: var(--paper-border);
 }
 
 html.dark .workspace-record__workflow-item {
-  background: rgba(18, 24, 34, 0.94) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: var(--surface-card) !important;
+  border-color: var(--paper-border) !important;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015) !important;
 }
 
@@ -4207,13 +4182,13 @@ html.dark .workspace-record__workflow-item--done {
 }
 
 .dark .workspace-record__workflow-item--active {
-  background: rgba(33, 43, 61, 0.94);
-  border-color: rgba(127, 180, 255, 0.3);
+  background: var(--academic-surface);
+  border-color: var(--academic-border);
 }
 
 html.dark .workspace-record__workflow-item--active {
-  background: rgba(33, 43, 61, 0.94) !important;
-  border-color: rgba(127, 180, 255, 0.3) !important;
+  background: var(--academic-surface) !important;
+  border-color: var(--academic-border) !important;
 }
 
 .workspace-record__workflow-item--error {
@@ -4285,14 +4260,14 @@ html.dark .workspace-record__workflow-item--error {
 }
 
 .workspace-record__workflow-state--running {
-  border-color: rgba(90, 125, 255, 0.18);
-  background: rgba(90, 125, 255, 0.08);
-  color: #335cff;
+  border-color: var(--academic-border);
+  background: var(--academic-surface);
+  color: var(--accent-strong);
 }
 
 .workspace-record__workflow-state--pending {
-  border-color: rgba(8, 8, 8, 0.08);
-  background: rgba(8, 8, 8, 0.04);
+  border-color: var(--paper-border);
+  background: var(--surface-muted);
   color: var(--text-sub);
 }
 
@@ -4309,9 +4284,9 @@ html.dark .workspace-record__workflow-state--done {
 }
 
 html.dark .workspace-record__workflow-state--running {
-  border-color: rgba(127, 180, 255, 0.24) !important;
-  background: rgba(90, 125, 255, 0.18) !important;
-  color: #dbe7ff !important;
+  border-color: var(--academic-border) !important;
+  background: var(--academic-surface) !important;
+  color: var(--academic-accent-light) !important;
 }
 
 html.dark .workspace-record__workflow-state--pending {
@@ -4364,38 +4339,4 @@ html.dark .workspace-record__workflow-error {
   color: #fda4af !important;
 }
 
-@keyframes reasoningPulse {
-  0%,
-  100% {
-    box-shadow:
-      0 8px 18px rgba(8, 8, 8, 0.04),
-      0 0 0 0 rgba(8, 8, 8, 0);
-  }
-  50% {
-    box-shadow:
-      0 12px 26px rgba(8, 8, 8, 0.18),
-      0 0 18px 4px rgba(8, 8, 8, 0.25);
-  }
-}
-
-@keyframes reasoningSweep {
-  0% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(120%);
-  }
-}
-
-@keyframes reasoningGradient {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
 </style>

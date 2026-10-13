@@ -1,99 +1,88 @@
-<template>
-  <Teleport to="body" :disabled="!visible">
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
-      enter-from-class="transform opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="opacity-100"
-      leave-to-class="transform opacity-0"
-    >
-      <div v-if="visible" class="fixed inset-0 z-[9999]">
-        <!-- 遮罩层 -->
-        <div class="absolute inset-0 bg-black/50" @click="handleCancel"></div>
-
-        <!-- 对话框 -->
-        <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div
-            class="w-[400px] bg-white dark:bg-[#24272e] rounded-lg shadow-lg overflow-hidden"
-            @click.stop
-          >
-            <!-- 标题 -->
-            <div class="p-4 border-b border-neutral-200 dark:border-neutral-700">
-              <h3 class="text-lg font-medium text-neutral-900 dark:text-neutral-100">
-                {{ options.title }}
-              </h3>
-            </div>
-
-            <!-- 内容 -->
-            <div class="p-4 text-neutral-700 dark:text-neutral-300">
-              {{ options.content }}
-            </div>
-
-            <!-- 按钮 -->
-            <div class="flex justify-end gap-2 px-4 py-3">
-              <button
-                class="px-4 py-2 text-sm rounded-md border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 transition-colors"
-                @click="handleCancel"
-              >
-                {{ options.negativeText }}
-              </button>
-              <button
-                class="px-4 py-2 text-sm rounded-md bg-primary-500 hover:bg-primary-600 text-white transition-colors"
-                @click="handleConfirm"
-              >
-                {{ options.positiveText }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-</template>
-
 <script setup lang="ts">
+import { useNativeDialog } from '@/hooks/useNativeDialog'
+import { t } from '@/locales'
 import type { DialogOptions } from '@/utils/dialog'
 import { ref } from 'vue'
 
 const visible = ref(false)
-const resolvePromise: any = ref(null)
-const options = ref<DialogOptions>({
-  title: '',
-  content: '',
-  positiveText: '确认',
-  negativeText: '取消',
-})
+const dialogRef = ref<HTMLDialogElement | null>(null)
+useNativeDialog(dialogRef, () => visible.value)
+const resolvePromise = ref<((confirmed: boolean) => void) | null>(null)
+const options = ref<DialogOptions>({ title: '', content: '' })
 
-const showDialog = (dialogOptions: DialogOptions) => {
-  options.value = {
-    ...options.value,
-    ...dialogOptions,
-  }
+function showDialog(dialogOptions: DialogOptions) {
+  options.value = dialogOptions
   visible.value = true
-  return new Promise(resolve => {
-    resolvePromise.value = resolve
-  })
+  return new Promise<boolean>(resolve => { resolvePromise.value = resolve })
 }
-
-const handleConfirm = async () => {
+async function handleConfirm() {
   try {
-    if (options.value.onPositiveClick) {
-      await options.value.onPositiveClick()
-    }
+    await options.value.onPositiveClick?.()
     visible.value = false
-    resolvePromise.value(true)
-  } catch (e) {
-    resolvePromise.value(false)
+    resolvePromise.value?.(true)
+  } catch {
+    resolvePromise.value?.(false)
   }
 }
-
-const handleCancel = () => {
+function handleCancel() {
   visible.value = false
-  resolvePromise.value(false)
+  resolvePromise.value?.(false)
 }
 
-defineExpose({
-  showDialog,
-})
+defineExpose({ showDialog })
 </script>
+
+<template>
+  <Teleport to="body">
+    <dialog v-if="visible" ref="dialogRef" class="lens-dialog research-confirm"
+      :aria-label="options.title" @cancel.prevent="handleCancel" @click.self="handleCancel">
+      <section class="research-confirm__surface">
+        <h2>{{ options.title }}</h2>
+        <p>{{ options.content }}</p>
+        <div class="research-confirm__actions">
+          <button type="button" class="btn btn-secondary btn-md" @click="handleCancel">
+            {{ options.negativeText || t('lens.settings.cancel') }}
+          </button>
+          <button type="button" class="btn btn-primary btn-md" @click="handleConfirm">
+            {{ options.positiveText || t('lens.settings.confirm') }}
+          </button>
+        </div>
+      </section>
+    </dialog>
+  </Teleport>
+</template>
+
+<style scoped>
+.research-confirm {
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--modal-overlay);
+}
+.research-confirm__surface {
+  width: min(400px, 100%);
+  padding: 24px;
+  border: 1px solid var(--paper-border);
+  border-radius: var(--radius-panel);
+  background: var(--surface-card);
+  box-shadow: var(--dialog-shadow);
+}
+.research-confirm h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.research-confirm p {
+  margin: 12px 0 24px;
+  color: var(--text-sub);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.research-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.research-confirm__actions button { min-height: 44px; }
+</style>

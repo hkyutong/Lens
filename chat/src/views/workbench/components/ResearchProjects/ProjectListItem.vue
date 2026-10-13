@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { DropdownMenu } from '@/components/common/DropdownMenu'
-import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { t } from '@/locales'
 import { useChatStore } from '@/store'
 import { debounce } from '@/utils/functions/debounce'
@@ -14,7 +13,6 @@ const vFocus = {
 interface Props {
   dataSources?: Chat.ChatState['groupList']
   title?: string
-  showSearchAction?: boolean
 }
 
 const props = defineProps<Props>()
@@ -22,7 +20,6 @@ const dataSources = props.dataSources
 const emit = defineEmits<{
   delete: [group: Chat.History]
   select: [group: Chat.History]
-  search: []
 }>()
 const chatStore = useChatStore()
 const menuStates = ref<Record<string | number, boolean>>({})
@@ -53,20 +50,20 @@ function handleTitleKey(group: Chat.History, event: KeyboardEvent) {
   event.stopPropagation()
   if (event.key === 'Enter') saveProjectTitle(group)
 }
+
+function closeProjectMenu(group: Chat.History, event: KeyboardEvent) {
+  if (!menuStates.value[group.uuid]) return
+  event.preventDefault()
+  event.stopPropagation()
+  menuStates.value[group.uuid] = false
+}
 </script>
 
 <template>
   <section v-if="dataSources?.length" class="project-list">
     <header v-if="title" class="project-list__header">
       <span>{{ title }} <small>({{ dataSources.length }})</small></span>
-      <button
-        v-if="showSearchAction"
-        type="button"
-        :aria-label="t('lens.sidebar.searchProject')"
-        @click="emit('search')"
-      >
-        <SvgIcon icon="ri:search-line" />
-      </button>
+
     </header>
 
     <div
@@ -85,6 +82,7 @@ function handleTitleKey(group: Chat.History, event: KeyboardEvent) {
         v-model="item.title"
         v-focus
         type="text"
+        :aria-label="t('chat.rename')"
         @click.stop
         @keydown="handleTitleKey(item, $event)"
       />
@@ -93,37 +91,38 @@ function handleTitleKey(group: Chat.History, event: KeyboardEvent) {
         {{ item.title || t('lens.sidebar.unnamedProject') }}
       </span>
 
-      <CheckSmall
-        v-if="item.isEdit"
-        size="18"
-        aria-hidden="true"
-        @click.stop="saveProjectTitle(item)"
-      />
+      <button v-if="item.isEdit" type="button" class="project-list__more"
+        :aria-label="t('lens.settings.confirm')" @click.stop="saveProjectTitle(item)" @keydown.stop>
+        <CheckSmall size="18" aria-hidden="true" />
+      </button>
       <DropdownMenu v-else v-model="menuStates[item.uuid]" position="auto" min-width="128px">
-        <template #trigger>
-          <button type="button" class="project-list__more" @click.stop>
+        <template #trigger="{ isOpen }">
+          <button type="button" class="project-list__more" :aria-label="t('chat.more')"
+            :aria-expanded="isOpen" aria-haspopup="true"
+            @click.stop="menuStates[item.uuid] = !isOpen"
+            @keydown.enter.stop @keydown.space.stop @keydown.esc="closeProjectMenu(item, $event)">
             <More size="18" aria-hidden="true" />
           </button>
         </template>
         <template #menu="{ close }">
-          <div>
+          <div @click.stop @keydown.enter.stop @keydown.space.stop @keydown.esc.stop.prevent="close">
             <button
               type="button"
-              class="menu-item menu-item-md w-full"
+              class="menu-item menu-item-md"
               @click="editProject(item, true); close()"
             >
               {{ t('chat.rename') }}
             </button>
             <button
               type="button"
-              class="menu-item menu-item-md w-full"
+              class="menu-item menu-item-md"
               @click="togglePinned(item); close()"
             >
               {{ item.isSticky ? t('chat.unfavorite') : t('chat.favoriteConversations') }}
             </button>
             <button
               type="button"
-              class="menu-item menu-item-md w-full"
+              class="menu-item menu-item-md"
               @click="deleteProject(item); close()"
             >
               {{ t('chat.deleteConversation') }}
@@ -146,50 +145,46 @@ function handleTitleKey(group: Chat.History, event: KeyboardEvent) {
   align-items: center;
   justify-content: space-between;
   padding: 8px 4px 5px;
-  color: var(--ink-faint);
+  color: var(--text-sub);
   font-size: 11px;
   font-weight: 650;
 }
 .project-list__header small {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
 }
-.project-list__header button,
 .project-list__more {
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 44px;
+  height: 44px;
   place-items: center;
-  border-radius: 7px;
-  color: var(--ink-faint);
+  border-radius: var(--radius-control);
+  color: var(--text-sub);
 }
-.project-list__header button:hover,
 .project-list__more:hover {
   background: var(--surface-muted);
   color: var(--text-main);
 }
 .project-list__item {
   display: flex;
-  min-height: 40px;
+  min-height: 48px;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 11px;
-  border: 1px solid transparent;
-  border-radius: 9px;
+  padding: 2px 4px 2px 12px;
+  border: 0;
+  border-radius: var(--radius-control);
   color: var(--text-main);
   cursor: pointer;
 }
 .project-list__item:hover,
 .project-list__item.active {
-  border-color: var(--paper-border);
-  background: var(--surface-muted);
+  background: var(--academic-surface);
 }
 .project-list__item > input {
   min-width: 0;
   flex: 1;
   border-bottom: 1px solid var(--academic-border);
   background: transparent;
-  outline: none;
 }
 .project-list__title {
   display: flex;
@@ -198,7 +193,7 @@ function handleTitleKey(group: Chat.History, event: KeyboardEvent) {
   align-items: center;
   gap: 7px;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

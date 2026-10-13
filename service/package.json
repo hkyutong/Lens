@@ -8,13 +8,13 @@
   "bin": "./dist/main.js",
   "scripts": {
     "start": "pm2 start pm2.conf.json",
-    "prebuild": "pnpm run format",
-    "build": "pnpm format && nest build",
+    "build": "nest build",
     "build:test": "nest build",
     "format": "prettier --write 'src/**/*.{vue,ts,tsx,js,jsx,css,scss,less}'",
     "guard:playwright": "node ./scripts/guard_playwright_policy.mjs --scan-only",
     "generate:long-chat-fixture": "node ./scripts/generate_long_chat_fixture.mjs",
     "test:playwright": "node ./scripts/run_playwright_local.mjs",
+    "test:live-smoke": "NODE_PATH=node_modules/.pnpm/node_modules node scripts/verify-lens-live-smoke.cjs",
     "test:academic-real-gate": "node ./scripts/academic_real_gate.mjs",
     "test:academic-real-gate-contract": "node ./scripts/academic_real_gate_contract.mjs",
     "test:academic-controlled-write": "node ./scripts/academic_controlled_write_gate.mjs",
@@ -39,7 +39,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "pkg:win": "pkg . -t node16-win-x64 -o app-win --debug",
     "pkg:mac": "pkg . -t node16-mac-x64 -o app-mac --debug",
-    "pkg:linux": "pkg . -t node16-linux-x64 -o app-linux --debug"
+    "pkg:linux": "pkg . -t node16-linux-x64 -o app-linux --debug",
+    "test:local-credentials-contract": "node --test scripts/local_test_credentials.test.cjs",
+    "test:local-acceptance-contract": "NODE_PATH=node_modules/.pnpm/node_modules node --test scripts/local_test_credentials.test.cjs scripts/live_research_challenge.test.cjs scripts/live_smoke_browser_contract.test.cjs scripts/academic_write_identity.test.mjs scripts/academic_core_semantics.test.cjs scripts/academic_mindmap_render.test.cjs scripts/academic_mermaid_recovery.test.cjs scripts/academic_config_access.test.cjs scripts/academic_upload_controller.test.cjs",
+    "test:academic-core-live": "node scripts/verify_academic_core_live.cjs"
   },
   "dependencies": {
     "@alicloud/pop-core": "^1.8.0",

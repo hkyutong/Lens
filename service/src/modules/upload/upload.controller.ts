@@ -1,5 +1,5 @@
 import { JwtAuthGuard } from '@/common/auth/jwtAuth.guard';
-import {
+import { BadRequestException,
   Body,
   Controller,
   Post,
@@ -32,6 +32,10 @@ export class UploadController {
     }),
   )
   async uploadFile(@UploadedFile() file, @Req() req: Request, @Query('dir') dir?: string) {
+    if (!file) {
+      throw new BadRequestException('File is required');
+    }
+
     return this.uploadService.uploadFile(file, dir, req.user);
   }
 

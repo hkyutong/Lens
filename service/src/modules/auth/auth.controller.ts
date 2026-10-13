@@ -1,12 +1,16 @@
 import { JwtAuthGuard } from '@/common/auth/jwtAuth.guard';
 import { SuperAuthGuard } from '@/common/auth/superAuth.guard';
-import { Body, Controller, Get, Logger, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { UserLoginDto } from './dto/authLogin.dto';
 import { UpdatePassByOtherDto } from './dto/updatePassByOther.dto';
 import { UpdatePasswordDto } from './dto/updatePassword.dto';
+
+const authControllerLogger = {
+  debug: (_message?: unknown, _context?: string) => undefined,
+};
 
 @ApiTags('auth')
 @Controller('auth')
@@ -51,7 +55,7 @@ export class AuthController {
   async getInfo(@Req() req: Request) {
     const { id, role } = req.user || {};
     const fingerprint = req.headers.fingerprint;
-    Logger.debug(
+    authControllerLogger.debug(
       `用户信息请求 | ID: ${id} | 角色: ${role} | 指纹: ${fingerprint}`,
       'AuthController',
     );

@@ -799,6 +799,15 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
                 if task:
                     task.cancel()
 
+            @app.get("/health")
+            async def academic_health():
+                """受控给 Lens service 使用的学术运行时就绪探针。"""
+                return JSONResponse(content={
+                    "status": "ready",
+                    "service": "academic-runtime",
+                    "contract": "lens-academic-v1",
+                })
+
             class UserInput(BaseModel):
                 main_input: str
             @app.post("/predict_user_input")
@@ -882,8 +891,10 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
 
             @app.post("/academic/plugin-list")
             async def academic_plugin_list():
-                import crazy_functional, importlib
-                importlib.reload(crazy_functional)
+                # The plugin registry is loaded once by the Academic process.
+                # Reloading it for every request races with task imports and can
+                # turn an otherwise healthy catalog request into a 500 response.
+                import crazy_functional
                 plugins = crazy_functional.get_crazy_functions()
                 rows = []
 
@@ -954,6 +965,15 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
                 ]
 
                 short_name_map = {
+                    "Lens｜研究设计体检": "研究设计体检",
+                    "Lens｜审稿意见应答": "审稿意见应答",
+                    "Lens｜文献检索策略": "文献检索策略",
+                    "Lens｜整理研究笔记": "整理研究笔记",
+                    "Lens｜比较多篇论文": "比较多篇论文",
+                    "Lens｜生成教学材料": "生成教学材料",
+                    "Lens｜研究问题拆解": "研究问题拆解",
+                    "Lens｜文献综述工作台": "文献综述工作台",
+                    "Lens｜研究方案设计": "研究方案设计",
                     "批量总结Word文档": "Word 批量总结",
                     "读Tex论文写摘要": "LaTeX 摘要",
                     "批量总结PDF文档": "PDF 批量总结",

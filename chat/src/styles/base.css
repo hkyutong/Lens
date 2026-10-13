@@ -6,3 +6,27 @@ html {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Each modal owns its surface; the browser owns focus and the top layer. */
+.lens-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  --control-height: 44px;
+  --control-height-compact: 44px;
+}
+.lens-dialog:not([open]) { display: none; }
+.lens-dialog::backdrop { background: transparent; }
+
+/* Native account and consent controls follow the active academic theme. */
+input.lens-checkbox {
+  accent-color: var(--academic-blue);
+}

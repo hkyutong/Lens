@@ -5,6 +5,7 @@ import { useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import {
   AddPicture,
   FullScreen,
+  Down,
   LoadingFour,
   OffScreen,
   Plus,
@@ -18,9 +19,8 @@ import {
 import { uploadFile } from '@/api/upload'
 import { parseResearchFiles, type ResearchFile } from '@/domain/research/files'
 import { getAcademicEntityDisplayLabel } from '@/utils/academicI18n'
-import { getAcademicWorkflowChainLabel } from '@/utils/academicWorkflow'
 import { message } from '@/utils/message'
-import { computed, inject, nextTick, onMounted, onUnmounted, Ref, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import AttachmentTray from './AttachmentTray.vue'
 import ResearchModelSelector from './ResearchModelSelector.vue'
 
@@ -35,11 +35,12 @@ const useGlobalStore = useGlobalStoreWithOut()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const emit = defineEmits<Emit>()
+const props = defineProps<{ compactLayout?: boolean }>()
 const ms = message()
 let academicDataLoading: Promise<void> | null = null
 const fileInput = ref()
 const isUploading = ref(false)
-const inputRef = ref<Ref | null>(null)
+const inputRef = ref<HTMLTextAreaElement | null>(null)
 const footerRef = ref<HTMLElement | null>(null) // 添加容器引用
 const isDragging = ref(false) // 添加拖拽状态标志
 const isFileDraggingOverPage = ref(false) // 添加文件拖到页面内(但未到输入框)的状态标志
@@ -159,74 +160,30 @@ const isExpanded = ref(false) // 控制输入框是否扩展
 const shouldShowExpandButton = ref(false) // 控制是否显示扩展按钮
 
 const autoResize = () => {
-  if (inputRef.value) {
-    const textarea = inputRef.value
+  const textarea = inputRef.value
+  if (!textarea) return
 
-    if (isExpanded.value) {
-      // 展开模式下，使用较高但有限的高度
-      const lineHeight = parseFloat(window.getComputedStyle(textarea).lineHeight) || 20
-      const expandedMaxLines = 8
-      textarea.style.height = `${lineHeight * expandedMaxLines}px`
-      textarea.style.overflowY = 'auto'
-      return
-    }
-
-    // 普通模式下，先重置高度，然后根据内容自适应
-    textarea.style.height = 'auto' // 使用auto而不是固定的小值，让浏览器自动计算
-
-    // 获取自动计算后的scrollHeight
-    const contentHeight = textarea.scrollHeight
-
-    // 获取行高
-    const singleLineHeight = parseFloat(window.getComputedStyle(textarea).lineHeight) || 20 // 默认行高 20px
-
-    // 普通模式最大行数为4行
-    const maxLines = 4
-    const maxHeight = singleLineHeight * maxLines // 最大高度
-
-    // 计算新高度，确保不超过最大高度
-    const newHeight = Math.min(contentHeight, maxHeight)
-
-    // 设置新高度
-    textarea.style.height = `${newHeight}px`
-    textarea.style.overflowY = contentHeight > maxHeight ? 'auto' : 'hidden'
-
-    // 判断是否应该显示扩展按钮 - 当内容高度超过3行时显示
-    shouldShowExpandButton.value = contentHeight > singleLineHeight * 3
+  const hasContent = Boolean(prompt.value?.trim())
+  if (isExpanded.value && !hasContent) {
+    isExpanded.value = false
+    nextTick(autoResize)
+    return
   }
+
+  textarea.style.height = 'auto'
+  const style = window.getComputedStyle(textarea)
+  const minHeight = parseFloat(style.minHeight)
+  // 空输入不根据 placeholder 的换行显示展开；有内容时按实际可见高度判断。
+  const contentHeight = textarea.scrollHeight
+  textarea.style.height = `${Math.max(contentHeight, minHeight)}px`
+  const hasOverflow = hasContent && textarea.scrollHeight > textarea.clientHeight + 1
+  textarea.style.overflowY = hasOverflow ? 'auto' : 'hidden'
+  shouldShowExpandButton.value = isExpanded.value || hasOverflow
 }
 
-// 切换扩展模式
 const toggleExpanded = () => {
-  // 从展开到收起模式时，先获取当前高度
-  const currentHeight = isExpanded.value ? inputRef.value.style.height : null
-
-  // 切换状态
   isExpanded.value = !isExpanded.value
-
-  nextTick(() => {
-    if (isExpanded.value) {
-      const textarea = inputRef.value
-      const lineHeight = parseFloat(window.getComputedStyle(textarea).lineHeight) || 20
-      const expandedMaxLines = 8
-      textarea.style.height = `${lineHeight * expandedMaxLines}px`
-      textarea.style.overflowY = 'auto'
-    } else {
-      // 收起模式时，先保持当前高度，然后在下一帧进行调整
-      // 这样可以让过渡效果更平滑
-      if (currentHeight) {
-        // 先设置当前高度，避免立即收缩导致的视觉跳跃
-        inputRef.value.style.height = currentHeight
-
-        // 在下一帧进行实际的大小调整
-        requestAnimationFrame(() => {
-          autoResize()
-        })
-      } else {
-        autoResize()
-      }
-    }
-  })
+  nextTick(autoResize)
 }
 
 // 监听 prompt 的变化（外部修改时调整高度）
@@ -245,27 +202,12 @@ const activeModelAvatar = computed(() => {
 })
 
 const selectedAcademicLabel = computed(() => {
-  if (chatStore.academicWorkflowEnabled && (chatStore.academicWorkflowSteps || []).length) {
-    return getAcademicWorkflowChainLabel(chatStore.academicWorkflowSteps || [])
-  }
   return getAcademicEntityDisplayLabel(
     chatStore.currentAcademicPlugin || chatStore.currentAcademicCore
   )
 })
 
-const selectedAcademicCompactLabel = computed(() => {
-  if (chatStore.academicWorkflowEnabled && (chatStore.academicWorkflowSteps || []).length) {
-    const labels = (chatStore.academicWorkflowSteps || [])
-      .map(
-        step => getAcademicEntityDisplayLabel(step as any) || step?.displayName || step?.name || ''
-      )
-      .filter(Boolean)
-    if (!labels.length) return ''
-    if (labels.length === 1) return labels[0]
-    return `${labels[0]} · ${labels.length}${t('lens.workflow.stepsShort')}`
-  }
-  return selectedAcademicLabel.value
-})
+const openResearchControls = inject('openResearchControls', () => {})
 
 const createNewChatGroup = inject('createNewChatGroup', () =>
   Promise.resolve()
@@ -323,7 +265,7 @@ const handleSubmit = async (index?: number) => {
               const response = await uploadFile(file)
               return response.data
             } catch (error) {
-              console.error(`上传图片 ${file.name} 失败:`, error)
+
               uploadFailed = true
               return ''
             }
@@ -344,7 +286,7 @@ const handleSubmit = async (index?: number) => {
                 type: 'document',
               }
             } catch (error) {
-              console.error(`上传文件 ${file.name} 失败:`, error)
+
               uploadFailed = true
               return null
             }
@@ -355,7 +297,7 @@ const handleSubmit = async (index?: number) => {
         submittedFileUrl = uploadedDocs.length > 0 ? JSON.stringify(uploadedDocs) : ''
       }
     } catch (error) {
-      console.error('附件上传过程中发生错误:', error)
+
       uploadFailed = true
       ms.error(t('lens.footer.uploadFailed'))
     } finally {
@@ -525,7 +467,7 @@ const handlePaste = async (event: ClipboardEvent) => {
         } else if (!file.type.startsWith('image/') && (isFilesModel.value || academicMode.value)) {
           await processDocumentFile(file)
         } else {
-          console.warn('文件类型不匹配当前模型支持的类型:', file.name)
+
         }
       }
     }
@@ -535,7 +477,7 @@ const handlePaste = async (event: ClipboardEvent) => {
 // 处理文档类型文件
 const processDocumentFile = async (file: File) => {
   if (file.type.startsWith('image/')) {
-    console.warn('图片文件应使用图片上传功能:', file.name)
+
     return
   }
 
@@ -576,7 +518,7 @@ const processDocumentFile = async (file: File) => {
 // 处理图片类型文件
 const processImageFile = async (file: File) => {
   if (!file.type.startsWith('image/')) {
-    console.warn('非图片文件应使用文件上传功能:', file.name)
+
     return
   }
 
@@ -707,8 +649,10 @@ const handleStop = () => {
 watch(clipboardText, async val => {
   await chatStore.setPrompt(val)
   // prompt.value = val;
-  inputRef.value?.focus()
-  inputRef.value.scrollTop = inputRef.value.scrollHeight
+  const textarea = inputRef.value
+  if (!textarea) return
+  textarea.focus()
+  textarea.scrollTop = textarea.scrollHeight
 })
 
 watch(
@@ -754,7 +698,7 @@ const clearData = async (index: number, isSavedFile = false) => {
         }
       }
     } catch (error) {
-      console.error('删除文件失败：', error)
+
     }
   } else {
     // 处理新上传的文件，从本地列表中移除
@@ -772,7 +716,7 @@ const containerResizeObserver = ref<ResizeObserver | null>(null)
 // 计算输入框占位符文本，根据不同工具状态显示不同提示
 const placeholderText = computed(() => {
   if (!isLogin.value) {
-    return t('lens.footer.placeholderLoggedOut')
+    return t(props.compactLayout ? 'lens.footer.placeholderLoggedOutCompact' : 'lens.footer.placeholderLoggedOut')
   }
 
   if (isDragging.value) {
@@ -784,7 +728,7 @@ const placeholderText = computed(() => {
   }
 
   if (academicMode.value) {
-    return t('lens.footer.placeholderAcademicDefault')
+    return t(props.compactLayout ? 'lens.footer.placeholderResearchQuestion' : 'lens.footer.placeholderAcademicDefault')
   }
 
   const activeFeatures = []
@@ -904,6 +848,7 @@ onMounted(async () => {
       for (const entry of entries) {
         if (entry.target === buttonContainerRef.value) {
           availableWidth.value = entry.contentRect.width
+          autoResize()
         }
       }
     })
@@ -1032,10 +977,10 @@ const uploadButtonTooltip = computed(() => {
   return t('lens.footer.upload')
 })
 
-// 添加计算属性来控制按钮文字的显示
-const shouldShowButtonText = computed(() => {
-  return availableWidth.value > 300 // 当宽度大于300px时显示按钮文字
-})
+// 窄操作区优先保留完整触控目标，按钮说明由现有提示和无障碍名称提供。
+const shouldShowButtonText = computed(() => availableWidth.value > 400)
+
+watch(placeholderText, () => nextTick(autoResize))
 
 defineExpose({
   openFilePicker,
@@ -1051,7 +996,7 @@ defineExpose({
 
     <!-- Main footer content -->
     <div
-      class="flex flex-col items-center justify-center w-full"
+      class="research-composer__frame flex flex-col items-center justify-center w-full"
       :class="[isMobile ? 'px-3 pb-3' : 'px-2']"
     >
       <footer
@@ -1065,21 +1010,17 @@ defineExpose({
         <div
           class="research-command-panel flex w-full flex-col justify-center border transition-all duration-200"
           :class="[
-            isMobile ? 'rounded-[20px] px-3 py-3' : 'rounded-[22px] px-4 py-3',
+            isMobile ? 'px-3 py-3' : 'px-4 py-3',
             {
               'ring-1 ring-[var(--accent)]': isDragging,
               'bg-[var(--surface-muted)]': isFileDraggingOverPage,
-              'opacity-70 cursor-not-allowed': !isLogin,
+              'cursor-not-allowed': !isLogin,
             },
           ]"
           :style="{ minHeight: '1.5rem', position: 'relative' }"
         >
-          <header class="research-command-panel__header">
-            <strong>{{ t('lens.workspace.inputArea') }}</strong>
-            <span v-if="!isMobile">{{ t('lens.workspace.inputShortcut') }}</span>
-          </header>
-
           <AttachmentTray
+            class="research-composer__attachments custom-scrollbar"
             :data-base64-list="dataBase64List"
             :file-list="fileList"
             :saved-files="savedFiles"
@@ -1087,15 +1028,18 @@ defineExpose({
             @clear-data="clearData"
           />
 
-          <div
-            class="relative w-full rounded-[18px] px-2 py-1.5"
-            :style="{ background: 'transparent' }"
-          >
-            <!-- 扩展按钮 - 只在内容高度超过阈值时显示 -->
+            <div
+              class="research-composer__input-row relative w-full rounded-[2px] px-2 py-1.5"
+              :style="{ background: 'transparent' }"
+            >
+            <!-- 仅在内容超出输入区域或已展开时显示。 -->
             <div v-if="shouldShowExpandButton" class="absolute right-1 top-2 z-10 group">
               <button
                 @click="toggleExpanded"
-                class="btn-pill btn-sm"
+                type="button"
+                class="btn-pill btn-sm research-composer__expand"
+                :aria-expanded="isExpanded"
+                aria-controls="workspace-composer"
                 :aria-label="
                   isExpanded ? t('lens.footer.collapseInput') : t('lens.footer.expandInput')
                 "
@@ -1134,17 +1078,17 @@ defineExpose({
             <textarea
               v-show="!isFileDraggingOverPage"
               id="workspace-composer"
+              rows="1"
               ref="inputRef"
               v-model="prompt"
               :placeholder="placeholderText"
-              class="custom-scrollbar flex w-full flex-grow items-center justify-center bg-transparent px-0 py-2 text-[15px] leading-6 text-[var(--text-main)] placeholder:text-[var(--ink-faint)] resize-none transition-all duration-300 ease-in-out"
+              class="custom-scrollbar flex w-full flex-grow items-center justify-center bg-transparent px-0 py-2 text-[15px] leading-6 text-[var(--text-main)] placeholder:text-[var(--text-sub)] resize-none"
               :disabled="!isLogin || isStreamIn"
-              @input="autoResize"
               @keypress="handleEnter"
               @paste="handlePaste"
               :style="{
-                maxHeight: isExpanded ? '7rem' : '3.6rem',
-                minHeight: '1.5rem',
+                maxHeight: isExpanded ? 'min(13rem, 30dvh)' : '5.5rem',
+                minHeight: isMobile ? '4rem' : '2.5rem',
               }"
               :aria-label="t('lens.footer.researchInputLabel')"
               role="textbox"
@@ -1153,21 +1097,11 @@ defineExpose({
 
           <div
             ref="buttonContainerRef"
-            class="mt-1 flex w-full flex-col gap-2 px-2 pb-0.5 lg:flex-row lg:items-center lg:justify-between"
+            class="research-composer__controls mt-1 flex w-full flex-col gap-2 px-2 pb-0.5"
           >
             <template v-if="isMobile">
-              <div class="flex w-full items-center gap-2">
-                <div class="flex min-w-0 flex-1 items-center gap-2">
-                  <ResearchModelSelector />
-
-                  <span
-                    v-if="selectedAcademicCompactLabel"
-                    class="btn-pill btn-sm pointer-events-none min-w-0 max-w-[10rem] shrink truncate text-[12px]"
-                    :title="selectedAcademicLabel"
-                  >
-                    {{ selectedAcademicCompactLabel }}
-                  </span>
-
+              <div class="research-mobile-controls-row">
+                <div class="research-mobile-options">
                   <div
                     v-if="showUploadButton && !isUploading"
                     class="group relative shrink-0"
@@ -1191,85 +1125,57 @@ defineExpose({
                     size="15"
                     class="animate-rotate text-gray-500 dark:text-gray-500"
                   />
+                  <button type="button" class="btn-pill btn-sm research-composer__capability"
+                    :aria-label="t('lens.academicPanel.settingsTitle')" :title="selectedAcademicLabel || t('lens.academicPanel.defaultCapability')"
+                    @click="openResearchControls">
+                    <span>{{ selectedAcademicLabel || t('lens.academicPanel.settingsTitle') }}</span>
+                    <Down size="14" aria-hidden="true" />
+                  </button>
+                  <button v-if="shouldShowDeepThinking" type="button" class="btn-pill btn-sm research-mobile-toggle"
+                    :class="{ 'btn-pill-active': usingDeepThinking }" :aria-pressed="usingDeepThinking"
+                    :aria-label="t('lens.footer.reasoningToggleLabel')" @click="usingDeepThinking = !usingDeepThinking">
+                    <TwoEllipses size="15" /><span>{{ t('lens.footer.reasoning') }}</span>
+                  </button>
+                  <button v-if="shouldShowNetworkSearch" type="button" class="btn-pill btn-sm research-mobile-toggle"
+                    :class="{ 'btn-pill-active': usingNetwork }" :aria-pressed="usingNetwork"
+                    :aria-label="t('lens.footer.searchToggleLabel')" @click="usingNetwork = !usingNetwork">
+                    <Sphere size="15" /><span>{{ t('lens.footer.search') }}</span>
+                  </button>
                 </div>
 
-                <div class="flex shrink-0 items-center">
+                <div class="research-mobile-submit">
                   <button
                     v-if="!isStreamIn"
                     type="button"
-                    class="research-send-button inline-flex min-h-[44px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 text-[14px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
+                    class="research-send-button inline-flex items-center justify-center text-[14px] font-semibold transition"
                     :class="{
-                      'cursor-not-allowed opacity-60 hover:bg-[var(--btn-bg-primary)]':
+                      'cursor-not-allowed opacity-60':
                         buttonDisabled,
                     }"
                     :disabled="buttonDisabled"
                     @click="handleSubmit()"
                     :aria-label="t('lens.footer.send')"
                   >
-                    <SendOne size="15" />
-                    <span class="ml-1.5 whitespace-nowrap">{{ t('lens.footer.send') }}</span>
+                    <SendOne size="16" />
                   </button>
 
                   <button
                     v-else
                     type="button"
-                    class="research-send-button inline-flex min-h-[44px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-4 text-[14px] font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
+                    class="research-send-button inline-flex items-center justify-center text-[14px] font-semibold transition"
                     @click="handleStop()"
                     :aria-label="t('lens.footer.stopGeneration')"
                   >
-                    <Square size="15" />
-                    <span class="ml-1.5 whitespace-nowrap">{{
-                      t('lens.footer.stopGeneration')
-                    }}</span>
+                    <Square size="16" />
                   </button>
                 </div>
               </div>
 
-              <div
-                v-if="shouldShowDeepThinking || shouldShowNetworkSearch"
-                class="flex w-full flex-wrap items-center gap-2"
-              >
-                <div v-if="shouldShowDeepThinking" class="group relative">
-                  <button
-                    type="button"
-                    class="btn-pill btn-sm"
-                    :class="[usingDeepThinking ? 'btn-pill-active' : '']"
-                    @click="usingDeepThinking = !usingDeepThinking"
-                    :aria-pressed="usingDeepThinking"
-                    :aria-label="t('lens.footer.reasoningToggleLabel')"
-                  >
-                    <TwoEllipses size="15" />
-                    <span class="ml-1">{{ t('lens.footer.reasoning') }}</span>
-                  </button>
-                </div>
-
-                <div v-if="shouldShowNetworkSearch" class="group relative">
-                  <button
-                    type="button"
-                    class="btn-pill btn-sm"
-                    :class="[usingNetwork ? 'btn-pill-active' : '']"
-                    @click="usingNetwork = !usingNetwork"
-                    :aria-pressed="usingNetwork"
-                    :aria-label="t('lens.footer.searchToggleLabel')"
-                  >
-                    <Sphere size="15" />
-                    <span class="ml-1">{{ t('lens.footer.search') }}</span>
-                  </button>
-                </div>
-              </div>
             </template>
 
             <template v-else>
-              <div class="flex flex-wrap items-center gap-2">
-                <ResearchModelSelector />
-
-                <span
-                  v-if="selectedAcademicCompactLabel"
-                  class="btn-pill btn-sm pointer-events-none min-w-0 max-w-[13rem] shrink truncate text-[12px]"
-                  :title="selectedAcademicLabel"
-                >
-                  {{ selectedAcademicCompactLabel }}
-                </span>
+              <div class="research-composer__option-row flex flex-wrap items-center gap-2">
+                <ResearchModelSelector v-if="!props.compactLayout" />
 
                 <div
                   v-if="showUploadButton && !isUploading"
@@ -1280,7 +1186,7 @@ defineExpose({
                 >
                   <button
                     type="button"
-                    class="btn-pill btn-sm"
+                    class="btn-pill btn-sm research-composer__upload"
                     @click="triggerUpload"
                     :aria-label="uploadButtonTooltip"
                   >
@@ -1337,21 +1243,20 @@ defineExpose({
                 </div>
               </div>
 
-              <div class="flex items-center justify-end gap-3 lg:justify-end">
+              <div class="research-composer__submit-row flex items-center justify-end gap-3">
                 <div v-if="!isStreamIn" class="group relative">
                   <button
                     type="button"
-                    class="research-send-button inline-flex min-h-[44px] min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
+                    class="research-send-button inline-flex items-center justify-center text-sm font-semibold transition"
                     :class="{
-                      'cursor-not-allowed opacity-60 hover:bg-[var(--btn-bg-primary)]':
+                      'cursor-not-allowed opacity-60':
                         buttonDisabled,
                     }"
                     :disabled="buttonDisabled"
                     @click="handleSubmit()"
                     :aria-label="t('lens.footer.send')"
                   >
-                    <SendOne size="15" />
-                    <span class="ml-2">{{ t('lens.footer.send') }}</span>
+                    <SendOne size="16" />
                   </button>
                   <div v-if="!isMobile" class="tooltip tooltip-top">
                     {{ t('lens.footer.sendTooltip') }}
@@ -1361,12 +1266,11 @@ defineExpose({
                 <div v-if="isStreamIn" class="group relative">
                   <button
                     type="button"
-                    class="research-send-button inline-flex min-h-[44px] min-w-[132px] items-center justify-center rounded-full bg-[var(--btn-bg-primary)] px-5 text-sm font-semibold text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
+                    class="research-send-button inline-flex items-center justify-center text-sm font-semibold transition"
                     @click="handleStop()"
                     :aria-label="t('lens.footer.stopGeneration')"
                   >
                     <Square size="16" />
-                    <span class="ml-2">{{ t('lens.footer.stopGeneration') }}</span>
                   </button>
                   <div v-if="!isMobile" class="tooltip tooltip-top">
                     {{ t('lens.footer.stopTooltip') }}
@@ -1387,16 +1291,57 @@ defineExpose({
 </template>
 
 <style scoped>
+.research-command-panel {
+  border-color: color-mix(in srgb, var(--academic-accent) 16%, var(--paper-border));
+  background: color-mix(in srgb, var(--surface-card) 94%, var(--academic-accent-soft));
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: blur(18px) saturate(145%);
+  border-radius: var(--radius-panel);
+  box-shadow: none;
+  transition: border-color 160ms ease;
+}
+
+.research-command-panel:focus-within {
+  border-color: color-mix(in srgb, var(--academic-accent) 48%, var(--paper-border));
+}
+.research-command-panel:has(textarea:focus-visible) {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+.research-composer__input-row textarea:focus-visible {
+  outline: none;
+}
+
+.research-composer__input-row {
+  min-height: 42px;
+}
+
+.research-composer__input-row:has(.research-composer__expand) textarea {
+  padding-inline-end: 48px;
+}
+
+.research-composer__controls {
+  align-items: stretch;
+}
+
 :deep(.btn-pill) {
-  min-height: 40px;
-  border-color: transparent;
-  border-radius: 999px;
-  background: var(--surface-muted);
+  min-height: var(--control-height-compact) !important;
+  height: var(--control-height-compact) !important;
+  padding-inline: 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
 :deep(.btn-pill:hover) {
-  background: var(--btn-bg-ghost-active);
+  border-color: transparent;
+  background: var(--accent-soft);
   color: var(--text-main);
 }
 
@@ -1406,6 +1351,157 @@ defineExpose({
 }
 
 .research-send-button {
-  box-shadow: 0 5px 14px var(--academic-blue-shadow);
+  width: var(--control-height-compact);
+  min-width: var(--control-height-compact) !important;
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact) !important;
+  padding: 0 !important;
+  border: 4px solid transparent;
+  background: var(--btn-bg-primary);
+  background-clip: padding-box;
+  color: var(--btn-text-primary);
+  border-radius: calc(var(--radius-button) + 4px) !important;
+  box-shadow: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.research-composer__option-row,
+.research-composer__submit-row {
+  width: 100%;
+}
+
+.research-composer__option-row {
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .research-composer__option-row :deep(.research-chip-button),
+  .research-composer__option-row .research-composer__upload {
+    padding-inline: 8px;
+    background: transparent;
+    transition: none;
+  }
+  .research-composer__option-row :deep(.research-chip-button:hover),
+  .research-composer__option-row .research-composer__upload:hover {
+    background: transparent;
+  }
+  .research-composer__option-row { gap: 20px; }
+}
+
+.research-composer__submit-row {
+  min-height: var(--control-height);
+}
+
+@media (min-width: 769px) {
+  .research-composer__controls {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .research-composer__option-row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .research-composer__submit-row {
+    width: auto;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+}
+
+.research-send-button:not(:disabled):hover {
+  background: var(--btn-bg-primary-hover);
+}
+
+.research-send-button:not(:disabled):active {
+  background: var(--btn-bg-primary-active);
+  box-shadow: none;
+  transform: translateY(0);
+}
+
+.research-send-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.research-mobile-controls-row { display: flex; width: 100%; align-items: center; gap: 4px; }
+.research-mobile-options { display: flex; min-width: 0; flex: 1; align-items: center; gap: 4px; }
+.research-mobile-submit { display: flex; flex: none; }
+.research-composer__capability { min-width: 44px; flex: 1; gap: 4px; }
+.research-composer__capability span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.research-composer__capability svg { flex: none; }
+.research-mobile-toggle { gap: 4px; flex: none; }
+
+@media (max-width: 768px) {
+  .research-command-panel {
+    padding: 11px 11px 12px !important;
+    border-radius: 18px !important;
+  }
+
+  .research-composer__input-row {
+    min-height: 40px;
+    padding-inline: 4px;
+  }
+
+  #workspace-composer {
+    font-size: 16px;
+  }
+
+  .research-composer__controls {
+    gap: 8px;
+    padding-inline: 0;
+  }
+
+  :deep(.btn-pill) {
+    min-height: var(--control-height) !important;
+    height: var(--control-height) !important;
+  }
+
+  .research-send-button {
+    width: var(--control-height);
+    min-width: var(--control-height) !important;
+    height: var(--control-height);
+    min-height: var(--control-height) !important;
+  }
+
+  .research-mobile-options :deep(.btn-pill) { padding-inline: 8px; }
+  .research-mobile-options > .group { flex: none; }
+}
+
+@media (max-width: 420px) {
+  .research-mobile-toggle span { display: none; }
+  .research-mobile-toggle { width: 44px; padding: 0; }
+}
+
+@media (max-width: 360px) {
+  .research-mobile-controls-row {
+    flex-wrap: nowrap;
+  }
+
+  .research-mobile-options {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .research-mobile-submit {
+    width: auto;
+  }
+
+  .research-mobile-submit .research-send-button {
+    width: var(--control-height);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .research-command-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface-card) !important;
+  }
 }
 </style>

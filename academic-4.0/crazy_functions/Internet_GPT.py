@@ -202,7 +202,6 @@ def scrape_text(url, proxies) -> str:
 
 
 def jina_scrape_text(url) -> str:
-    "jina_39727421c8fa4e4fa9bd698e5211feaaDyGeVFESNrRaepWiLT0wmHYJSh-d"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.61 Safari/537.36',
         'Content-Type': 'text/plain',

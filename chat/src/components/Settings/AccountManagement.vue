@@ -8,7 +8,7 @@ import {
   fetchVerifyIdentityAPI,
   fetchVerifyPhoneIdentityAPI,
 } from '@/api/user'
-import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { t } from '@/locales'
 import { useAuthStore, useGlobalStoreWithOut } from '@/store'
 import { DIALOG_TABS } from '@/store/modules/global'
 import { message } from '@/utils/message'
@@ -28,7 +28,6 @@ const loading = ref(false)
 const ms = message()
 const showPasswordForm = ref(false)
 
-const { isMobile } = useBasicLayout()
 
 // 定义用户信息完整类型
 interface UserInfo {
@@ -69,7 +68,7 @@ const isPasswordUpdating = ref(false)
 
 // 处理密码修改表单提交
 function handlePasswordFormSubmit() {
-  console.log('开始密码修改流程')
+
   const { newPassword, confirmPassword } = passwordForm
 
   // 清空之前的错误信息
@@ -78,31 +77,31 @@ function handlePasswordFormSubmit() {
 
   // 验证新密码
   if (!newPassword) {
-    passwordError.value = '请输入新密码'
+    passwordError.value = t('lens.account.passwordRequired')
     return
   }
 
   // 验证密码格式
   if (newPassword.length < 8 || newPassword.length > 20) {
-    passwordError.value = '密码长度必须在8-20个字符之间'
+    passwordError.value = t('lens.account.passwordLength')
     return
   }
   if (!/[a-zA-Z]/.test(newPassword)) {
-    passwordError.value = '密码必须包含字母'
+    passwordError.value = t('lens.account.passwordLetters')
     return
   }
   if (!/\d/.test(newPassword)) {
-    passwordError.value = '密码必须包含数字'
+    passwordError.value = t('lens.account.passwordNumbers')
     return
   }
 
   // 验证确认密码
   if (!confirmPassword) {
-    reenteredPasswordError.value = '请再次输入新密码'
+    reenteredPasswordError.value = t('lens.account.reenterPassword')
     return
   }
   if (newPassword !== confirmPassword) {
-    reenteredPasswordError.value = '两次输入的密码不一致'
+    reenteredPasswordError.value = t('lens.account.passwordMismatch')
     return
   }
 
@@ -112,37 +111,33 @@ function handlePasswordFormSubmit() {
 
 async function updatePassword() {
   try {
-    console.log('验证通过，开始提交密码修改请求')
+
     loading.value = true
     isPasswordUpdating.value = true
 
     const res: ResData = await fetchUpdatePasswordAPI({ password: passwordForm.newPassword })
-    console.log('密码修改API响应:', {
-      success: res.success,
-      message: res.message,
-    })
 
     loading.value = false
     isPasswordUpdating.value = false
 
     if (res.success) {
-      console.log('密码修改成功，开始清理表单')
-      ms.success('密码修改成功')
+
+      ms.success(t('lens.account.passwordUpdated'))
       // 重置密码表单
       passwordForm.newPassword = ''
       passwordForm.confirmPassword = ''
       // 返回主视图
       backToMainView()
-      console.log('表单清理完成，状态已更新')
+
     } else {
-      console.log('密码修改失败:', res.message)
-      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '密码修改失败'))
+
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, t('lens.account.passwordFailed')))
     }
   } catch (error) {
-    console.log('密码修改过程出现异常:', error)
+
     loading.value = false
     isPasswordUpdating.value = false
-    ms.error('密码修改失败')
+    ms.error(t('lens.account.passwordFailed'))
   }
 }
 
@@ -155,11 +150,11 @@ function resetForm() {
 
 // 登录检测函数
 function checkLoginStatus() {
-  console.log('检查登录状态:', isLogin.value)
+
   if (!isLogin.value) {
-    console.log('用户未登录，关闭设置弹窗并打开登录弹窗')
+
     // 显示消息提醒
-    ms.warning('请登录后使用账户安全')
+    ms.warning(t('lens.account.loginRequired'))
     // 关闭设置弹窗
     useGlobalStore.updateSettingsDialog(false)
     // 打开登录弹窗
@@ -187,7 +182,7 @@ async function getInfo() {
 
     loading.value = false
   } catch (error) {
-    console.error('获取用户信息失败:', error)
+
     loading.value = false
     // 失败时也需要重置UI状态
     resetUiState()
@@ -231,7 +226,7 @@ async function saveUserInfo() {
     const value = editableUsername.value.trim()
     if (!/^[a-z0-9]+$/.test(value)) {
       loading.value = false
-      return ms.error('ID只能由小写字母或数字组成')
+      return ms.error(t('lens.account.idRule'))
     }
     const res: ResData = await fetchUpdateInfoAPI({
       username: value,
@@ -239,16 +234,16 @@ async function saveUserInfo() {
     loading.value = false
 
     if (!res.success) {
-      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '更新失败'))
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, t('lens.account.updateFailed')))
       return
     }
 
-    ms.success('ID更新成功')
+    ms.success(t('lens.account.idUpdated'))
     isEditingInfo.value = false
     await authStore.getUserInfo()
   } catch (error) {
     loading.value = false
-    ms.error('更新失败')
+    ms.error(t('lens.account.updateFailed'))
   }
 }
 
@@ -276,7 +271,6 @@ const phoneForm = ref({
 // 验证相关
 const agreedToUserAgreement = ref(true) // 是否同意用户协议
 const sendCodeLoading = ref(false)
-const countdown = ref(0)
 const timer = ref<number | null>(null)
 
 // 微信绑定相关
@@ -347,7 +341,7 @@ function handleAgreementClick() {
 // 身份认证提交
 function handleIdentitySubmit() {
   if (agreedToUserAgreement.value === false && globalConfig.value.isAutoOpenAgreement === '1') {
-    return ms.error(`请阅读并同意《${globalConfig.value.agreementTitle}》`)
+    return ms.error(t('lens.account.agreementRequired'))
   }
   isShowIdVerify.value = true
 }
@@ -357,10 +351,10 @@ function onIdentitySuccess() {
   isShowIdVerify.value = false
   fetchVerifyIdentityAPI(identityForm.value).then((res: any) => {
     if (res.code === 200) {
-      ms.success('身份认证成功')
+      ms.success(t('lens.account.verificationSuccess'))
       getInfo() // 刷新用户信息
     } else {
-      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '认证失败'))
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, t('lens.account.verificationFailed')))
     }
   })
 }
@@ -368,10 +362,10 @@ function onIdentitySuccess() {
 // 发送手机验证码
 async function sendCode() {
   if (!phoneForm.value.phone) {
-    return ms.error('请输入手机号')
+    return ms.error(t('lens.account.enterPhone'))
   }
 
-  if (countdown.value > 0) return
+  if (isCountingDown.value) return
 
   try {
     sendCodeLoading.value = true
@@ -379,15 +373,14 @@ async function sendCode() {
     const res: ResData = await fetchSendSms(params)
 
     if (res.success) {
-      ms.success(res.data || '验证码已发送')
-      countdown.value = 60
+      ms.success(t('lens.account.codeSent'))
       startCountdown()
     } else {
-      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '发送验证码失败'))
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, t('lens.account.codeFailed')))
     }
   } catch (error) {
-    console.error('发送验证码失败:', error)
-    ms.error('发送验证码失败，请稍后重试')
+
+    ms.error(t('lens.account.codeFailed'))
   } finally {
     sendCodeLoading.value = false
   }
@@ -414,11 +407,11 @@ const startCountdown = () => {
 // 手机认证验证
 function handlePhoneSubmit() {
   if (agreedToUserAgreement.value === false && globalConfig.value.isAutoOpenAgreement === '1') {
-    return ms.error(`请阅读并同意《${globalConfig.value.agreementTitle}》`)
+    return ms.error(t('lens.account.agreementRequired'))
   }
 
   if (!phoneForm.value.phone || !phoneForm.value.code) {
-    return ms.error('请填写完整信息')
+    return ms.error(t('lens.account.completeFields'))
   }
 
   isShowPhoneVerify.value = true
@@ -439,7 +432,7 @@ async function onPhoneSuccess() {
     })) as ResData
 
     if (res.success) {
-      ms.success('手机认证成功')
+      ms.success(t('lens.account.verificationSuccess'))
 
       // 重置表单
       phoneForm.value.phone = ''
@@ -451,11 +444,11 @@ async function onPhoneSuccess() {
       // 返回主视图
       backToMainView()
     } else {
-      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, '手机认证失败'))
+      ms.error(sanitizeUserFacingErrorMessage(res.message || '', 0, t('lens.account.verificationFailed')))
     }
   } catch (error) {
-    console.error('手机认证失败:', error)
-    ms.error('手机认证失败，请稍后重试')
+
+    ms.error(t('lens.account.verificationFailed'))
   } finally {
     loading.value = false
   }
@@ -472,7 +465,7 @@ async function getSeneStr() {
       startCountdown()
     }
   } catch (error) {
-    console.error('获取场景字符串失败:', error)
+
   }
 }
 
@@ -492,7 +485,7 @@ async function getQrCodeUrl() {
       }, 1000)
     }
   } catch (error) {
-    console.error('获取二维码URL失败:', error)
+
   }
 }
 
@@ -508,22 +501,22 @@ async function bindWxBySnece() {
         clearInterval(wxBindTimer.value)
         wxBindTimer.value = null
       }
-      const { status, msg } = res.data
+      const { status } = res.data
       if (status) {
-        ms.success(msg)
+        ms.success(t('lens.account.wechatLinked'))
         await authStore.getUserInfo()
         // 绑定成功后自动关闭微信绑定区域
         showWxBindSection.value = false
       }
     }
   } catch (error) {
-    console.error('绑定微信失败:', error)
+
   }
 }
 
 // 清理微信绑定相关资源
 function cleanupWxBind() {
-  console.log('清理微信绑定资源')
+
   if (wxBindTimer.value !== null) {
     clearInterval(wxBindTimer.value)
     wxBindTimer.value = null
@@ -542,9 +535,9 @@ async function unbindWx() {
     //   ms.success('解绑成功')
     //   await authStore.getUserInfo()
     // }
-    ms.warning('暂不支持解绑微信，请联系管理员')
+    ms.warning(t('lens.account.wechatUnlinkUnavailable'))
   } catch (error) {
-    console.error('解绑微信失败:', error)
+
   }
 }
 
@@ -562,6 +555,10 @@ function cleanupWechatMigration() {
 onBeforeUnmount(() => {
   // 重置加载状态
   loading.value = false
+  if (countdownRef.value !== null) {
+    clearInterval(countdownRef.value)
+    countdownRef.value = null
+  }
 
   // 清除任何可能正在运行的定时器
   if (timer.value !== null) {
@@ -618,12 +615,12 @@ watch(
 
 // 监听登录状态变化
 watch(isLogin, newLoginStatus => {
-  console.log('登录状态变化:', newLoginStatus)
+
   // 如果组件可见但用户登出了，立即关闭设置弹窗并打开登录弹窗
   if (props.visible && !newLoginStatus) {
-    console.log('用户已登出，关闭设置弹窗并打开登录弹窗')
+
     // 显示消息提醒
-    ms.warning('账户已登出，请重新登录后查看')
+    ms.warning(t('lens.account.loginRequired'))
     useGlobalStore.updateSettingsDialog(false)
     authStore.setLoginDialog(true)
   }
@@ -655,96 +652,82 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="research-account w-full">
     <!-- 主视图 -->
     <div
       v-if="activeView === 'main'"
-      class="overflow-y-auto custom-scrollbar p-1"
-      :class="{ 'max-h-[70vh]': !isMobile }"
+      class="research-account__overview"
     >
       <!-- 用户基本信息卡片 -->
       <div
-        class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4 flex flex-col space-y-4"
+        class="research-account__section flex flex-col gap-4"
       >
         <!-- 卡片标题 -->
         <div
-          class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700"
-        >
-          个人信息
-        </div>
+          class="research-account__section-title"
+        >{{ t('lens.account.personalInfo') }}</div>
 
         <!-- 头像展示 -->
         <div class="flex items-center">
-          <div class="w-20 text-gray-500 dark:text-gray-400">头像</div>
-          <!-- <div>
-            <img :src="avatar" alt="头像" class="w-20 h-20 rounded-full cursor-pointer" />
-          </div> -->
+          <div class="w-20 shrink-0 text-[var(--text-sub)]">{{ t('lens.account.avatar') }}</div>
+
           <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--user-avatar-bg)]">
             <span class="text-white text-lg font-semibold">{{ avatarLetters }}</span>
           </div>
         </div>
 
         <!-- 用户信息展示 - 每行一个信息 -->
-        <!-- <div class="flex items-center">
-          <div class="w-24 text-gray-500 dark:text-gray-400">用户名</div>
-          <div class="text-gray-900 dark:text-gray-200">
-            {{ username || '未设置' }}
-          </div>
-        </div> -->
 
         <div class="flex items-center">
-          <div class="w-20 text-gray-500 dark:text-gray-400">ID</div>
+          <div class="w-20 shrink-0 text-[var(--text-sub)]">ID</div>
           <div v-if="!isEditingInfo" class="flex items-center">
-            <div class="text-gray-900 dark:text-gray-200">
-              {{ username || '未设置' }}
+            <div class="text-[var(--text-main)]">
+              {{ username || t('lens.account.notSet') }}
             </div>
             <div class="group relative ml-2">
-              <button @click="startEditingInfo" class="btn-icon btn-sm" aria-label="编辑ID">
-                <Edit theme="outline" size="16" class="text-gray-500 hover:text-primary-600" />
+              <button @click="startEditingInfo" class="btn-icon btn-sm" :aria-label="t('lens.account.editId')">
+                <Edit theme="outline" size="16" class="text-[var(--text-sub)] hover:text-[var(--academic-accent)]" />
               </button>
-              <div class="tooltip tooltip-right">编辑</div>
+              <div class="tooltip tooltip-right">{{ t('lens.account.edit') }}</div>
             </div>
           </div>
-          <div v-else class="flex items-center space-x-2">
+          <div v-else class="account-edit flex min-w-0 flex-wrap items-center gap-2">
             <input
               v-model="editableUsername"
               class="input input-md w-full"
-              placeholder="请输入ID"
+              :aria-label="t('lens.account.editId')"
+              :placeholder="t('lens.account.enterId')"
             />
-            <button @click="saveUserInfo" class="btn btn-primary btn-md">保存</button>
-            <button @click="cancelEditingInfo" class="btn btn-secondary btn-md">取消</button>
+            <button @click="saveUserInfo" class="btn btn-primary btn-md">{{ t('lens.account.save') }}</button>
+            <button @click="cancelEditingInfo" class="btn btn-secondary btn-md">{{ t('lens.account.cancel') }}</button>
           </div>
         </div>
 
         <div v-if="shouldShowEmail" class="flex items-center">
-          <div class="w-20 text-gray-500 dark:text-gray-400">邮箱</div>
-          <div class="text-gray-900 dark:text-gray-200">{{ email }}</div>
+          <div class="w-20 shrink-0 text-[var(--text-sub)]">{{ t('lens.account.email') }}</div>
+          <div class="min-w-0 break-all text-[var(--text-main)]">{{ email }}</div>
         </div>
       </div>
 
       <!-- 账户安全卡片 -->
       <div
-        class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4 flex flex-col space-y-4"
+        class="research-account__section flex flex-col gap-4"
       >
         <!-- 卡片标题 -->
         <div
-          class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700"
-        >
-          账户安全
-        </div>
+          class="research-account__section-title"
+        >{{ t('lens.account.security') }}</div>
 
         <!-- 账户安全选项 -->
         <div class="grid grid-cols-1 gap-4">
           <!-- 手机绑定 -->
-          <div v-if="phoneLoginStatus" class="flex items-center justify-between">
+          <div v-if="phoneLoginStatus" class="flex items-center justify-between gap-3">
             <div class="flex items-center">
               <div>
-                <div class="text-gray-900 dark:text-gray-200 flex items-center">
-                  手机绑定
-                  <Phone theme="outline" size="16" class="text-gray-500 ml-1" />
+                <div class="text-[var(--text-main)] flex items-center">{{ t('lens.account.phoneBinding') }}<Phone theme="outline" size="16" class="text-[var(--text-sub)] ml-1" />
                 </div>
-                <div class="text-xs text-gray-500">
-                  {{ phoneBindInfo.status === 'bound' ? '已绑定' : '未绑定' }}
+                <div class="text-xs text-[var(--text-sub)]">
+                  {{ phoneBindInfo.status === 'bound' ? t('lens.account.bound') : t('lens.account.unbound') }}
                   {{ phoneBindInfo.phone || '' }}
                 </div>
               </div>
@@ -753,40 +736,34 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
               v-if="phoneBindInfo.status !== 'bound'"
               @click="showPhoneBindView"
               class="btn btn-secondary btn-sm"
-            >
-              绑定
-            </button>
-            <span v-else class="text-green-600 text-sm">已绑定</span>
+            >{{ t('lens.account.bind') }}</button>
+            <span v-else class="text-[var(--academic-blue)] text-sm">{{ t('lens.account.bound') }}</span>
           </div>
 
           <!-- 微信绑定 -->
-          <div v-if="wechatRegisterStatus" class="flex items-center justify-between">
+          <div v-if="wechatRegisterStatus" class="flex items-center justify-between gap-3">
             <div class="flex items-center">
               <div>
-                <div class="text-gray-900 dark:text-gray-200 flex items-center">
-                  微信绑定
-                  <Wechat theme="outline" size="16" class="text-gray-500 ml-1" />
+                <div class="text-[var(--text-main)] flex items-center">{{ t('lens.account.wechatBinding') }}<Wechat theme="outline" size="16" class="text-[var(--text-sub)] ml-1" />
                 </div>
-                <div class="text-xs text-gray-500">
-                  {{ isWxBound ? '已绑定微信' : '未绑定微信' }}
+                <div class="text-xs text-[var(--text-sub)]">
+                  {{ isWxBound ? t('lens.account.wechatLinked') : t('lens.account.unbound') }}
                 </div>
               </div>
             </div>
             <button @click="showWxBindView" class="btn btn-secondary btn-sm" :disabled="isWxBound">
-              {{ isWxBound ? '已绑定' : '绑定' }}
+              {{ isWxBound ? t('lens.account.bound') : t('lens.account.bind') }}
             </button>
           </div>
 
           <!-- 实名认证 -->
-          <div v-if="openIdentity" class="flex items-center justify-between">
+          <div v-if="openIdentity" class="flex items-center justify-between gap-3">
             <div class="flex items-center">
               <div>
-                <div class="text-gray-900 dark:text-gray-200 flex items-center">
-                  实名认证
-                  <IdCard theme="outline" size="16" class="text-gray-500 ml-1" />
+                <div class="text-[var(--text-main)] flex items-center">{{ t('lens.account.identity') }}<IdCard theme="outline" size="16" class="text-[var(--text-sub)] ml-1" />
                 </div>
-                <div class="text-xs text-gray-500">
-                  {{ identityStatus === 'verified' ? '已认证' : '未认证' }}
+                <div class="text-xs text-[var(--text-sub)]">
+                  {{ identityStatus === 'verified' ? t('lens.account.verified') : t('lens.account.unverified') }}
                 </div>
               </div>
             </div>
@@ -794,24 +771,20 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
               v-if="identityStatus !== 'verified'"
               @click="showIdentityView"
               class="btn btn-secondary btn-sm"
-            >
-              认证
-            </button>
-            <span v-else class="text-green-600 text-sm">已完成</span>
+            >{{ t('lens.account.verify') }}</button>
+            <span v-else class="text-[var(--academic-blue)] text-sm">{{ t('lens.account.verified') }}</span>
           </div>
 
           <!-- 修改密码 -->
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-3">
             <div class="flex items-center">
               <div>
-                <div class="text-gray-900 dark:text-gray-200 flex items-center">
-                  账户密码
-                  <Lock theme="outline" size="16" class="text-gray-500 ml-1" />
+                <div class="text-[var(--text-main)] flex items-center">{{ t('lens.account.password') }}<Lock theme="outline" size="16" class="text-[var(--text-sub)] ml-1" />
                 </div>
-                <div class="text-xs text-gray-500">定期修改密码可以保护账户安全</div>
+                <div class="text-xs text-[var(--text-sub)]">{{ t('lens.account.passwordHint') }}</div>
               </div>
             </div>
-            <button @click="showPasswordView" class="btn btn-secondary btn-sm">修改</button>
+            <button @click="showPasswordView" class="btn btn-secondary btn-sm">{{ t('lens.account.change') }}</button>
           </div>
         </div>
       </div>
@@ -824,44 +797,46 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
     >
       <!-- 修改密码卡片 -->
       <div
-        class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4"
+        class="p-4 bg-[var(--surface-card)] rounded-lg border border-[var(--paper-border)] mb-4"
       >
         <!-- 卡片标题 -->
-        <div class="flex items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <button @click="backToMainView" class="text-gray-500 hover:text-gray-700 mr-2">
+        <div class="flex items-center mb-4 pb-2">
+          <button @click="backToMainView" class="btn-icon btn-md mr-2" :aria-label="t('lens.account.back')">
             <ArrowLeft size="18" />
           </button>
-          <div class="text-base font-semibold text-gray-900 dark:text-gray-100">修改密码</div>
+          <div class="text-base font-semibold text-[var(--text-main)]">{{ t('lens.account.changePassword') }}</div>
         </div>
 
         <form @submit.prevent="handlePasswordFormSubmit" class="flex flex-col space-y-4">
           <!-- 新密码 -->
           <div class="flex flex-col space-y-1">
-            <label for="new-password" class="text-sm text-gray-700 dark:text-gray-300"
-              >新密码</label
+            <label for="new-password" class="text-sm text-[var(--text-sub)]"
+              >{{ t('lens.account.newPassword') }}</label
             >
             <input
               id="new-password"
               v-model="passwordForm.newPassword"
               type="password"
-              placeholder="请输入新密码"
+              autocomplete="new-password"
+              :placeholder="t('lens.account.enterPassword')"
               class="input input-md w-full"
               required
             />
-            <div class="text-xs text-gray-500">密码长度8-20个字符，必须包含字母和数字</div>
+            <div class="text-xs text-[var(--text-sub)]">{{ t('lens.account.passwordRule') }}</div>
             <div v-if="passwordError" class="text-xs text-red-500 mt-1">{{ passwordError }}</div>
           </div>
 
           <!-- 确认新密码 -->
           <div class="flex flex-col space-y-1">
-            <label for="confirm-password" class="text-sm text-gray-700 dark:text-gray-300"
-              >确认新密码</label
+            <label for="confirm-password" class="text-sm text-[var(--text-sub)]"
+              >{{ t('lens.account.confirmPassword') }}</label
             >
             <input
               id="confirm-password"
               v-model="passwordForm.confirmPassword"
               type="password"
-              placeholder="请再次输入新密码"
+              autocomplete="new-password"
+              :placeholder="t('lens.account.reenterPassword')"
               class="input input-md w-full"
               required
             />
@@ -877,8 +852,8 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
               class="btn btn-primary btn-md w-full"
               :disabled="isPasswordUpdating"
             >
-              <span v-if="isPasswordUpdating">提交中...</span>
-              <span v-else>确认修改</span>
+              <span v-if="isPasswordUpdating">{{ t('lens.account.submitting') }}</span>
+              <span v-else>{{ t('lens.account.confirmChange') }}</span>
             </button>
           </div>
         </form>
@@ -892,45 +867,43 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
     >
       <!-- 手机绑定卡片 -->
       <div
-        class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4"
+        class="p-4 bg-[var(--surface-card)] rounded-lg border border-[var(--paper-border)] mb-4"
       >
         <!-- 卡片标题 -->
-        <div class="flex items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <button @click="backToMainView" class="text-gray-500 hover:text-gray-700 mr-2">
+        <div class="flex items-center mb-4 pb-2">
+          <button @click="backToMainView" class="btn-icon btn-md mr-2" :aria-label="t('lens.account.back')">
             <ArrowLeft size="18" />
           </button>
-          <div class="text-base font-semibold text-gray-900 dark:text-gray-100">绑定手机号</div>
+          <div class="text-base font-semibold text-[var(--text-main)]">{{ t('lens.account.bindPhone') }}</div>
         </div>
 
         <div class="space-y-4">
           <div>
-            <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-              手机号码
-            </label>
+            <label class="block mb-1 text-sm font-medium text-[var(--text-sub)]">{{ t('lens.account.phone') }}</label>
             <input
               v-model="phoneForm.phone"
+              :aria-label="t('lens.account.phone')"
               class="input input-md w-full"
-              placeholder="请输入手机号码"
+              :placeholder="t('lens.account.enterPhone')"
             />
           </div>
           <div class="flex space-x-2">
             <div class="flex-1">
-              <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                验证码
-              </label>
+              <label class="block mb-1 text-sm font-medium text-[var(--text-sub)]">{{ t('lens.account.code') }}</label>
               <input
                 v-model="phoneForm.code"
+              :aria-label="t('lens.account.code')"
                 class="input input-md w-full"
-                placeholder="请输入验证码"
+                :placeholder="t('lens.account.enterCode')"
               />
             </div>
             <div class="flex items-end">
               <button
                 @click="sendCode"
                 class="btn btn-secondary btn-sm w-full"
-                :disabled="sendCodeLoading || countdown > 0"
+                :disabled="sendCodeLoading || isCountingDown"
               >
-                {{ countdown > 0 ? `${countdown}s后重新获取` : '获取验证码' }}
+                {{ isCountingDown ? t('lens.login.codeCountdown', { seconds: remainingTime }) : t('login.sendVerificationCode') }}
               </button>
             </div>
           </div>
@@ -938,24 +911,21 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
           <div v-if="globalConfig.isAutoOpenAgreement === '1'" class="flex items-center">
             <input
               v-model="agreedToUserAgreement"
+              :aria-label="t('lens.account.agreement')"
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
+              class="lens-checkbox"
             />
-            <p class="ml-1 text-center text-sm text-gray-500 dark:text-gray-400">
-              已阅读并同意
-              <a
+            <p class="ml-1 text-center text-sm text-[var(--text-sub)]">{{ t('lens.account.agreement') }}<a
                 href="#"
-                class="font-semibold leading-6 text-primary-600 hover:text-primary-500 dark:text-primary-500 dark:hover:text-primary-600"
-                @click="handleAgreementClick"
+                class="font-semibold leading-6 text-primary-600 hover:text-primary-500 dark:text-primary-500 dark:hover:text-[var(--academic-accent)]"
+                @click.prevent="handleAgreementClick"
                 >《{{ globalConfig.agreementTitle }}》</a
               >
             </p>
           </div>
 
           <div>
-            <button @click="handlePhoneSubmit" class="btn btn-primary btn-md w-full">
-              提交认证
-            </button>
+            <button @click="handlePhoneSubmit" class="btn btn-primary btn-md w-full">{{ t('lens.account.submitVerification') }}</button>
           </div>
         </div>
       </div>
@@ -968,59 +938,54 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
     >
       <!-- 实名认证卡片 -->
       <div
-        class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4"
+        class="p-4 bg-[var(--surface-card)] rounded-lg border border-[var(--paper-border)] mb-4"
       >
         <!-- 卡片标题 -->
-        <div class="flex items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <button @click="backToMainView" class="text-gray-500 hover:text-gray-700 mr-2">
+        <div class="flex items-center mb-4 pb-2">
+          <button @click="backToMainView" class="btn-icon btn-md mr-2" :aria-label="t('lens.account.back')">
             <ArrowLeft size="18" />
           </button>
-          <div class="text-base font-semibold text-gray-900 dark:text-gray-100">实名认证</div>
+          <div class="text-base font-semibold text-[var(--text-main)]">{{ t('lens.account.identity') }}</div>
         </div>
 
         <div class="space-y-4">
           <div>
-            <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-              真实姓名
-            </label>
+            <label class="block mb-1 text-sm font-medium text-[var(--text-sub)]">{{ t('lens.account.realName') }}</label>
             <input
               v-model="identityForm.name"
+              :aria-label="t('lens.account.realName')"
               class="input input-md w-full"
-              placeholder="请输入真实姓名"
+              :placeholder="t('lens.account.enterName')"
             />
           </div>
           <div>
-            <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-              身份证号
-            </label>
+            <label class="block mb-1 text-sm font-medium text-[var(--text-sub)]">{{ t('lens.account.idNumber') }}</label>
             <input
               v-model="identityForm.idCard"
+              :aria-label="t('lens.account.idNumber')"
               class="input input-md w-full"
-              placeholder="请输入身份证号"
+              :placeholder="t('lens.account.enterIdentity')"
             />
           </div>
 
           <div v-if="globalConfig.isAutoOpenAgreement === '1'" class="flex items-center">
             <input
               v-model="agreedToUserAgreement"
+              :aria-label="t('lens.account.agreement')"
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600"
+              class="lens-checkbox"
             />
-            <p class="ml-1 text-center text-sm text-gray-500 dark:text-gray-400">
-              已阅读并同意
-              <a
+            <p class="ml-1 text-center text-sm text-[var(--text-sub)]">{{ t('lens.account.agreement') }}<a
                 href="#"
-                class="font-semibold leading-6 text-primary-600 hover:text-primary-500 dark:text-primary-500 dark:hover:text-primary-600"
-                @click="handleAgreementClick"
+                class="font-semibold leading-6 text-primary-600 hover:text-primary-500 dark:text-primary-500 dark:hover:text-[var(--academic-accent)]"
+                @click.prevent="handleAgreementClick"
                 >《{{ globalConfig.agreementTitle }}》</a
               >
             </p>
           </div>
 
           <div>
-            <button @click="handleIdentitySubmit" class="btn btn-primary btn-md w-full">
-              提交认证
-            </button>
+            <button @click="handleIdentitySubmit" class="btn btn-primary btn-md w-full">{{ t('lens.account.submitVerification') }}</button>
           </div>
         </div>
       </div>
@@ -1030,35 +995,27 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
     <div v-else-if="activeView === 'wx'" class="max-h-[70vh] overflow-y-auto custom-scrollbar p-2">
       <!-- 微信绑定卡片 -->
       <div
-        class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4"
+        class="p-4 bg-[var(--surface-card)] rounded-lg border border-[var(--paper-border)] mb-4"
       >
         <!-- 卡片标题 -->
-        <div class="flex items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <button @click="backToMainView" class="text-gray-500 hover:text-gray-700 mr-2">
+        <div class="flex items-center mb-4 pb-2">
+          <button @click="backToMainView" class="btn-icon btn-md mr-2" :aria-label="t('lens.account.back')">
             <ArrowLeft size="18" />
           </button>
-          <div class="text-base font-semibold text-gray-900 dark:text-gray-100">绑定微信</div>
+          <div class="text-base font-semibold text-[var(--text-main)]">{{ t('lens.account.bindWechat') }}</div>
         </div>
 
         <!-- 已绑定状态 -->
         <div v-if="isWxBound" class="text-center py-6">
-          <div class="text-green-500 text-lg mb-4">✓ 已成功绑定微信</div>
-          <button @click="unbindWx" class="btn btn-secondary btn-sm">解除绑定</button>
+          <div class="text-green-500 text-lg mb-4">{{ t('lens.account.wechatLinked') }}</div>
+          <button @click="unbindWx" class="btn btn-secondary btn-sm">{{ t('lens.account.unbind') }}</button>
         </div>
 
         <!-- 未绑定状态 -->
         <div v-else class="px-4 pt-2 pb-6">
           <!-- 绑定提示 -->
           <div class="text-center my-6">
-            <p class="text-gray-700 dark:text-gray-300">
-              请在
-              <span class="text-red-500 font-medium">{{
-                remainingTime > 0
-                  ? `00:${remainingTime < 10 ? '0' + remainingTime : remainingTime}`
-                  : '00:00'
-              }}</span>
-              时间内完成绑定
-            </p>
+            <p class="text-[var(--text-sub)]">{{ t('lens.account.linkWithin', { seconds: remainingTime }) }}</p>
           </div>
 
           <!-- 微信绑定页面的二维码显示 -->
@@ -1068,9 +1025,9 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
                 v-if="
                   wxLoginUrl && (agreedToUserAgreement || globalConfig.isAutoOpenAgreement !== '1')
                 "
-                class="w-full h-full select-none shadow-sm rounded-lg object-cover border border-gray-100 dark:border-gray-700"
+                class="w-full h-full select-none rounded-lg object-cover border border-gray-100 dark:border-gray-700"
                 :src="wxLoginUrl"
-                alt="微信绑定二维码"
+                :alt="t('lens.account.wechatCode')"
               />
 
               <div
@@ -1090,9 +1047,7 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
           </div>
 
           <!-- 提示文字 -->
-          <div class="text-center text-gray-700 dark:text-gray-300 text-base">
-            打开微信扫码绑定账户
-          </div>
+          <div class="text-center text-[var(--text-sub)] text-base">{{ t('lens.account.scanWechat') }}</div>
         </div>
       </div>
     </div>
@@ -1114,6 +1069,18 @@ const identityStatus = computed(() => (realName.value ? 'verified' : 'unverified
 </template>
 
 <style scoped>
+.research-account { font-size: 14px; line-height: 1.5; }
+.research-account__overview { display: grid; gap: 28px; }
+.research-account__section { min-width: 0; }
+.research-account__section-title { color: var(--text-main); font-size: 14px; font-weight: 600; }
+
+.account-edit input { flex: 1 1 120px; min-width: 0; }
+.research-account :deep(.btn), .research-account :deep(.btn-icon) { min-height: 44px; }
+@media (max-width: 480px) {
+  .research-account .w-20 { width: 64px; }
+  .research-account .p-4 { padding: 12px; }
+}
+
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(155, 155, 155, 0.5) transparent;

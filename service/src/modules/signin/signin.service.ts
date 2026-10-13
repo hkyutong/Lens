@@ -1,6 +1,6 @@
 import { GlobalConfigService } from './../globalConfig/globalConfig.service';
 import { UserBalanceService } from './../userBalance/userBalance.service';
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { SigninEntity } from './signIn.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -8,6 +8,11 @@ import { Repository } from 'typeorm';
 import dayjs from '@/common/utils/date';
 import { UserEntity } from '../user/user.entity';
 import { RechargeType } from '@/common/constants/balance.constant';
+
+const signinLogger = {
+  debug: (_message?: unknown, _context?: string) => undefined,
+  error: (_message?: unknown, _context?: string) => undefined,
+};
 
 @Injectable()
 export class SigninService {
@@ -64,7 +69,7 @@ export class SigninService {
     });
     /* 昨天签到了 连续签到 增加连续签到日期 */
     if (previousSignin) {
-      Logger.debug(`用户${userId}昨天签到了、今天是连续签到！`, 'SigninService');
+      signinLogger.debug('连续签到状态已更新', 'SigninService');
       const userInfo = await this.userEntity.findOne({ where: { id: userId } });
       if (!userInfo) {
         throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
@@ -72,7 +77,7 @@ export class SigninService {
       const { consecutiveDays = 0 } = userInfo;
       await this.userEntity.update({ id: userId }, { consecutiveDays: consecutiveDays + 1 });
     } else {
-      Logger.debug(`用户${userId}昨天没签到、今天重置天数！`, 'SigninService');
+      signinLogger.debug('签到连续天数已重置', 'SigninService');
       await this.userEntity.update({ id: userId }, { consecutiveDays: 1 });
     }
 
@@ -113,7 +118,7 @@ export class SigninService {
       }
       return res;
     } catch (error) {
-      console.log('error: ', error);
+      signinLogger.error('签到数据查询失败', 'SigninService');
       throw new HttpException('获取签到数据失败！', HttpStatus.BAD_REQUEST);
     }
   }

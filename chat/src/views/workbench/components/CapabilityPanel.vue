@@ -1,33 +1,33 @@
 <script setup lang="ts">
 import { t } from '@/locales'
-import { useAuthStore, useGlobalStoreWithOut, useChatStore } from '@/store'
-import { DIALOG_TABS } from '@/store/modules/global'
-import { computed, ref, watch } from 'vue'
+import { useAuthStore, useChatStore } from '@/store'
+import { computed, nextTick, ref, watch } from 'vue'
+import ResearchShortcuts from './ResearchShortcuts.vue'
+import CapabilityScrollRegion from './CapabilityScrollRegion.vue'
+import ResearchSearchField from './ResearchSearchField.vue'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
+import { DropdownMenu } from '@/components/common/DropdownMenu'
 import {
   getAcademicEntityDisplayLabel,
   getAcademicEntityRawLabel,
   getAcademicEntitySelectorValue,
 } from '@/utils/academicI18n'
 import type { AcademicEntity } from '@/utils/academicI18n'
-import { getAcademicWorkflowChainLabel } from '@/utils/academicWorkflow'
 import {
-  canUseAcademicCore,
-  canUseAcademicPlugin,
-  getAcademicWorkflowStepLimit,
-} from '@/utils/academicPlanAccess'
+  ACADEMIC_HOME_PLUGIN_ORDER,
+  isAcademicFeaturedPlugin,
+  normalizeAcademicCapabilityName,
+} from '@/utils/academicCapabilityCatalog'
+import { canUseAcademicCore, canUseAcademicPlugin } from '@/utils/academicPlanAccess'
+import { useRouter } from 'vue-router'
 
 interface Props {
+  titleLabel?: string
   embedded?: boolean
-  coreLabel?: string
-  pluginLabel?: string
-  corePlaceholder?: string
-  pluginPlaceholder?: string
-  pluginSearchPlaceholder?: string
-  pluginArgsLabel?: string
-  pluginArgsPlaceholder?: string
-  groupLabel?: string
-  infoLabel?: string
+  serviceState?: 'unknown' | 'ready' | 'unavailable'
   showClose?: boolean
+  scrollable?: boolean
+  fillContainer?: boolean
 }
 
 const props = defineProps<Props>()
@@ -36,9 +36,15 @@ const emit = defineEmits<{
 }>()
 const chatStore = useChatStore()
 const authStore = useAuthStore()
-const useGlobalStore = useGlobalStoreWithOut()
+const router = useRouter()
 
 const userBalance = computed(() => authStore.userBalance || {})
+const isLoggedIn = computed(() => Boolean(authStore.isLogin))
+const hasLoadedCapabilityData = computed(
+  () =>
+    (chatStore.academicCoreFunctions?.length || 0) > 0 ||
+    (chatStore.academicPluginList?.length || 0) > 0
+)
 const coreFunctions = computed(() =>
   (chatStore.academicCoreFunctions || []).filter((core: AcademicEntity) =>
     canUseAcademicCore(core, userBalance.value)
@@ -46,50 +52,28 @@ const coreFunctions = computed(() =>
 )
 const activePlugin = computed(() => chatStore.currentAcademicPlugin)
 const activeCore = computed(() => chatStore.currentAcademicCore)
-const workflowEnabled = computed(() => Boolean(chatStore.academicWorkflowEnabled))
-const workflowSteps = computed(() => chatStore.academicWorkflowSteps || [])
-const workflowRunning = computed(() => Boolean(chatStore.academicWorkflowRunning))
-const workflowStepLimit = computed(() => getAcademicWorkflowStepLimit(userBalance.value))
-const workflowMemberAvailable = computed(() => workflowStepLimit.value > 0)
-const activeSelectionLabel = computed(() => {
-  if (workflowEnabled.value) {
-    return (
-      getAcademicWorkflowChainLabel(workflowSteps.value) ||
-      t('lens.academicPanel.workflowFallbackLabel')
-    )
-  }
-  return (
-    getAcademicEntityDisplayLabel(activeCore.value || activePlugin.value) ||
-    t('lens.academicPanel.workflowFallbackLabel')
-  )
-})
+const canConfigureCapabilities = computed(
+  () => isLoggedIn.value && props.serviceState !== 'unavailable'
+)
+const hasNoAvailableCapabilities = computed(
+  () =>
+    isLoggedIn.value &&
+    props.serviceState === 'ready' &&
+    hasLoadedCapabilityData.value &&
+    !coreFunctions.value.length &&
+    !pluginList.value.length
+)
 const openMemberDialog = () => {
-  useGlobalStore.updateSettingsDialog(true, DIALOG_TABS.MEMBER)
+  void router.push('/pricing')
 }
 
 const getCoreLabel = (core: AcademicEntity) => getAcademicEntityRawLabel(core)
 const getCoreDisplayLabel = (core: AcademicEntity) => getAcademicEntityDisplayLabel(core)
 const getPluginLabel = (plugin: AcademicEntity) => getAcademicEntityRawLabel(plugin)
 const getPluginDisplayLabel = (plugin: AcademicEntity) => getAcademicEntityDisplayLabel(plugin)
-const normalizePluginName = (name: string) =>
-  String(name || '')
-    .replace(/\s+/g, '')
-    .replace(/latex/gi, 'latex')
-    .toLowerCase()
+const normalizePluginName = (name: string) => normalizeAcademicCapabilityName(name)
 
-const academicPluginOrder = [
-  '论文速读',
-  'PDF 批量总结',
-  'PDF 深度理解',
-  'Word 批量总结',
-  'Arxiv摘要',
-  'Arxiv 英文摘要',
-  'LaTeX 摘要',
-  'LaTeX 精准翻译',
-  'LaTeX 英文润色',
-  'LaTeX 中文润色',
-  'LaTeX 高亮纠错',
-]
+const academicPluginOrder = ACADEMIC_HOME_PLUGIN_ORDER
 
 const getSortKey = (name: string) => {
   const normalized = normalizePluginName(name)
@@ -167,6 +151,7 @@ const pluginList = computed(() => {
       const description = String(plugin?.description || '')
       const haystack = `${label} ${rawName} ${info} ${description}`
       if (!label) return false
+      if (isAcademicFeaturedPlugin(plugin)) return false
       if (label.includes('中译英') || rawName.includes('中译英')) return false
       return !blockedPlugins.some(block => haystack.includes(block))
     })
@@ -199,80 +184,7 @@ const pluginList = computed(() => {
     .map(entry => entry.item)
 })
 
-const showAdvanced = ref(false)
-const groupFilter = ref('学术')
-const hiddenPluginGroups = ['智能体']
-const preferredGroups = ['学术', '对话', '编程']
-const groupLabelMap: Record<string, string> = {
-  学术: 'lens.academicPanel.groupAcademic',
-  对话: 'lens.academicPanel.groupConversation',
-  编程: 'lens.academicPanel.groupProgramming',
-}
-
-const pluginGroups = computed(() => {
-  const groups = new Set<string>()
-  pluginList.value.forEach(plugin => {
-    const raw = String(plugin.group || '')
-    raw.split('|').forEach(part => {
-      const trimmed = part.trim()
-      if (trimmed && !hiddenPluginGroups.includes(trimmed)) {
-        groups.add(trimmed)
-      }
-    })
-  })
-  const filtered = preferredGroups.filter(group => groups.has(group))
-  return filtered.length ? filtered : preferredGroups
-})
-
-const groupOptions = computed(() =>
-  pluginGroups.value.map(group => ({
-    value: group,
-    label: groupLabelMap[group] ? t(groupLabelMap[group]) : group,
-  }))
-)
-
-watch(
-  pluginGroups,
-  groups => {
-    if (!groups.includes(groupFilter.value)) {
-      groupFilter.value = groups[0] || '学术'
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  () => activePlugin.value,
-  plugin => {
-    if (plugin?.advancedArgs) {
-      showAdvanced.value = true
-    }
-  },
-  { immediate: true }
-)
-
-const matchesGroup = (plugin: AcademicEntity, group: string) => {
-  if (!group) return true
-  const raw = String(plugin.group || '')
-  if (!raw) return false
-  return raw
-    .split('|')
-    .map(part => part.trim())
-    .filter(part => !hiddenPluginGroups.includes(part))
-    .includes(group)
-}
-
-const filteredPlugins = computed(() => {
-  const group = groupFilter.value.trim()
-  let candidates = pluginList.value.filter(plugin => matchesGroup(plugin, group))
-  if (!candidates.length) {
-    candidates = pluginList.value
-  }
-  if (activePlugin.value && !candidates.some(plugin => plugin.name === activePlugin.value?.name)) {
-    return [activePlugin.value, ...candidates]
-  }
-  return candidates
-})
+const showGuestPreview = computed(() => !isLoggedIn.value)
 
 watch(
   [pluginList, coreFunctions],
@@ -299,35 +211,6 @@ watch(
   },
   { immediate: true }
 )
-
-const MAX_PLUGIN_ARGS = 300
-const DISALLOWED_PLUGIN_PATTERNS: RegExp[] = [
-  /ignore\s+previous/i,
-  /system\s+prompt/i,
-  /developer\s+message/i,
-  /jailbreak/i,
-  /\bsudo\b/i,
-  /rm\s+-rf/i,
-  /\bcurl\b/i,
-  /\bwget\b/i,
-  /file:\/\//i,
-  /https?:\/\//i,
-  /\.\.[\/]/,
-  /\/etc\//i,
-  /\\\\\s*$/,
-]
-
-const sanitizePluginArgs = (value: string) => {
-  if (!value) return ''
-  let result = value
-  DISALLOWED_PLUGIN_PATTERNS.forEach(pattern => {
-    result = result.replace(pattern, '')
-  })
-  if (result.length > MAX_PLUGIN_ARGS) {
-    result = result.slice(0, MAX_PLUGIN_ARGS)
-  }
-  return result.trim()
-}
 
 const selectedCore = computed({
   get: () => getAcademicEntitySelectorValue(activeCore.value) || '',
@@ -357,86 +240,143 @@ const selectedPlugin = computed({
   },
 })
 
-const pluginArgs = computed({
-  get: () => chatStore.academicPluginArgs || '',
-  set: (value: string) => chatStore.setAcademicPluginArgs(sanitizePluginArgs(value)),
-})
-
-const isPluginArgsEnabled = computed(() => Boolean(activePlugin.value))
-const pluginArgsPlaceholder = computed(() => {
-  if (!activePlugin.value) return t('lens.academicPanel.customInstructionPlaceholderInactive')
-  return props.pluginArgsPlaceholder || t('lens.academicPanel.customInstructionPlaceholder')
-})
-
-const toggleWorkflowMode = (enabled: boolean) => {
-  if (enabled && !workflowMemberAvailable.value) {
-    openMemberDialog()
-    return
-  }
-  if (enabled) {
-    chatStore.setAcademicPlugin(undefined)
-    chatStore.setAcademicCore(undefined)
-    chatStore.setAcademicWorkflowEnabled(true)
-    if (!workflowSteps.value.length) {
-      chatStore.addAcademicWorkflowStep({ kind: 'plugin' })
+// One UI selection adapts to the existing mutually exclusive Academic state.
+const selectedCapability = computed({
+  get: () =>
+    activeCore.value
+      ? `core:${selectedCore.value}`
+      : activePlugin.value
+      ? `plugin:${selectedPlugin.value}`
+      : '',
+  set: (value: string) => {
+    if (value.startsWith('core:')) selectedCore.value = value.slice(5)
+    else if (value.startsWith('plugin:')) selectedPlugin.value = value.slice(7)
+    else {
+      selectedCore.value = ''
+      selectedPlugin.value = ''
     }
-    return
-  }
-  chatStore.clearAcademicWorkflow()
-}
+  },
+})
 
-const updateWorkflowStepKind = (index: number, kind: 'core' | 'plugin') => {
-  chatStore.updateAcademicWorkflowStep(index, {
-    kind,
-    name: '',
-    displayName: '',
-    args: workflowSteps.value[index]?.args || '',
-  })
-}
+const capabilityEntries = computed(() => [
+  { value: '', label: t('lens.academicPanel.defaultCapability'), category: 'academic' },
+  ...coreFunctions.value.map(core => ({
+    value: `core:${getAcademicEntitySelectorValue(core)}`,
+    label: getCoreDisplayLabel(core),
+    category: capabilityCategoryFor(core),
+  })),
+  ...pluginList.value.map(plugin => ({
+    value: `plugin:${getAcademicEntitySelectorValue(plugin)}`,
+    label: getPluginDisplayLabel(plugin),
+    category: capabilityCategoryFor(plugin),
+  })),
+])
 
-const updateWorkflowStepSelection = (index: number, value: string) => {
-  const step = workflowSteps.value[index]
-  if (!step) return
-  const list = step.kind === 'plugin' ? pluginList.value : coreFunctions.value
-  const selected = list.find(
-    item => getAcademicEntitySelectorValue(item) === value || item?.name === value
+// Filtering is presentation-only: permissions and the selection setters stay authoritative.
+function capabilityCategoryFor(entity: AcademicEntity) {
+  return String(entity.group || '')
+    .split('|')
+    .includes('编程') || /代码|编程|code|python|javascript/i.test(getAcademicEntityRawLabel(entity))
+    ? 'programming'
+    : 'academic'
+}
+const category = ref('all')
+const categoryMenuOpen = ref(false)
+const categoryOptions = computed(() => [
+  { value: 'all', label: t('lens.academicPanel.categoryAll') },
+  { value: 'academic', label: t('lens.academicPanel.groupAcademic') },
+  { value: 'programming', label: t('lens.academicPanel.groupProgramming') },
+])
+const categoryLabel = computed(
+  () => categoryOptions.value.find(item => item.value === category.value)?.label
+)
+const searchVisible = ref(false)
+const searchQuery = ref('')
+const searchInput = ref<InstanceType<typeof ResearchSearchField>>()
+const searchButton = ref<HTMLButtonElement>()
+const filteredCapabilityEntries = computed(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase()
+  return capabilityEntries.value.filter(
+    entry =>
+      (category.value === 'all' || entry.category === category.value) &&
+      (!query || `${entry.label} ${entry.value}`.toLocaleLowerCase().includes(query))
   )
-  if (!selected) return
-  chatStore.updateAcademicWorkflowStep(index, {
-    name: String(selected?.name || '').trim(),
-    displayName: getAcademicEntityDisplayLabel(selected),
-  })
+})
+async function toggleSearch() {
+  searchVisible.value = !searchVisible.value
+  if (!searchVisible.value) searchQuery.value = ''
+  await nextTick()
+  if (searchVisible.value) searchInput.value?.focus()
+  else searchButton.value?.focus()
 }
-
-const updateWorkflowStepArgs = (index: number, value: string) => {
-  chatStore.updateAcademicWorkflowStep(index, {
-    args: value.trim().slice(0, 300),
-  })
-}
-
-const addWorkflowStep = () => {
-  if (!workflowMemberAvailable.value) {
-    openMemberDialog()
-    return
-  }
-  if (workflowSteps.value.length >= workflowStepLimit.value) return
-  chatStore.addAcademicWorkflowStep({ kind: 'plugin' })
-}
-
-const workflowSourceOptions = (kind: 'core' | 'plugin') =>
-  kind === 'plugin' ? filteredPlugins.value : coreFunctions.value
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="w-full" :class="{ 'research-controls-frame--fill': props.fillContainer }">
     <section class="research-controls">
       <div class="research-controls__header">
-        <div>
-          <template v-if="!props.embedded">
-            <h3 class="research-controls__title">{{ t('lens.academicPanel.title') }}</h3>
-          </template>
+        <div class="research-controls__heading">
+          <h3 v-if="!props.embedded" class="research-controls__title">
+            {{ props.titleLabel || t('lens.academicPanel.settingsTitle') }}
+          </h3>
+          <DropdownMenu
+            v-if="isLoggedIn"
+            v-model="categoryMenuOpen"
+            position="bottom-left"
+            min-width="140px"
+            menu-class="menu-items-academic"
+          >
+            <template #trigger>
+              <button
+                type="button"
+                class="research-controls__category"
+                :aria-label="t('lens.academicPanel.categoryLabel')"
+                :aria-expanded="categoryMenuOpen"
+                aria-haspopup="menu"
+              >
+                {{ categoryLabel }}
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="m7 10 5 5 5-5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </template>
+            <template #menu="{ close }">
+              <button
+                v-for="item in categoryOptions"
+                :key="item.value"
+                type="button"
+                class="menu-item menu-item-md"
+                role="menuitemradio"
+                :aria-checked="category === item.value"
+                :class="{ 'menu-item-active': category === item.value }"
+                @click="() => {
+                  category = item.value
+                  close()
+                }"
+              >
+                {{ item.label }}
+              </button>
+            </template>
+          </DropdownMenu>
         </div>
         <div class="research-controls__header-actions">
+          <button
+            v-if="isLoggedIn"
+            ref="searchButton"
+            type="button"
+            class="research-controls__search-toggle"
+            :aria-label="t('lens.academicPanel.searchLabel')"
+            :aria-expanded="searchVisible"
+            @click="toggleSearch"
+          >
+            <SvgIcon icon="ri:search-line" aria-hidden="true" />
+          </button>
           <button
             v-if="props.showClose"
             type="button"
@@ -449,230 +389,93 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
         </div>
       </div>
 
-      <div class="research-controls__overview" role="status" aria-live="polite">
-        <div class="research-controls__overview-row">
-          <span>{{ t('lens.academicPanel.workflowLabel') }}</span>
-          <strong>{{ activeSelectionLabel }}</strong>
+      <ResearchSearchField
+        v-if="isLoggedIn && searchVisible"
+        ref="searchInput"
+        v-model="searchQuery"
+        class="research-controls__search"
+        :label="t('lens.academicPanel.searchLabel')"
+        @keydown.esc.stop.prevent="toggleSearch"
+      />
+
+      <div
+        v-if="showGuestPreview"
+        class="research-controls__preview"
+        role="group"
+        :aria-label="props.titleLabel || t('lens.workspace.starterTitle')"
+      >
+        <ResearchShortcuts compact featured hide-title :scrollable="props.scrollable" />
+      </div>
+
+      <div
+        v-if="hasNoAvailableCapabilities"
+        class="research-controls__access-notice research-controls__access-notice--accent"
+        role="status"
+      >
+        <div class="research-controls__access-copy">
+          <strong>{{ t('lens.academicPanel.noAvailableCapabilities') }}</strong>
+          <span>{{ t('lens.academicPanel.coreLabel') }}</span>
         </div>
-        <div
-          v-if="workflowEnabled && workflowSteps.length"
-          class="research-controls__overview-chips"
+        <button
+          v-if="hasNoAvailableCapabilities"
+          type="button"
+          class="research-controls__access-action"
+          @click="openMemberDialog"
         >
-          <span
-            v-for="(step, index) in workflowSteps"
-            :key="`${step.kind}-${step.name || index}`"
-            class="research-controls__overview-chip"
+          {{ t('lens.workflow.upgradeNow') }}
+        </button>
+      </div>
+
+      <div v-if="isLoggedIn" class="research-controls__body">
+        <CapabilityScrollRegion
+          class="research-controls__scroll-region"
+          :enabled="props.scrollable !== false"
+          :fill-container="props.fillContainer"
+          inset
+        >
+          <div
+            class="research-controls__list"
+            role="group"
+            :aria-label="t('lens.academicPanel.settingsTitle')"
           >
-            {{ index + 1 }}.
-            {{ step.displayName || step.name || t('lens.workflow.stepSelectPlaceholder') }}
-          </span>
-        </div>
-      </div>
-
-      <div class="research-controls__mode-switch">
-        <button
-          type="button"
-          class="research-controls__toggle"
-          :class="{ 'research-controls__toggle--active': !workflowEnabled }"
-          :aria-pressed="!workflowEnabled"
-          @click="toggleWorkflowMode(false)"
-        >
-          {{ t('lens.workflow.singleMode') }}
-        </button>
-        <button
-          type="button"
-          class="research-controls__toggle"
-          :class="{ 'research-controls__toggle--active': workflowEnabled }"
-          :aria-pressed="workflowEnabled"
-          @click="toggleWorkflowMode(true)"
-        >
-          {{ t('lens.workflow.workflowMode') }}
-        </button>
-      </div>
-
-      <div v-if="!workflowEnabled" class="research-controls__grid">
-        <div class="research-controls__field">
-          <label>{{ props.coreLabel || t('lens.academicPanel.coreLabel') }}</label>
-          <select v-model="selectedCore" class="research-controls__select">
-            <option value="">
-              {{ props.corePlaceholder || t('lens.academicPanel.corePlaceholder') }}
-            </option>
-            <option
-              v-for="core in coreFunctions"
-              :key="core.name"
-              :value="getAcademicEntitySelectorValue(core)"
-            >
-              {{ getCoreDisplayLabel(core) }}
-            </option>
-          </select>
-        </div>
-
-        <div class="research-controls__field">
-          <label>{{ props.pluginLabel || t('lens.academicPanel.pluginLabel') }}</label>
-          <select v-model="selectedPlugin" class="research-controls__select">
-            <option value="">
-              {{ props.pluginPlaceholder || t('lens.academicPanel.pluginPlaceholder') }}
-            </option>
-            <option
-              v-for="plugin in filteredPlugins"
-              :key="plugin.name"
-              :value="getAcademicEntitySelectorValue(plugin)"
-              :title="getPluginDisplayLabel(plugin)"
-            >
-              {{ getPluginDisplayLabel(plugin) }}
-            </option>
-          </select>
-        </div>
-      </div>
-
-      <div v-else class="research-controls__workflow-builder">
-        <div class="research-controls__workflow-head">
-          <div class="research-controls__workflow-head-copy">
-            <span>{{ t('lens.workflow.builderTitle') }}</span>
-            <small
-              >{{ workflowSteps.length }}/{{ workflowStepLimit || 0 }}
-              {{ t('lens.workflow.stepsShort') }}</small
-            >
-          </div>
-          <button
-            v-if="workflowMemberAvailable && workflowSteps.length < workflowStepLimit"
-            type="button"
-            class="research-controls__advanced"
-            @click="addWorkflowStep"
-          >
-            {{ t('lens.workflow.addStep') }}
-          </button>
-        </div>
-
-        <div v-if="!workflowMemberAvailable" class="research-controls__workflow-locked">
-          <div>{{ t('lens.workflow.memberOnly') }}</div>
-          <button type="button" class="research-controls__advanced" @click="openMemberDialog">
-            {{ t('lens.workflow.upgradeNow') }}
-          </button>
-        </div>
-
-        <div
-          v-for="(step, index) in workflowSteps"
-          :key="`${step.kind}-${index}`"
-          class="research-controls__workflow-card"
-        >
-          <div class="research-controls__workflow-row">
-            <div class="research-controls__workflow-index">{{ index + 1 }}</div>
-            <div class="research-controls__workflow-grid">
-              <select
-                :value="step.kind"
-                class="research-controls__select"
-                @change="
-                  updateWorkflowStepKind(
-                    index,
-                    ($event.target as HTMLSelectElement).value as 'core' | 'plugin'
-                  )
-                "
-              >
-                <option value="core">{{ t('lens.workflow.stepKindCore') }}</option>
-                <option value="plugin">{{ t('lens.workflow.stepKindTool') }}</option>
-              </select>
-              <select
-                :value="step.name"
-                class="research-controls__select"
-                @change="
-                  updateWorkflowStepSelection(index, ($event.target as HTMLSelectElement).value)
-                "
-              >
-                <option value="">{{ t('lens.workflow.stepSelectPlaceholder') }}</option>
-                <option
-                  v-for="item in workflowSourceOptions(step.kind)"
-                  :key="`${step.kind}-${getAcademicEntitySelectorValue(item)}`"
-                  :value="getAcademicEntitySelectorValue(item)"
-                >
-                  {{
-                    step.kind === 'plugin' ? getPluginDisplayLabel(item) : getCoreDisplayLabel(item)
-                  }}
-                </option>
-              </select>
-            </div>
-          </div>
-          <div v-if="step.displayName || step.name" class="research-controls__workflow-selection">
-            {{ step.displayName || step.name }}
-          </div>
-          <textarea
-            :value="step.args || ''"
-            rows="2"
-            class="research-controls__textarea"
-            :placeholder="t('lens.workflow.stepArgsPlaceholder')"
-            @input="updateWorkflowStepArgs(index, ($event.target as HTMLTextAreaElement).value)"
-          />
-          <div class="research-controls__workflow-actions">
             <button
+              v-for="entry in filteredCapabilityEntries"
+              :key="entry.value"
               type="button"
-              class="research-controls__advanced"
-              :disabled="index === 0 || workflowRunning"
-              @click="chatStore.moveAcademicWorkflowStep(index, -1)"
+              class="research-controls__option"
+              :data-capability="entry.value"
+              :aria-pressed="selectedCapability === entry.value"
+              :disabled="!canConfigureCapabilities"
+              @click="selectedCapability = entry.value"
             >
-              {{ t('lens.workflow.moveUp') }}
+              <span>{{ entry.label }}</span>
+              <SvgIcon class="research-entry-arrow" icon="ri:arrow-right-line" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              class="research-controls__advanced"
-              :disabled="index === workflowSteps.length - 1 || workflowRunning"
-              @click="chatStore.moveAcademicWorkflowStep(index, 1)"
+            <p
+              v-if="!filteredCapabilityEntries.length"
+              class="research-controls__empty"
+              role="status"
             >
-              {{ t('lens.workflow.moveDown') }}
-            </button>
-            <button
-              type="button"
-              class="research-controls__advanced"
-              :disabled="workflowRunning"
-              @click="chatStore.removeAcademicWorkflowStep(index)"
-            >
-              {{ t('lens.workflow.removeStep') }}
-            </button>
+              {{ t('lens.academicPanel.noSearchResults') }}
+            </p>
           </div>
-        </div>
-      </div>
-
-      <div v-if="!workflowEnabled" class="research-controls__advanced-trigger">
-        <button
-          type="button"
-          class="research-controls__advanced"
-          @click="showAdvanced = !showAdvanced"
-        >
-          {{
-            showAdvanced
-              ? t('lens.academicPanel.advancedCollapse')
-              : t('lens.academicPanel.advancedExpand')
-          }}
-        </button>
-      </div>
-
-      <div v-if="showAdvanced && !workflowEnabled" class="research-controls__advanced-panel">
-        <div class="research-controls__field">
-          <label>{{ props.groupLabel || t('lens.academicPanel.groupLabel') }}</label>
-          <select v-model="groupFilter" class="research-controls__select">
-            <option v-for="group in groupOptions" :key="group.value" :value="group.value">
-              {{ group.label }}
-            </option>
-          </select>
-        </div>
-        <textarea
-          v-model="pluginArgs"
-          :disabled="!isPluginArgsEnabled"
-          :placeholder="pluginArgsPlaceholder"
-          class="research-controls__textarea"
-          rows="4"
-          maxlength="300"
-        ></textarea>
-        <p class="research-controls__hint">{{ t('lens.academicPanel.customInstructionHint') }}</p>
+        </CapabilityScrollRegion>
       </div>
     </section>
   </div>
 </template>
 
 <style scoped>
+.research-controls__scroll-region {
+  /* Keep the full catalog discoverable while leaving the next section in view. */
+  --capability-list-max-height: clamp(196px, 38dvh, 420px);
+}
+
 .research-controls {
+  --controls-secondary: color-mix(in srgb, var(--text-main) 12%, var(--text-sub));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   padding: 0;
   border-radius: 0;
   border: none;
@@ -680,9 +483,15 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   box-shadow: none;
 }
 
+.research-controls__body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: inherit;
+}
+
 .research-controls__header,
-.research-controls__header-actions,
-.research-controls__group-row {
+.research-controls__header-actions {
   display: flex;
   align-items: center;
 }
@@ -690,23 +499,7 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
 .research-controls__header {
   justify-content: space-between;
   gap: 12px;
-}
-
-.research-controls__mode-switch,
-.research-controls__workflow-head,
-.research-controls__workflow-row,
-.research-controls__workflow-actions {
-  display: flex;
-  align-items: center;
-}
-
-.research-controls__mode-switch {
-  gap: 4px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 3px;
-  border-radius: 999px;
-  background: var(--surface-muted);
+  margin-inline: 8px;
 }
 
 .research-controls__header-actions {
@@ -714,320 +507,92 @@ const workflowSourceOptions = (kind: 'core' | 'plugin') =>
   align-self: flex-start;
 }
 
-.research-controls__eyebrow,
-.research-controls__workflow-label {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink-faint);
-}
-
 .research-controls__title {
-  margin: 2px 0 0;
-  font-size: 17px;
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: 20px;
   color: var(--text-main);
 }
 
-.research-controls__subtitle,
-.research-controls__workflow-desc,
-.research-controls__hint,
-.research-controls__idle {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text-sub);
-}
-
-.research-controls__toggle,
-.research-controls__close,
-.research-controls__advanced {
-  border: 1px solid transparent;
-  background: var(--surface-muted);
-  color: var(--text-main);
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease;
-}
-
-.research-controls__toggle,
-.research-controls__advanced {
-  display: inline-flex;
+.research-controls__access-notice {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  min-height: 44px;
-  padding: 0 16px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.research-controls__toggle--active {
-  background: var(--surface-card);
-  border-color: transparent;
-  color: var(--text-main);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
-.research-controls__close {
-  width: 44px;
-  height: 44px;
-  border-radius: 9999px;
-  font-size: 16px;
-}
-
-.research-controls__overview {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid var(--paper-border);
-  background: var(--surface-card);
-}
-
-.research-controls__overview-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.research-controls__overview-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 11px;
-  border-radius: 999px;
-  border: 1px solid var(--paper-border);
-  background: var(--surface-muted);
-  color: var(--text-sub);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.research-controls__workflow-builder {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.research-controls__workflow-head {
   justify-content: space-between;
-  gap: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-main);
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--academic-blue) 24%, var(--paper-border));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--academic-blue) 7%, var(--surface-card));
 }
 
-.research-controls__workflow-head-copy {
+.research-controls__access-notice--accent {
+  border-color: color-mix(in srgb, var(--academic-blue) 32%, var(--paper-border));
+}
+
+.research-controls__access-copy {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.research-controls__workflow-head-copy small {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-faint);
-}
-
-.research-controls__workflow-locked,
-.research-controls__workflow-card {
-  display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 10px;
-  border: 1px solid var(--paper-border);
-  border-radius: 16px;
-  background: var(--surface-card);
-  padding: 14px;
+  gap: 3px;
 }
 
-.research-controls__workflow-locked {
-  color: var(--text-sub);
+.research-controls__access-copy strong {
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
-.research-controls__workflow-row {
-  align-items: flex-start;
-  gap: 10px;
+.research-controls__access-copy span {
+  color: var(--controls-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
-.research-controls__workflow-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: var(--btn-bg-primary);
+.research-controls__access-action {
+  flex: none;
+  min-height: max(44px, var(--control-height));
+  padding: 0 12px;
+  border: 1px solid var(--academic-blue);
+  border-radius: var(--radius-control);
+  background: var(--academic-blue);
   color: var(--btn-text-primary);
   font-size: 12px;
   font-weight: 600;
-  flex-shrink: 0;
 }
 
-.research-controls__workflow-grid {
-  display: grid;
-  flex: 1;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: 8px;
+.research-controls__close {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--controls-secondary);
+  transition: background-color 160ms ease, color 160ms ease;
 }
 
-.research-controls__workflow-actions {
-  flex-wrap: wrap;
-  gap: 8px;
+.research-controls__close {
+  width: max(44px, var(--control-height));
+  height: max(44px, var(--control-height));
+  border-radius: var(--radius-control);
+  font-size: 16px;
 }
 
-.research-controls__workflow-selection {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-main);
-  font-weight: 600;
-}
-
-.research-controls__overview-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.research-controls__overview-row strong {
-  color: var(--text-main);
-  font-weight: 600;
-  text-align: right;
-}
-
-.research-controls__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.research-controls__field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.research-controls__field label {
-  font-size: 13px;
-  color: var(--ink-faint);
-}
-
-.research-controls__select,
-.research-controls__textarea {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--paper-border);
-  background: var(--surface-card);
-  color: var(--text-main);
-  padding: 10px 12px;
-  font-size: 13px;
-  outline: none;
-}
-
-.research-controls__textarea {
-  min-height: 88px;
-  border-radius: 12px;
-  resize: vertical;
-}
-
-.research-controls__select:focus,
-.research-controls__textarea:focus {
-  border-color: rgba(53, 55, 64, 0.16);
-}
-
-.research-controls button:focus-visible,
-.research-controls select:focus-visible,
-.research-controls textarea:focus-visible {
-  outline: 3px solid var(--focus-ring);
+.research-controls button:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
-.research-controls__advanced-trigger {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.research-controls__select {
-  min-height: 44px;
-  line-height: 1.2;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%23676767' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 14px;
-  padding-right: 36px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56);
-}
-
-.research-controls__toggle:hover,
-.research-controls__advanced:hover,
 .research-controls__close:hover {
   border-color: transparent;
-  background: var(--btn-bg-ghost-active);
-  color: var(--text-main);
-}
-
-.research-controls__workflow,
-.research-controls__advanced-panel,
-.research-controls__idle {
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--paper-border);
-  background: var(--surface-card);
-}
-
-.research-controls__workflow-title {
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-html.dark .research-controls__select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3.5 5.25L7 8.75L10.5 5.25' stroke='%2399A4B8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  box-shadow: none;
-}
-
-html.dark .research-controls__overview,
-html.dark .research-controls__workflow-locked,
-html.dark .research-controls__workflow-card,
-html.dark .research-controls__workflow,
-html.dark .research-controls__advanced-panel,
-html.dark .research-controls__idle {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  background: linear-gradient(
-    180deg,
-    rgba(18, 24, 34, 0.94) 0%,
-    rgba(14, 19, 28, 0.98) 100%
-  ) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015) !important;
-}
-
-html.dark .research-controls__overview-chip {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: rgba(238, 242, 248, 0.82) !important;
-}
-
-html.dark .research-controls__toggle--active {
-  background: rgba(255, 255, 255, 0.1) !important;
-}
-
-html.dark .research-controls__workflow-selection {
-  color: rgba(238, 242, 248, 0.92) !important;
+  background: var(--academic-surface);
+  color: var(--academic-accent-strong);
 }
 
 @media (max-width: 768px) {
+  .research-controls__scroll-region {
+    --capability-list-max-height: clamp(176px, 34dvh, 320px);
+  }
+
   .research-controls {
     gap: 12px;
     padding: 0;
@@ -1039,24 +604,143 @@ html.dark .research-controls__workflow-selection {
     align-items: center;
   }
 
-  .research-controls__header-actions,
-  .research-controls__grid {
-    width: 100%;
-  }
-
   .research-controls__header-actions {
+    flex: none;
+    align-self: center;
     justify-content: flex-end;
   }
 
-  .research-controls__grid {
-    grid-template-columns: 1fr;
+  .research-controls__access-notice {
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .research-controls__advanced,
-  .research-controls__toggle {
-    min-height: 40px;
+  .research-controls__access-action {
     width: 100%;
-    justify-content: center;
   }
 }
+
+.research-controls__list {
+  padding: 2px 0;
+  margin: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.research-controls__option {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  width: 100%;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-inline: 0;
+  padding: 8px 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-main);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.research-controls__option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.research-controls__option svg {
+  flex: none;
+}
+
+.research-controls__preview {
+  display: grid;
+}
+.research-controls__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.research-controls__category,
+.research-controls__search-toggle {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 12px;
+}
+.research-controls__search-toggle {
+  min-width: 44px;
+}
+.research-controls__category svg,
+.research-controls__search-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+.research-controls__search-toggle:hover {
+  background: var(--academic-surface);
+}
+.research-controls__empty {
+  margin: 8px;
+  color: var(--text-sub);
+  font-size: 13px;
+}
+
+.research-controls__option::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0 -8px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--academic-surface) 72%, var(--surface-card));
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+.research-controls__option[aria-pressed='true'] {
+  color: var(--academic-accent-strong);
+}
+.research-controls__option[aria-pressed='true']::before {
+  background: var(--academic-surface);
+  opacity: 1;
+}
+.research-controls__option:focus-visible::before {
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .research-controls__option:hover:not(:disabled)::before {
+    opacity: 1;
+  }
+}
+
+.research-controls__option:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.research-controls-frame--fill,
+.research-controls-frame--fill .research-controls {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+.research-controls-frame--fill .research-controls {
+  gap: 8px;
+}
+.research-controls-frame--fill .research-controls__body {
+  flex: 1;
+}
+
 </style>

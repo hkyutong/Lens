@@ -41,6 +41,14 @@ export class AcademicController {
     return this.academicService.pluginList(req);
   }
 
+  @Get('health')
+  @ApiOperation({ summary: 'Academic runtime readiness' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  academicHealth(@Query('model') model?: string, @Query('modelName') modelName?: string) {
+    return this.academicService.health(model, modelName);
+  }
+
   @Get('file')
   @ApiOperation({ summary: 'Academic file proxy' })
   @UseGuards(JwtAuthGuard)

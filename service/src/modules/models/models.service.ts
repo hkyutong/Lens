@@ -55,6 +55,12 @@ export class ModelsService {
     'modelLimits',
   ];
 
+  private isModelEnabled(modelInfo: any) {
+    if (!modelInfo) return false;
+    if (modelInfo.status === undefined || modelInfo.status === null) return true;
+    return Number(modelInfo.status) !== 0;
+  }
+
   private sanitizeModelPayload(params: Partial<SetModelDto>) {
     const source = (params || {}) as Record<string, any>;
     const payload: Record<string, any> = {};
@@ -176,7 +182,7 @@ export class ModelsService {
       // 遍历当前keyType下的所有模型
       for (const model of this.modelMaps[keyType]) {
         // 检查模型状态并比较modelOrder
-        if (model.status === true && model.modelOrder < minOrder) {
+        if (this.isModelEnabled(model) && model.modelOrder < minOrder) {
           minOrder = model.modelOrder;
           minOrderModel = model;
         }
@@ -307,7 +313,7 @@ export class ModelsService {
     Object.keys(cloneModelMaps).forEach(key => {
       // 对每个模型进行排序，同时过滤掉 status 为 false 的模型
       cloneModelMaps[key] = cloneModelMaps[key]
-        .filter(t => t.status === true) // 只保留 status 为 true 的模型
+        .filter(t => this.isModelEnabled(t)) // 统一兼容数据库返回的 0/1 与 boolean 状态
         .sort((a, b) => a.modelOrder - b.modelOrder);
       cloneModelMaps[key] = Array.from(
         cloneModelMaps[key]

@@ -4,7 +4,6 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
-  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -12,6 +11,11 @@ import { AuthGuard } from '@nestjs/passport';
 import * as jwt from 'jsonwebtoken';
 
 import { AuthService } from '../../modules/auth/auth.service';
+
+const authGuardLogger = {
+  debug: (_message?: unknown, _context?: string) => undefined,
+  error: (_message?: unknown, _context?: string) => undefined,
+};
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -66,7 +70,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       const decoded = await jwt.verify(token, secret);
       return decoded;
     } catch (error) {
-      Logger.debug('用户信息校验失败', 'JwtAuthGuard');
+      authGuardLogger.debug('用户信息校验失败', 'JwtAuthGuard');
       throw new HttpException(
         '亲爱的用户,请登录后继续操作,我们正在等您的到来！',
         HttpStatus.UNAUTHORIZED,
@@ -76,7 +80,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   handleRequest(err, user, info) {
     if (err || !user) {
-      console.log('err: ', err);
+      authGuardLogger.error('认证守卫请求失败', 'JwtAuthGuard');
       throw err || new UnauthorizedException();
     }
     return user;

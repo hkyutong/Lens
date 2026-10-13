@@ -3,6 +3,24 @@ export const riIconCollection = {
   width: 24,
   height: 24,
   icons: {
+    'add-line': {
+      body: '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12 5v14M5 12h14"/>',
+    },
+    'close-line': {
+      body: '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m6 6 12 12M6 18 18 6"/>',
+    },
+    'folder-open-line': {
+      body: '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 8V5h6l2 2h10v4M3 8v12h16l3-9H6z"/>',
+    },
+    'user-settings-line': {
+      body: '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-2a6 6 0 0 1 10-4.5M18 13v8m-3-6h6m-6 4h6"/></g>',
+    },
+    'logout-box-r-line': {
+      body: '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M10 4H4v16h6m-1-8h12m-4-4 4 4-4 4"/>',
+    },
+    'arrow-right-line': {
+      body: '<path fill="currentColor" d="m16.172 11l-5.364-5.364l1.414-1.414L20 12l-7.778 7.778l-1.414-1.414L16.172 13H4v-2z"/>',
+    },
     'award-line': {
       body: '<path fill="currentColor" d="M17 15.245v6.872a.5.5 0 0 1-.757.429L12 20l-4.243 2.546a.5.5 0 0 1-.757-.43v-6.87a8 8 0 1 1 10 0M9 16.42v3.049l3-1.8l3 1.8v-3.05A8 8 0 0 1 12 17a8 8 0 0 1-3-.581M12 15a6 6 0 1 0 0-12a6 6 0 0 0 0 12"/>',
     },
@@ -42,6 +60,9 @@ export const riIconCollection = {
     'file-text-line': {
       body: '<path fill="currentColor" d="M21 8v12.993A1 1 0 0 1 20.007 22H3.993A.993.993 0 0 1 3 21.008V2.992C3 2.455 3.449 2 4.002 2h10.995zm-2 1h-5V4H5v16h14zM8 7h3v2H8zm0 4h8v2H8zm0 4h8v2H8z"/>',
     },
+    'git-compare-line': {
+      body: '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><path d="M5 7v9a3 3 0 0 0 3 3h5m-3-3l3 3-3 3M19 17V8a3 3 0 0 0-3-3h-5m3-3l-3 3 3 3"/></g>',
+    },
     'inbox-line': {
       body: '<path fill="currentColor" d="M21 3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM7.416 14H4v5h16v-5h-3.416a5.001 5.001 0 0 1-9.168 0M20 5H4v7h5a3 3 0 1 0 6 0h5z"/>',
     },
@@ -57,6 +78,9 @@ export const riIconCollection = {
     'pie-chart-line': {
       body: '<path fill="currentColor" d="M9 2.458v2.124A8.003 8.003 0 0 0 12 20a8 8 0 0 0 7.419-5h2.123c-1.274 4.057-5.064 7-9.542 7c-5.523 0-10-4.477-10-10c0-4.478 2.943-8.268 7-9.542M12 2c5.523 0 10 4.477 10 10q0 .507-.05 1H11V2.05Q11.493 2 12 2m1 2.062V11h6.938A8.004 8.004 0 0 0 13 4.062"/>',
     },
+    'presentation-line': {
+      body: '<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18M4 3v12h16V3M12 15v6m-4 0l4-4 4 4M8 11l3-3 2 2 3-4"/></g>',
+    },
     'question-line': {
       body: '<path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10s-4.477 10-10 10m0-2a8 8 0 1 0 0-16a8 8 0 0 0 0 16m-1-5h2v2h-2zm2-1.645V14h-2v-1.5a1 1 0 0 1 1-1a1.5 1.5 0 1 0-1.471-1.794l-1.962-.393A3.501 3.501 0 1 1 13 13.355"/>',
     },
@@ -71,6 +95,9 @@ export const riIconCollection = {
     },
     'speed-line': {
       body: '<path fill="currentColor" d="m12 13.333l-9.223 6.149A.5.5 0 0 1 2 19.066V4.934a.5.5 0 0 1 .777-.416L12 10.667V4.934a.5.5 0 0 1 .777-.416l10.599 7.066a.5.5 0 0 1 0 .832l-10.599 7.066a.5.5 0 0 1-.777-.416zM10.394 12L4 7.737v8.526zM14 7.737v8.526L20.394 12z"/>',
+    },
+    'sticky-note-line': {
+      body: '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 3h16a1 1 0 0 1 1 1v11l-6 6H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm17 12h-6v6M7 8h10M7 12h6"/>',
     },
     'test-tube-line': {
       body: '<path fill="currentColor" d="M17 2v2h-1v14a4 4 0 0 1-8 0V4H7V2zm-3 8h-4v8a2 2 0 1 0 4 0zm-1 5a1 1 0 1 1 0 2a1 1 0 0 1 0-2m-2-3a1 1 0 1 1 0 2a1 1 0 0 1 0-2m3-8h-4v4h4z"/>',

@@ -99,6 +99,17 @@ export const canUseAcademicPlugin = (
 
   const plusAllowed =
     label.includes(normalizeAcademicAccessName('论文速读')) ||
+    [
+      'Lens｜研究设计体检',
+      'Lens｜审稿意见应答',
+      'Lens｜文献检索策略',
+      'Lens｜整理研究笔记',
+      'Lens｜比较多篇论文',
+      'Lens｜生成教学材料',
+      'Lens｜研究问题拆解',
+      'Lens｜文献综述工作台',
+      'Lens｜研究方案设计',
+    ].some(name => label.includes(normalizeAcademicAccessName(name))) ||
     (label.includes('arxiv') &&
       (label.includes(normalizeAcademicAccessName('摘要')) ||
         label.includes(normalizeAcademicAccessName('下载')) ||

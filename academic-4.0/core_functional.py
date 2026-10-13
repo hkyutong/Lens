@@ -60,7 +60,10 @@ def get_core_functions():
                         r"Each row must cover only one minimal edit unit, preferably one short sentence or one short clause. "
                         r"Do not merge multiple sentences or multiple edits into one row. "
                         r"Keep every table cell short and quote only the necessary fragment instead of copying a whole long paragraph. "
-                        r"The third column must explain that single edit in concise Chinese." + "\n\n",
+                        r"The third column must explain that single edit in concise Chinese. "
+                        r"Before finalizing, perform a strict grammar pass for subject-verb agreement, tense, number, articles and countability. "
+                        r"Never leave a malformed construction such as 'we investigates' or 'plant grow' in the revised text: use 'we investigate' and the grammatically correct form 'plant growth' or 'plants grow' according to the original meaning. "
+                        r"Preserve every factual claim, including statements that an experiment has not started." + "\n\n",
             "Suffix":   r"",
         },
 

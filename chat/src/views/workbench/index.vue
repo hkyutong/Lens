@@ -65,7 +65,11 @@ async function createNewChatGroup() {
 
 onMounted(() => {
   // 如果当前路径不是根路径，则重定向到根路径
-  if (window.location.pathname !== '/' && !window.location.pathname.includes('.')) {
+  if (
+    window.location.pathname !== '/' &&
+    window.location.pathname !== '/pricing' &&
+    !window.location.pathname.includes('.')
+  ) {
     window.history.replaceState({}, document.title, '/')
   }
 })
@@ -75,6 +79,13 @@ const handleGuestClickCapture = (event: MouseEvent) => {
   const target = event.target as HTMLElement | null
   if (!target) return
   if (target.closest('.academic-login')) return
+  if (
+    target.closest(
+      '.research-theme-button, .research-chip-button, .language-selector-trigger, .research-language-menu, .workspace-sidebar-toggle'
+    )
+  ) {
+    return
+  }
   const clickable = target.closest(
     'button, [role="button"], .btn, .btn-pill, .btn-primary, .btn-secondary, .btn-icon, a'
   )

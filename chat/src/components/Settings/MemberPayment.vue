@@ -309,13 +309,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="overflow-y-auto custom-scrollbar p-2" :class="{ 'max-h-[70vh]': !isMobile }">
+  <div class="research-payment overflow-y-auto custom-scrollbar p-2" :class="{ 'max-h-[70vh]': !isMobile }">
     <div
-      class="mb-4 rounded-[24px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-soft)]"
+      class="mb-4 rounded-[var(--radius-panel)] border border-[var(--paper-border)] bg-[var(--surface-card)] p-4 "
     >
       <!-- 卡片标题 -->
       <div class="mb-4 flex items-center border-b border-[var(--paper-border)] pb-2">
-        <button @click="backToMainView" class="btn-icon btn-md mr-2">
+        <button @click="backToMainView" class="btn-icon btn-md mr-2" :aria-label="t('lens.account.back')">
           <ArrowLeft size="18" />
         </button>
         <div class="text-base font-semibold text-[var(--text-main)]">
@@ -325,7 +325,7 @@ onBeforeUnmount(() => {
 
       <div class="p-2">
         <div
-          class="rounded-[22px] border border-[var(--paper-border)] bg-[var(--surface-panel)] p-4"
+          class="rounded-[var(--radius-panel)] border border-[var(--paper-border)] bg-[var(--surface-panel)] p-4"
         >
           <div class="flex flex-wrap items-baseline justify-between gap-3">
             <div>
@@ -337,48 +337,48 @@ onBeforeUnmount(() => {
                   ${{ formatCurrency(displayAmount) }}
                 </span>
                 <span class="text-sm text-[var(--text-sub)]">
-                  USD {{ orderInfo.billingCycle === 'annual' ? '/年' : '/月' }}
+                  USD {{ orderInfo.billingCycle === 'annual' ? t('lens.payment.perYear') : t('lens.payment.perMonth') }}
                 </span>
               </div>
             </div>
             <div
               class="rounded-full border border-[var(--paper-border)] bg-[var(--surface-card)] px-3 py-1 text-sm font-medium text-[var(--text-main)]"
             >
-              {{ orderInfo.billingCycle === 'annual' ? '按年支付' : '按月支付' }}
+              {{ orderInfo.billingCycle === 'annual' ? t('lens.payment.annual') : t('lens.payment.monthly') }}
             </div>
           </div>
 
           <div class="mt-4 grid gap-2 text-sm text-[var(--text-sub)]">
             <div class="flex justify-between gap-4">
-              <span class="font-medium">套餐</span>
+              <span class="font-medium">{{ t('lens.payment.plan') }}</span>
               <span class="text-[var(--text-main)]">{{ orderInfo.pkgInfo?.name }}</span>
             </div>
             <div class="flex justify-between gap-4">
-              <span class="font-medium">计费</span>
+              <span class="font-medium">{{ t('lens.payment.cycle') }}</span>
               <span class="text-[var(--text-main)]">{{
-                orderInfo.billingCycle === 'annual' ? '一年' : '一个月'
+                orderInfo.billingCycle === 'annual' ? t('lens.payment.year') : t('lens.payment.month')
               }}</span>
             </div>
             <div class="flex justify-between gap-4">
-              <span class="font-medium">有效期</span>
+              <span class="font-medium">{{ t('lens.payment.validity') }}</span>
               <span class="text-[var(--text-main)]">{{
-                billingInfo?.days > 0 ? `${billingInfo.days} 天` : '长期权益'
+                billingInfo?.days > 0 ? t('lens.payment.days', { days: billingInfo.days }) : t('lens.payment.ongoing')
               }}</span>
             </div>
             <div class="flex justify-between gap-4">
-              <span class="font-medium">折合每月</span>
+              <span class="font-medium">{{ t('lens.payment.equivalent') }}</span>
               <span class="text-[var(--text-main)]"
-                >${{ formatCurrency(displayMonthlyEquivalent) }} USD/月</span
+                >${{ formatCurrency(displayMonthlyEquivalent) }} USD{{ t('lens.payment.perMonth') }}</span
               >
             </div>
             <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
-              <span class="font-medium">按月购买</span>
+              <span class="font-medium">{{ t('lens.payment.monthlyTotal') }}</span>
               <span class="line-through text-[var(--ink-faint)]">
-                ${{ formatCurrency(displayOriginalTotal) }} USD/年
+                ${{ formatCurrency(displayOriginalTotal) }} USD{{ t('lens.payment.perYear') }}
               </span>
             </div>
             <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
-              <span class="font-medium">节省</span>
+              <span class="font-medium">{{ t('lens.payment.savings') }}</span>
               <span class="font-semibold text-emerald-600 dark:text-emerald-300">
                 ${{ formatCurrency(displaySaveAmount) }} USD
               </span>
@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
               </div>
               <div
                 v-if="qrCodeloading"
-                class="w-[240px] h-[240px] rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse"
+                class="w-[200px] h-[200px] rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse"
               ></div>
 
               <!-- epay -->
@@ -412,14 +412,14 @@ onBeforeUnmount(() => {
                   payPlatform === 'epay' && !qrCodeloading && !redirectloading && !isRedirectPay
                 "
                 :value="url_qrcode"
-                :size="240"
+                :size="isMobile ? 200 : 240"
               />
               <QRCode
                 v-if="
                   payPlatform === 'dulu' && !qrCodeloading && !redirectloading && !isRedirectPay
                 "
                 :value="url_qrcode"
-                :size="240"
+                :size="isMobile ? 200 : 240"
               />
               <img
                 v-if="payType === 'wxpay' && !qrCodeloading && !isRedirectPay"
@@ -436,7 +436,7 @@ onBeforeUnmount(() => {
               <QRCode
                 v-if="payPlatform === 'wechat' && !qrCodeloading"
                 :value="url_qrcode"
-                :size="240"
+                :size="isMobile ? 200 : 240"
               />
 
               <div
@@ -452,7 +452,7 @@ onBeforeUnmount(() => {
                 <button
                   v-if="isRedirectPay"
                   type="button"
-                  class="inline-flex h-12 items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-8 text-[15px] font-medium text-[var(--btn-text-primary)] shadow-[var(--shadow-soft)] transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                  class="inline-flex h-12 items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-8 text-[15px] font-medium text-[var(--btn-text-primary)]  transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="redirectloading"
                   @click="handleRedPay"
                 >
@@ -463,25 +463,27 @@ onBeforeUnmount(() => {
               <!-- dulu -->
               <!-- <iframe
                 v-if="payPlatform === 'dulu' && !redirectloading"
-                class="w-[280px] h-[280px] scale-90"
+                class="max-w-full w-[280px] h-[280px]"
                 :src="url_qrcode"
                 frameborder="0"
+                :title="t('lens.payment.qrCode')"
               /> -->
 
               <!-- hupi -->
               <iframe
                 v-if="payPlatform === 'hupi' && !redirectloading"
-                class="w-[280px] h-[280px] scale-90"
+                class="max-w-full w-[280px] h-[280px]"
                 :src="url_qrcode"
                 frameborder="0"
+                :title="t('lens.payment.qrCode')"
               />
 
               <!-- ltzf -->
               <img
                 v-if="payPlatform === 'ltzf' && !redirectloading"
                 :src="url_qrcode"
-                class="w-[280px] h-[280px] scale-90"
-                alt="QRCode"
+                class="max-w-full w-[280px] h-[280px]"
+                :alt="t('lens.payment.qrCode')"
               />
             </div>
             <span v-if="!isRedirectPay" class="flex items-center justify-center text-lg">
@@ -490,13 +492,13 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex flex-col" :class="[isMobile ? 'w-full ' : ' ml-10 w-[200] ']">
             <div
-              class="flex items-center justify-center mt-6 w-full font-bold text-sm"
+              class="flex flex-wrap items-center justify-center gap-1 mt-6 w-full font-medium text-sm"
               :class="[isMobile ? 'mb-2' : 'mb-10']"
-              style="white-space: nowrap"
+
             >
               <span>{{ t('pay.completePaymentWithin') }}</span>
-              <span class="inline-block w-16 text-primary-500 text-center">
-                {{ remainingTime }}秒
+              <span class="inline-block text-[var(--academic-blue)] text-center">
+                {{ t('lens.payment.remaining', { seconds: remainingTime }) }}
               </span>
               <span>{{ t('pay.timeToCompletePayment') }}</span>
             </div>
@@ -518,11 +520,11 @@ onBeforeUnmount(() => {
                   name="payment-method"
                   :value="pay.value"
                   v-model="payType"
-                  class="h-4 w-4 border-[var(--paper-border)] text-[var(--text-main)] focus:ring-black/20"
+                  class="lens-checkbox"
                 />
                 <label
                   :for="pay.value"
-                  class="ml-3 block text-sm font-medium leading-6 text-[var(--text-main)]"
+                  class="ml-3 flex min-h-[44px] items-center text-sm font-medium leading-6 text-[var(--text-main)]"
                 >
                   <img class="mr-2 inline-block h-4 object-contain" :src="pay.icon" alt="" />
                   {{ pay.label }}

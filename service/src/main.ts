@@ -262,10 +262,11 @@ async function bootstrap() {
   }
 
   const PORT = process.env.PORT || 3000;
+  const BIND_HOST = String(process.env.LENS_BIND_HOST || '').trim() || undefined;
 
-  const server = await app.listen(PORT, () => {
+  const server = await app.listen(PORT, BIND_HOST, () => {
     console.log('\n======================================');
-    console.log(`  服务启动成功: http://localhost:${PORT}`);
+    console.log(`  服务启动成功: http://${BIND_HOST || 'localhost'}:${PORT}`);
     console.log('======================================\n');
   });
 

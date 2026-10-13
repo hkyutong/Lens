@@ -1,7 +1,7 @@
 import { UserStatusEnum, UserStatusErrMsg } from '@/common/constants/user.constant';
 import { createRandomCode, createRandomUid, getClientIp } from '@/common/utils';
 import { GlobalConfigService } from '@/modules/globalConfig/globalConfig.service';
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -18,6 +18,15 @@ import { VerificationService } from './../verification/verification.service';
 import { UserLoginDto } from './dto/authLogin.dto';
 import { UpdatePassByOtherDto } from './dto/updatePassByOther.dto';
 import { UpdatePasswordDto } from './dto/updatePassword.dto';
+
+// Authentication fields are sensitive by definition. Keep the call sites' control flow
+// intact while preventing usernames, contacts, identifiers, IPs, fingerprints, codes,
+// tokens, and error payloads from reaching a logger.
+const authLogger = {
+  debug: (_message?: unknown, _context?: string) => undefined,
+  log: (_message?: unknown, _context?: string) => undefined,
+  error: (_message?: unknown, _context?: string) => undefined,
+};
 
 @Injectable()
 export class AuthService {
@@ -44,23 +53,23 @@ export class AuthService {
   }
 
   async login(user: UserLoginDto, req: Request): Promise<string> {
-    Logger.debug(`用户登录尝试，用户名: ${user.username}`, 'authService');
+    authLogger.debug(`用户登录尝试，用户名: ${user.username}`, 'authService');
 
     // 检查是否是验证码登录
     if (user.captchaId) {
-      Logger.debug(`检测到验证码登录，联系方式: ${user.username}`, 'authService');
+      authLogger.debug(`检测到验证码登录，联系方式: ${user.username}`, 'authService');
       return await this.loginWithCaptcha({ contact: user.username, code: user.captchaId }, req);
     }
 
     // 密码登录流程
     const u: UserEntity = await this.userService.verifyUserCredentials(user);
     if (!u) {
-      Logger.error(`登录失败: 用户凭证无效 - 用户名: ${user.username}`, 'authService');
+      authLogger.error(`登录失败: 用户凭证无效 - 用户名: ${user.username}`, 'authService');
       throw new HttpException('登录失败，用户凭证无效。', HttpStatus.UNAUTHORIZED);
     }
 
     const { username, id, email, role, openId, client, phone } = u;
-    Logger.debug(`用户${username}(ID: ${id})登录成功`, 'authService');
+    authLogger.debug(`用户${username}(ID: ${id})登录成功`, 'authService');
 
     // 保存登录IP
     const ip = getClientIp(req);
@@ -80,7 +89,7 @@ export class AuthService {
 
     // 保存令牌到Redis
     await this.redisCacheService.saveToken(id, token);
-    Logger.debug(`用户${username}(ID: ${id})登录完成，IP: ${ip}`, 'authService');
+    authLogger.debug(`用户${username}(ID: ${id})登录完成，IP: ${ip}`, 'authService');
 
     return token;
   }
@@ -93,7 +102,7 @@ export class AuthService {
     // 判断 contact 是邮箱还是手机号
     const isEmail = /\S+@\S+\.\S+/.test(contact);
     const isPhone = /^\d{10,}$/.test(contact); // 根据实际需求调整正则表达式
-    Logger.debug(`验证码登录 | 联系方式: ${contact}`, 'authService');
+    authLogger.debug(`验证码登录 | 联系方式: ${contact}`, 'authService');
 
     if (isEmail) {
       email = contact;
@@ -113,11 +122,11 @@ export class AuthService {
     if (savedCode) {
       // 验证码存在，检查是否匹配
       if (savedCode !== code) {
-        Logger.log(`验证码错误 | 联系方式: ${contact}`, 'authService');
+        authLogger.log(`验证码错误 | 联系方式: ${contact}`, 'authService');
         throw new HttpException('验证码错误', HttpStatus.BAD_REQUEST);
       }
 
-      Logger.debug(`验证码验证成功`);
+      authLogger.debug('验证码验证成功');
 
       // 验证码验证成功后，立即删除缓存中的验证码，避免重复使用
       await this.redisCacheService.del({ key: codeKey });
@@ -125,7 +134,7 @@ export class AuthService {
       // 处理用户登录
       return await this.processUserLogin(email, phone, contact, req);
     } else {
-      Logger.log(`验证码不存在或已过期 | 联系方式: ${contact}`, 'authService');
+      authLogger.log(`验证码不存在或已过期 | 联系方式: ${contact}`, 'authService');
       throw new HttpException('验证码不存在或已过期，请重新获取', HttpStatus.BAD_REQUEST);
     }
   }
@@ -142,7 +151,7 @@ export class AuthService {
 
     // 如果用户不存在，创建新用户
     if (!u) {
-      Logger.log(`创建新用户 | 联系方式: ${contact}`, 'authService');
+      authLogger.log(`创建新用户 | 联系方式: ${contact}`, 'authService');
 
       const tempUsername = this.buildTempUsername();
 
@@ -171,7 +180,7 @@ export class AuthService {
       u = await this.userService.createUser(newUser);
       await this.userService.assignSequentialUsername(u.id);
       u.username = `user${u.id}`;
-      Logger.log(`用户创建成功 | 用户ID: ${u.id}`, 'authService');
+      authLogger.log(`用户创建成功 | 用户ID: ${u.id}`, 'authService');
 
       // 为新用户添加初始余额
       await this.userBalanceService.addBalanceToNewUser(u.id);
@@ -201,7 +210,7 @@ export class AuthService {
 
     // 保存令牌到Redis
     await this.redisCacheService.saveToken(id, token);
-    Logger.log(`用户登录成功 | 用户ID: ${id} | 联系方式: ${contact}`, 'authService');
+    authLogger.log(`用户登录成功 | 用户ID: ${id} | 联系方式: ${contact}`, 'authService');
 
     return token;
   }
@@ -229,19 +238,19 @@ export class AuthService {
 
   async getInfo(req: Request) {
     const { id, role } = req.user;
-    Logger.debug(`获取用户信息 | 用户ID: ${id} | 角色: ${role}`, 'AuthService-getInfo');
+    authLogger.debug(`获取用户信息 | 用户ID: ${id} | 角色: ${role}`, 'AuthService-getInfo');
 
     // 记录请求头中的指纹
     if (req.headers.fingerprint) {
-      Logger.debug(`请求包含指纹头: ${req.headers.fingerprint}`, 'AuthService-getInfo');
+      authLogger.debug(`请求包含指纹头: ${req.headers.fingerprint}`, 'AuthService-getInfo');
     }
 
     try {
       const result = await this.userService.getUserInfo(id);
-      Logger.debug(`成功获取用户信息 | 用户ID: ${id}`, 'AuthService-getInfo');
+      authLogger.debug(`成功获取用户信息 | 用户ID: ${id}`, 'AuthService-getInfo');
       return result;
     } catch (error) {
-      Logger.error(`获取用户信息失败: ${error.message}`, 'AuthService-getInfo');
+      authLogger.error(`获取用户信息失败: ${error.message}`, 'AuthService-getInfo');
       throw error;
     }
   }
@@ -287,7 +296,7 @@ export class AuthService {
       throw new HttpException('登录状态无效，请重新登录', HttpStatus.UNAUTHORIZED);
     }
     await this.redisCacheService.invalidateTokens(userId, [token]);
-    Logger.debug(`用户退出登录并失效token | userId: ${userId}`, 'authService');
+    authLogger.debug(`用户退出登录并失效token | userId: ${userId}`, 'authService');
     return '退出登录成功';
   }
 
@@ -318,7 +327,7 @@ export class AuthService {
     // 判断 contact 是邮箱还是手机号
     const isEmail = /\S+@\S+\.\S+/.test(contact);
     const isPhone = /^\d{10,}$/.test(contact); // 根据实际需求调整正则表达式
-    Logger.debug(`发送验证码 | 联系方式: ${contact}`);
+    authLogger.debug(`发送验证码 | 联系方式: ${contact}`);
 
     if (!isEmail && !isPhone) {
       throw new HttpException('请提供有效的邮箱地址或手机号码。', HttpStatus.BAD_REQUEST);
@@ -354,7 +363,7 @@ export class AuthService {
             code: existingCode,
           },
         });
-        Logger.log(`重发验证码 | 邮箱: ${email}`, 'authService');
+        authLogger.log(`重发验证码 | 邮箱: ${email}`, 'authService');
         return `验证码发送成功、请填写验证码完成${isLogin ? '登录' : '注册'}！`;
       } else {
         // 如果没有现有验证码或验证码已过期，则生成新的验证码
@@ -366,9 +375,9 @@ export class AuthService {
               code: code,
             },
           });
-          Logger.log(`发送新验证码 | 邮箱: ${email}`, 'authService');
+          authLogger.log(`发送新验证码 | 邮箱: ${email}`, 'authService');
         } catch (error) {
-          Logger.error(`邮件发送失败: ${error.message}`, 'authService');
+          authLogger.error(`邮件发送失败: ${error.message}`, 'authService');
           throw new HttpException('验证码发送失败，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
         }
         await this.redisCacheService.set({ key, val: code }, 10 * 60); // 设置验证码600秒过期
@@ -378,7 +387,7 @@ export class AuthService {
       const messageInfo = { phone, code };
       await this.verificationService.sendPhoneCode(messageInfo);
       await this.redisCacheService.set({ key, val: code }, 10 * 60);
-      Logger.log(`发送验证码 | 手机号: ${phone}`, 'authService');
+      authLogger.log(`发送验证码 | 手机号: ${phone}`, 'authService');
       return `验证码发送成功、请填写验证码完成${isLogin ? '登录' : '注册'}！`;
     }
   }
@@ -390,7 +399,7 @@ export class AuthService {
     const code = createRandomCode();
     // 判断 contact 是邮箱还是手机号
     const isPhone = /^\d{10,}$/.test(phone); // 根据实际需求调整正则表达式
-    Logger.debug(`发送手机验证码 | 手机号: ${phone}`);
+    authLogger.debug(`发送手机验证码 | 手机号: ${phone}`);
 
     if (!isPhone) {
       throw new HttpException('请提供有效的手机号码。', HttpStatus.BAD_REQUEST);
@@ -418,7 +427,7 @@ export class AuthService {
     const messageInfo = { phone, code };
     await this.redisCacheService.set({ key, val: code }, 10 * 60);
     await this.verificationService.sendPhoneCode(messageInfo);
-    Logger.log(`发送验证码 | 手机号: ${phone}`, 'authService');
+    authLogger.log(`发送验证码 | 手机号: ${phone}`, 'authService');
 
     return `验证码发送成功、请填写验证码完成${isLogin === false ? '注册' : '验证/登录'}！`;
   }
@@ -438,7 +447,7 @@ export class AuthService {
   }
 
   async verifyIdentity(req: Request, body) {
-    Logger.debug('开始实名认证流程');
+    authLogger.debug('开始实名认证流程');
     const { name, idCard } = body;
 
     const { id } = req.user;
@@ -448,7 +457,7 @@ export class AuthService {
       const result = await this.verificationService.verifyIdentity(body);
 
       // 输出验证结果到日志
-      Logger.debug(`实名认证结果: ${result}`);
+    authLogger.debug(`实名认证结果: ${result}`);
 
       // 检查验证结果
       if (!result) {
@@ -459,13 +468,13 @@ export class AuthService {
       return '认证成功';
     } catch (error) {
       // 处理可能的错误并记录错误信息
-      Logger.error('验证过程出现错误', error);
+      authLogger.error('验证过程出现错误', error);
       throw new HttpException('认证失败，请检查相关信息', HttpStatus.BAD_REQUEST);
     }
   }
 
   async verifyPhoneIdentity(req: Request, body) {
-    Logger.debug('开始手机号认证流程');
+    authLogger.debug('开始手机号认证流程');
     const { phone, username, password, code } = body;
     const { id } = req.user;
 
@@ -473,17 +482,17 @@ export class AuthService {
     const nameSpace = this.globalConfigService.getNamespace();
     const key = `${nameSpace}:CODE:${phone}`;
     const redisCode = await this.redisCacheService.get({ key });
-    Logger.debug(`Retrieved redisCode for ${phone}: ${redisCode}`);
+    authLogger.debug(`Retrieved redisCode for ${phone}: ${redisCode}`);
     if (code === '') {
       throw new HttpException('请输入验证码', HttpStatus.BAD_REQUEST);
     }
     if (!redisCode) {
-      Logger.log(`验证码过期: ${phone}`, 'authService');
+      authLogger.log(`验证码过期: ${phone}`, 'authService');
       throw new HttpException('验证码已过期，请重新发送！', HttpStatus.BAD_REQUEST);
     }
 
     if (code !== redisCode) {
-      Logger.log(
+      authLogger.log(
         `验证码错误: ${phone} 输入的验证码: ${code}, 期望的验证码: ${redisCode}`,
         'authService',
       );
@@ -504,7 +513,7 @@ export class AuthService {
       return '认证成功';
     } catch (error) {
       // 处理可能的错误并记录错误信息
-      Logger.error('验证过程出现错误', error);
+      authLogger.error('验证过程出现错误', error);
       throw new HttpException('身份验证错误，请检查相关信息', HttpStatus.BAD_REQUEST);
     }
   }

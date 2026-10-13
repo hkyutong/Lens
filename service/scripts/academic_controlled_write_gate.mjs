@@ -1,3 +1,5 @@
+import { decodeJwtSubject, successEnvelope, responseData, parseNdjson } from './academic_gate_protocol.mjs';
+import { resolveControlledWriteActor } from './academic_write_identity.mjs';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -6,40 +8,22 @@ const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 const WRITE_CONFIRMATION = 'CONFIRM_LENS_ACADEMIC_TEST_WRITES';
 const RESIDUE_CONFIRMATION = 'CONFIRM_LENS_ACADEMIC_UPLOAD_AND_SHARE_RESIDUE';
 
-const responseData = body => body?.data;
-const successEnvelope = body =>
-  body?.success === true || body?.code === 200 || body?.status === 200;
 
-const decodeJwtSubject = token => {
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-    return Number(payload.id || payload.sub || 0);
-  } catch (_error) {
-    return 0;
-  }
-};
+
+
+
 
 const normalizeBalance = data => ({
   sumModel3Count: Number(data?.sumModel3Count || 0),
   useModel3Count: Number(data?.useModel3Count || 0),
+  useModel3Token: Number(data?.useModel3Token || 0),
   sumModel4Count: Number(data?.sumModel4Count || 0),
   useModel4Count: Number(data?.useModel4Count || 0),
+  useModel4Token: Number(data?.useModel4Token || 0),
   packageId: Number(data?.packageId || 0),
 });
 
-const parseNdjson = text => {
-  const events = [];
-  for (const line of String(text || '').split(/\r?\n/)) {
-    const trimmed = line.trim().replace(/^data:\s*/i, '');
-    if (!trimmed || trimmed === '[DONE]') continue;
-    try {
-      events.push(JSON.parse(trimmed));
-    } catch (_error) {
-      events.push({ content: trimmed });
-    }
-  }
-  return events;
-};
+
 
 const referenceFingerprint = value =>
   crypto
@@ -145,7 +129,12 @@ export async function runAcademicControlledWriteGate({
 
   try {
     const info = await request('/auth/getInfo');
-    const actualUserId = Number(info.body?.data?.userInfo?.id || 0);
+    const infoData = responseData(info.body);
+    const infoUser = infoData?.userInfo ?? infoData;
+    const actualUserId = resolveControlledWriteActor(infoUser, expectedUserId, {
+      publicIdentity: env.LENS_ACADEMIC_EXPECTED_PUBLIC_USER_ID,
+      username: env.LENS_ACADEMIC_EXPECTED_USERNAME,
+    });
     addStep('测试用户身份', info.response.ok && actualUserId === expectedUserId, {
       userIdMatched: actualUserId === expectedUserId,
     });
@@ -226,14 +215,18 @@ export async function runAcademicControlledWriteGate({
     const charged =
       balanceAfter.sumModel3Count < balanceBefore.sumModel3Count ||
       balanceAfter.useModel3Count > balanceBefore.useModel3Count ||
+      balanceAfter.useModel3Token > balanceBefore.useModel3Token ||
       balanceAfter.sumModel4Count < balanceBefore.sumModel4Count ||
-      balanceAfter.useModel4Count > balanceBefore.useModel4Count;
+      balanceAfter.useModel4Count > balanceBefore.useModel4Count ||
+      balanceAfter.useModel4Token > balanceBefore.useModel4Token;
     const unchanged = JSON.stringify(balanceBefore) === JSON.stringify(balanceAfter);
     const accountingDirectionValid =
       balanceAfter.sumModel3Count <= balanceBefore.sumModel3Count &&
       balanceAfter.useModel3Count >= balanceBefore.useModel3Count &&
+      balanceAfter.useModel3Token >= balanceBefore.useModel3Token &&
       balanceAfter.sumModel4Count <= balanceBefore.sumModel4Count &&
       balanceAfter.useModel4Count >= balanceBefore.useModel4Count &&
+      balanceAfter.useModel4Token >= balanceBefore.useModel4Token &&
       balanceAfter.packageId === balanceBefore.packageId;
     const matchesExpectation = expectedDeduction === 'charged' ? charged : unchanged;
     const billingPassed =

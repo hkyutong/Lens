@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import { useNativeDialog } from '@/hooks/useNativeDialog'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
 import { useAuthStore } from '@/store'
 import { Close } from '@icon-park/vue-next'
 import { defineAsyncComponent, ref } from 'vue'
+import yutoGptLogo from '@/assets/yutogpt-logo.svg'
 
 const Email = defineAsyncComponent(() => import('./Email.vue'))
 
-defineProps<Props>()
+const props = defineProps<Props>()
+const dialogRef = ref<HTMLDialogElement | null>(null)
+useNativeDialog(dialogRef, () => props.visible)
 const authStore = useAuthStore()
 const { isMobile } = useBasicLayout()
 // 当前登录类型：wechat(微信登录), password(密码登录), captcha(验证码登录)
@@ -26,29 +30,32 @@ function changeLoginType(type: string) {
 </script>
 
 <template>
-  <div v-if="visible" class="academic-login fixed inset-0 z-50 flex items-center justify-center">
+  <dialog v-if="visible" ref="dialogRef" class="lens-dialog academic-login flex items-center justify-center"
+    :aria-label="t('lens.login.title')" @cancel.prevent="authStore.setLoginDialog(false)">
     <div
-      class="academic-login-card w-full flex flex-col relative"
+      class="academic-login-card flex flex-col relative"
       :class="{
         'w-[90vw] max-w-[360px] px-5 py-8': isMobile,
-        'max-w-[420px] px-10 py-10': !isMobile,
+        'w-full max-w-[420px] px-10 py-10': !isMobile,
       }"
     >
       <button
         @click="authStore.setLoginDialog(false)"
-        class="btn-icon btn-sm absolute top-5 right-5 z-30 text-gray-300 hover:text-white"
+        type="button"
+        class="academic-login-close absolute top-5 right-5 z-30"
         :aria-label="t('lens.header.close')"
       >
-        <Close theme="outline" size="18" />
+        <Close theme="outline" size="16" />
       </button>
 
       <div class="flex-1 flex flex-col items-center justify-center">
         <div class="mb-8 text-center">
           <div class="flex items-center justify-center mb-4">
-            <div class="academic-login-mark" aria-hidden="true">L</div>
+            <div class="academic-login-brand">
+              <img :src="yutoGptLogo" alt="Lens" />
+            </div>
           </div>
-          <div class="text-xl font-semibold tracking-wide">{{ t('lens.login.title') }}</div>
-          <div class="text-sm text-gray-500 mt-2">{{ t('lens.login.subtitle') }}</div>
+          <div class="academic-login-title">{{ t('lens.login.title') }}</div>
         </div>
         <!-- 登录组件区域 -->
         <div class="w-full flex-1 flex flex-col overflow-hidden">
@@ -59,7 +66,7 @@ function changeLoginType(type: string) {
         </div>
       </div>
     </div>
-  </div>
+  </dialog>
 </template>
 
 <style scoped>
@@ -75,77 +82,91 @@ function changeLoginType(type: string) {
   border: 1px solid var(--paper-border);
   box-shadow: var(--dialog-shadow);
   min-height: auto;
-  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
 }
 
-.academic-login-mark {
+.academic-login-brand {
+  display: inline-flex;
+  align-items: center;
+}
+
+.academic-login-brand img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  filter: var(--brand-logo-filter);
+}
+
+.academic-login-title {
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.academic-login-close {
   display: grid;
-  width: 42px;
-  height: 42px;
   place-items: center;
-  border: 1px solid var(--academic-border);
-  border-radius: 8px;
-  background: var(--academic-blue);
-  color: #fff;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 22px;
-  font-weight: 700;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  width: 44px;
+  height: 44px;
+  color: var(--text-sub);
 }
 
-.academic-tab-group {
-  display: grid;
-  grid-auto-flow: column;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+.academic-login-close:hover {
+  color: var(--text-main);
 }
 
-.academic-tab {
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.6);
-  transition: all 0.2s ease;
-}
-
-.academic-tab.is-active {
-  background: #ffffff;
-  color: #080808;
-  font-weight: 600;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+.academic-login-close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .academic-login-card :deep(.input) {
   background: var(--surface-card);
   color: var(--text-main);
-  border: 1px solid var(--paper-border);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   padding: 0.7rem 1rem;
   font-size: 0.9rem;
 }
 
+.academic-login-card :deep(.input:focus),
+.academic-login-card :deep(.input:focus-visible) {
+  border-color: var(--input-border-focus);
+  outline: none;
+  box-shadow: none;
+}
+
+@media (max-width: 1023px) {
+  .academic-login-card :deep(.input) { font-size: 16px; }
+}
+
 .academic-login-card :deep(.input::placeholder) {
-  color: var(--ink-faint);
+  color: var(--text-sub);
 }
 
 .academic-login-card :deep(.btn-primary) {
+  min-height: 44px;
   background: var(--academic-blue);
   border: none;
-  color: #ffffff;
+  color: var(--btn-text-primary);
+  border-radius: var(--radius-button);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .academic-login-card :deep(.btn-primary:hover) {
-  background: var(--academic-blue-deep);
+  background: var(--academic-blue-strong);
 }
 
 .academic-login-card :deep(.btn-captcha) {
   background: var(--academic-blue-soft);
   color: var(--academic-blue);
-  border-radius: 9px;
+  border-radius: var(--radius-button);
 }
 
 .academic-login-card :deep(label) {

@@ -14,6 +14,10 @@ import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { ModelsService } from '../models/models.service';
 import { UserService } from '../user/user.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
+import {
+  buildAcademicAttachmentContext as composeAcademicAttachmentContext,
+  type AcademicAttachmentContextSource,
+} from './academicAttachmentContext';
 
 interface AcademicChatBody {
   function?: 'chat' | 'basic' | 'plugin';
@@ -96,6 +100,15 @@ interface AcademicStreamState {
 
 type AcademicPlanTier = 'free' | 'plus' | 'pro' | 'max';
 
+// 未指定模型时，Lens 学术链路默认使用 DeepSeek V3.2；本地模型表的真实入口为
+// deepseek-v3.2。显式选择的其他已启用模型仍应沿用后台配置，不被默认值覆盖。
+// deepseek-chat 是同一模型的兼容别名，只用于兼容旧会话配置。
+const LENS_DEFAULT_ACADEMIC_MODEL = 'deepseek-v3.2';
+const isLensDeepSeekV32 = (value: unknown) => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s_-]/g, '');
+  return normalized === 'deepseekchat' || normalized === 'deepseekv3.2';
+};
+
 @Injectable()
 export class AcademicService {
   private readonly logger = new Logger(AcademicService.name);
@@ -132,6 +145,24 @@ export class AcademicService {
     'webp',
   ]);
   private readonly academicArchiveExtensions = new Set(['zip', 'rar', '7z', 'tar', 'gz']);
+  private readonly academicTextContextExtensions = new Set([
+    'txt',
+    'md',
+    'csv',
+    'json',
+    'yaml',
+    'yml',
+    'xml',
+    'html',
+    'css',
+    'js',
+    'ts',
+    'py',
+    'java',
+    'c',
+    'cpp',
+    'h',
+  ]);
   private readonly academicPluginOrder = [
     '论文速读',
     'PDF 批量总结',
@@ -377,6 +408,17 @@ export class AcademicService {
 
     const plusAllowed =
       normalized.includes(this.normalizePluginName('论文速读')) ||
+      [
+        'Lens｜研究设计体检',
+        'Lens｜审稿意见应答',
+        'Lens｜文献检索策略',
+        'Lens｜整理研究笔记',
+        'Lens｜比较多篇论文',
+        'Lens｜生成教学材料',
+        'Lens｜研究问题拆解',
+        'Lens｜文献综述工作台',
+        'Lens｜研究方案设计',
+      ].some(item => normalized.includes(this.normalizePluginName(item))) ||
       normalized.includes(this.normalizePluginName('速读论文')) ||
       (normalized.includes('arxiv') &&
         (normalized.includes(this.normalizePluginName('摘要')) ||
@@ -617,46 +659,38 @@ export class AcademicService {
   private async resolveAcademicModelInfo(preferredModel: string, preferredModelName = '') {
     const requested = String(preferredModel || '').trim();
     const requestedDisplayName = String(preferredModelName || '').trim();
+    const requestedIdentity = requested || requestedDisplayName;
     const explicitModelInfo = await this.findAcademicModelInfo(requested, requestedDisplayName);
-    if (this.isModelEnabled(explicitModelInfo)) {
+    const preferredModelInfo = await this.modelsService.getCurrentModelKeyInfo(
+      LENS_DEFAULT_ACADEMIC_MODEL,
+    );
+    const allModelsRaw = await this.modelsService.getAllKey();
+    const deepSeekModelInfo = (Array.isArray(allModelsRaw) ? allModelsRaw : []).find(
+      item => this.isModelEnabled(item) && isLensDeepSeekV32(item?.model),
+    );
+
+    // 显式选中的模型必须严格命中后台已启用条目；只有未指定模型时才使用
+    // DeepSeek 默认值，避免把用户选择的 gpt-6-luna 等模型误判为不可用。
+    const modelInfo = requestedIdentity
+      ? isLensDeepSeekV32(requestedIdentity)
+        ? [explicitModelInfo, preferredModelInfo, deepSeekModelInfo].find(
+            item => this.isModelEnabled(item) && isLensDeepSeekV32(item?.model),
+          )
+        : this.isModelEnabled(explicitModelInfo)
+          ? explicitModelInfo
+          : null
+      : [preferredModelInfo, deepSeekModelInfo].find(
+          item => this.isModelEnabled(item) && isLensDeepSeekV32(item?.model),
+        );
+    if (modelInfo) {
       return {
         requestedModel: requested,
         requestedModelName: requestedDisplayName,
-        resolvedModel: String(explicitModelInfo.model || requested),
-        modelInfo: explicitModelInfo,
+        resolvedModel: String(modelInfo.model || LENS_DEFAULT_ACADEMIC_MODEL),
+        modelInfo,
       };
     }
-    const hasExplicitRequest = Boolean(requested || requestedDisplayName);
-
-    const baseConfig = await this.modelsService.getBaseConfig();
-    const baseModel = String(baseConfig?.modelInfo?.model || '').trim();
-    if (baseModel) {
-      const modelInfo = await this.modelsService.getCurrentModelKeyInfo(baseModel);
-      if (this.isModelEnabled(modelInfo)) {
-        return {
-          requestedModel: requested,
-          requestedModelName: requestedDisplayName,
-          resolvedModel: String(modelInfo.model || baseModel),
-          modelInfo,
-        };
-      }
-    }
-
-    const allModels = await this.modelsService.getAllKey();
-    const enabledModels = (Array.isArray(allModels) ? allModels : [])
-      .filter(item => this.isModelEnabled(item))
-      .sort((a, b) => Number(a.modelOrder || 0) - Number(b.modelOrder || 0));
-    if (enabledModels.length) {
-      const fallbackModelInfo = enabledModels[0];
-      return {
-        requestedModel: requested,
-        requestedModelName: requestedDisplayName,
-        resolvedModel: String(fallbackModelInfo.model || ''),
-        modelInfo: fallbackModelInfo,
-      };
-    }
-
-    if (hasExplicitRequest) {
+    if (requestedIdentity) {
       return {
         requestedModel: requested,
         requestedModelName: requestedDisplayName,
@@ -664,7 +698,6 @@ export class AcademicService {
         modelInfo: null,
       };
     }
-
     return null;
   }
 
@@ -708,6 +741,10 @@ export class AcademicService {
 
   private async resolveAcademicRuntimeFallbackModelInfo(currentModelInfo: any) {
     const currentModel = String(currentModelInfo?.model || '').trim();
+    if (isLensDeepSeekV32(currentModel)) {
+      // Lens 固定使用 DeepSeek V3.2；不要在失败时静默切换到其他模型。
+      return null;
+    }
     const currentDeduct = Number(currentModelInfo?.deduct || 0);
     const allModels = await this.modelsService.getAllKey();
     const enabledModels = (Array.isArray(allModels) ? allModels : [])
@@ -788,11 +825,8 @@ export class AcademicService {
       this.logger.warn(
         JSON.stringify({
           event: 'academic_runtime_model_fallback',
-          requestId,
-          userId,
           scene,
-          fromModel: String(currentModelInfo?.model || ''),
-          toModel: String(fallbackModelInfo?.model || ''),
+          recovered: true,
         }),
       );
       return {
@@ -804,12 +838,8 @@ export class AcademicService {
       this.logger.warn(
         JSON.stringify({
           event: 'academic_runtime_model_fallback_failed',
-          requestId,
-          userId,
           scene,
-          fromModel: String(currentModelInfo?.model || ''),
-          toModel: String(fallbackModelInfo?.model || ''),
-          message: (error as Error)?.message || 'fallback_failed',
+          errorCategory: error instanceof HttpException ? 'http' : 'runtime',
         }),
       );
       return null;
@@ -860,7 +890,6 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_post_failed',
             path: pathname,
-            baseUrl,
             status: response.status,
           }),
         );
@@ -870,8 +899,7 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_post_error',
             path: pathname,
-            baseUrl,
-            message: (error as Error)?.message || 'request failed',
+            errorCategory: error instanceof HttpException ? 'http' : 'runtime',
           }),
         );
       }
@@ -899,7 +927,6 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_get_failed',
             path: pathname,
-            baseUrl,
             status: response.status,
           }),
         );
@@ -909,8 +936,7 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_get_error',
             path: pathname,
-            baseUrl,
-            message: (error as Error)?.message || 'request failed',
+            errorCategory: error instanceof HttpException ? 'http' : 'runtime',
           }),
         );
       }
@@ -957,9 +983,8 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_fetch_failed',
             path: pathname,
-            baseUrl,
             status: response.status,
-            body: lastBody,
+            hasResponseBody: Boolean(lastBody),
           }),
         );
       } catch (error) {
@@ -971,8 +996,7 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_fetch_error',
             path: pathname,
-            baseUrl,
-            message: (error as Error)?.message || 'fetch failed',
+            errorCategory: error instanceof HttpException ? 'http' : 'runtime',
           }),
         );
       }
@@ -981,6 +1005,49 @@ export class AcademicService {
       throw new HttpException(`学术服务异常(${lastStatus})`, HttpStatus.BAD_GATEWAY);
     }
     throw lastError || new Error('academic request failed');
+  }
+
+  async health(preferredModel = '', preferredModelName = '') {
+    const startedAt = Date.now();
+    try {
+      const { response } = await this.getAcademic('/health', { timeout: 2500 });
+      const status = String(response?.data?.status || '').trim().toLowerCase();
+      if (status !== 'ready') {
+        return {
+          status: 'degraded',
+          runtime: 'unavailable',
+          model: 'unknown',
+          contract: 'lens-academic-v1',
+          latencyMs: Date.now() - startedAt,
+        };
+      }
+      const resolvedModel = await this.resolveAcademicModelInfo(preferredModel, preferredModelName);
+      const modelConfigured = Boolean(String(resolvedModel?.modelInfo?.key || '').trim());
+      if (!modelConfigured) {
+        return {
+          status: 'degraded',
+          runtime: 'ready',
+          model: 'unconfigured',
+          contract: 'lens-academic-v1',
+          latencyMs: Date.now() - startedAt,
+        };
+      }
+      return {
+        status: 'ready',
+        runtime: 'ready',
+        model: 'ready',
+        contract: 'lens-academic-v1',
+        latencyMs: Date.now() - startedAt,
+      };
+    } catch (_error) {
+      return {
+        status: 'degraded',
+        runtime: 'unavailable',
+        model: 'unknown',
+        contract: 'lens-academic-v1',
+        latencyMs: Date.now() - startedAt,
+      };
+    }
   }
 
   private async getAcademicPluginRows() {
@@ -1126,6 +1193,12 @@ export class AcademicService {
 
   private isArxivPlugin(normalizedPluginName: string) {
     return String(normalizedPluginName || '').includes('arxiv');
+  }
+
+  private isLensFeaturedPlugin(normalizedPluginName: string) {
+    return String(normalizedPluginName || '').startsWith(
+      this.normalizePluginName('Lens｜'),
+    );
   }
 
   private isFileRequiredPlugin(normalizedPluginName: string) {
@@ -1966,8 +2039,6 @@ export class AcademicService {
   }
 
   async coreFunctionList(req: Request) {
-    const requestId = (req as any).requestId;
-    const userId = req.user?.id;
     try {
       const { response: res } = await this.postAcademic('/academic/core-function-list', {});
       const rows = Array.isArray(res?.data?.rows) ? res.data.rows : [];
@@ -2031,21 +2102,15 @@ export class AcademicService {
         this.logger.warn(
           JSON.stringify({
             event: 'academic_core_functions_fallback',
-            requestId,
-            userId,
-            reason: error.message,
+            errorCategory: 'http',
           }),
         );
       }
-      const err = error as Error;
       this.logger.error(
         JSON.stringify({
           event: 'academic_core_functions_error',
-          requestId,
-          userId,
-          message: err?.message,
+          errorCategory: error instanceof HttpException ? 'http' : 'runtime',
         }),
-        err?.stack,
       );
       return {
         rows: [
@@ -2216,8 +2281,6 @@ export class AcademicService {
   }
 
   async pluginList(req: Request) {
-    const requestId = (req as any).requestId;
-    const userId = req.user?.id;
     try {
       const { response: res } = await this.postAcademic('/academic/plugin-list', {});
       return this.filterPlugins(res.data);
@@ -2226,21 +2289,15 @@ export class AcademicService {
         this.logger.warn(
           JSON.stringify({
             event: 'academic_plugin_list_fallback',
-            requestId,
-            userId,
-            reason: error.message,
+            errorCategory: 'http',
           }),
         );
       }
-      const err = error as Error;
       this.logger.error(
         JSON.stringify({
           event: 'academic_plugin_list_error',
-          requestId,
-          userId,
-          message: err?.message,
+          errorCategory: error instanceof HttpException ? 'http' : 'runtime',
         }),
-        err?.stack,
       );
       const fallback = this.filterPlugins({ rows: [], source: 'fallback' });
       if (Array.isArray(fallback?.rows)) {
@@ -2377,7 +2434,7 @@ export class AcademicService {
       this.logger.warn(
         JSON.stringify({
           event: 'academic_file_proxy_failed',
-          message,
+          errorCategory: /academic status 4\d\d/i.test(message) ? 'upstream_client' : 'runtime',
         }),
       );
       throw new HttpException('下载服务异常，请稍后重试', HttpStatus.BAD_GATEWAY);
@@ -2387,20 +2444,14 @@ export class AcademicService {
   async academicChatProcess(body: AcademicChatBody, req: Request, res: Response) {
     const requestId = (req as any).requestId;
     const userId = req.user?.id;
-    const startTime = Date.now();
 
     await this.userBalanceService.checkUserCertification(userId);
     await this.userService.checkUserStatus(req.user);
 
-    const openaiBaseModelConfig = await this.globalConfigService.getConfigs(['openaiBaseModel']);
-    const openaiBaseModel =
-      typeof openaiBaseModelConfig === 'string'
-        ? openaiBaseModelConfig
-        : openaiBaseModelConfig?.openaiBaseModel;
     const requestedModel = String(body.model || '').trim();
     const requestedModelName = String(body.modelName || '').trim();
     const resolvedModel = await this.resolveAcademicModelInfo(
-      requestedModel || (requestedModelName ? '' : String(openaiBaseModel || '').trim()),
+      requestedModel,
       requestedModelName,
     );
     if (!resolvedModel) {
@@ -2416,13 +2467,15 @@ export class AcademicService {
     }
     if (
       resolvedModel.requestedModel &&
-      resolvedModel.requestedModel !== resolvedModel.resolvedModel
+      resolvedModel.requestedModel !== resolvedModel.resolvedModel &&
+      !(
+        isLensDeepSeekV32(resolvedModel.requestedModel) &&
+        isLensDeepSeekV32(resolvedModel.resolvedModel)
+      )
     ) {
       this.logger.warn(
         JSON.stringify({
           event: 'academic_model_fallback',
-          requestId,
-          userId,
           requestedModel: resolvedModel.requestedModel,
           resolvedModel: resolvedModel.resolvedModel,
         }),
@@ -2501,8 +2554,8 @@ export class AcademicService {
     if (groupId) {
       try {
         await this.chatGroupService.updateTime(groupId);
-      } catch (error) {
-        this.logger.warn(`Failed to update group time: ${error.message}`);
+      } catch (_error) {
+        this.logger.warn('academic_group_time_update_failed');
       }
     }
 
@@ -2618,8 +2671,14 @@ export class AcademicService {
     streamRes.flush?.();
 
     const controller = new AbortController();
+    let upstreamAbortStream: Readable | null = null;
+    let timeoutFallbackBuilder: (() => Promise<string>) | null = null;
     let responseCompleted = false;
     let forceCloseTimer: NodeJS.Timeout | null = null;
+    const forceCloseGraceMs = Math.max(
+      Number(process.env.ACADEMIC_STREAM_ABORT_GRACE_MS || 5000),
+      1000,
+    );
     const clearForceCloseTimer = () => {
       if (forceCloseTimer) {
         clearTimeout(forceCloseTimer);
@@ -2632,10 +2691,22 @@ export class AcademicService {
       forceCloseTimer = setTimeout(() => {
         void (async () => {
           if (responseCompleted || res.writableEnded || res.writableFinished) return;
-          const fallbackContent =
+          let fallbackContent =
             reason === 'idle_timeout'
               ? '学术服务响应超时，请稍后重试'
               : '学术服务处理超时，请稍后重试';
+          let fallbackStatus = 4;
+          let fallbackFinishReason = 'error';
+          if (timeoutFallbackBuilder) {
+            try {
+              const documentFallback = await timeoutFallbackBuilder();
+              if (documentFallback) {
+                fallbackContent = documentFallback;
+                fallbackStatus = 3;
+                fallbackFinishReason = 'stop';
+              }
+            } catch (_error) {}
+          }
           const persistedFallbackContent = this.resolvePersistedAcademicContent(
             state,
             fallbackContent,
@@ -2643,34 +2714,32 @@ export class AcademicService {
           try {
             await this.chatLogService.updateChatLog(assistantLogId, {
               content: persistedFallbackContent,
-              status: 4,
+              status: fallbackStatus,
             });
           } catch (_error) {}
           res.write(
             `${JSON.stringify({
               finalContent: persistedFallbackContent,
               requestId,
-              finishReason: 'error',
+              finishReason: fallbackFinishReason,
             })}\n`,
           );
           responseCompleted = true;
           res.end();
         })();
-      }, 1500);
+      }, forceCloseGraceMs);
     };
     const abortUpstream = (reason: string) => {
       if (responseCompleted || controller.signal.aborted) return;
+      if (upstreamAbortStream && !upstreamAbortStream.destroyed) {
+        upstreamAbortStream.destroy(new Error('academic_stream_aborted'));
+      }
       controller.abort();
       forceCloseAcademicStream(reason);
-      const durationMs = Date.now() - startTime;
       this.logger.warn(
         JSON.stringify({
           event: 'academic_chat_abort',
-          requestId,
-          userId,
-          model: useModel,
           reason,
-          durationMs,
         }),
       );
     };
@@ -2714,12 +2783,13 @@ export class AcademicService {
 
     let uploadDir = '';
     let uploadErrorMessage = '';
+    const originalPrompt = String(prompt || '').trim();
     if (body.fileUrl) {
       try {
         uploadDir = await this.pullFilesToAcademic(body.fileUrl, String(req.user.id), req);
-      } catch (error) {
-        uploadErrorMessage = String((error as Error)?.message || '文件上传处理失败');
-        this.logger.warn(`Failed to pull files to academic service: ${uploadErrorMessage}`);
+      } catch (_error) {
+        uploadErrorMessage = '文件上传处理失败';
+        this.logger.warn('academic_file_upload_failed');
       }
     }
 
@@ -2794,12 +2864,37 @@ export class AcademicService {
       }
     }
 
+    if (academicPayload.function === 'plugin' && body.fileUrl) {
+      if (
+        this.isPdfPlugin(normalizedPluginName) ||
+        this.isPaperQuickReadPlugin(normalizedPluginName)
+      ) {
+        timeoutFallbackBuilder = () => this.buildPdfFallbackSummary(body.fileUrl, req);
+      } else if (this.isWordPlugin(normalizedPluginName)) {
+        timeoutFallbackBuilder = () => this.buildWordFallbackSummary(body.fileUrl, req);
+      } else if (this.isLatexPlugin(normalizedPluginName)) {
+        timeoutFallbackBuilder = () => this.buildLatexFallbackSummary(body.fileUrl, req);
+      }
+    }
+
     if (academicPayload.function === 'basic') {
       if (!academicPayload.plugin_kwargs) {
         academicPayload.plugin_kwargs = {};
       }
       academicPayload.core_function = resolvedCoreFunction || rawCoreFunction;
       academicPayload.plugin_kwargs.core_function = resolvedCoreFunction || rawCoreFunction;
+    }
+
+    // 默认对话和基础能力没有插件的目录读取约定，需要把已上传资料的正文
+    // 作为受边界控制的上下文传入；插件仍保留原有目录路由，避免改变插件契约。
+    if (uploadDir && (academicPayload.function === 'chat' || academicPayload.function === 'basic')) {
+      const attachmentContext = await this.buildAcademicAttachmentContext(body.fileUrl, req);
+      if (attachmentContext) {
+        const userPrompt = String(prompt || '').trim();
+        academicPayload.main_input = userPrompt
+          ? `${userPrompt}\n\n<attachment_context>\n${attachmentContext}\n</attachment_context>`
+          : `<attachment_context>\n${attachmentContext}\n</attachment_context>`;
+      }
     }
 
     if (uploadDir) {
@@ -2815,7 +2910,12 @@ export class AcademicService {
     }
 
     // 绝大多数文件型插件以 main_input 作为真实入口，若这里是用户自然语言会导致后端误判。
-    if (uploadDir && academicPayload.function === 'plugin' && !isArxivPlugin) {
+    if (
+      uploadDir &&
+      academicPayload.function === 'plugin' &&
+      !isArxivPlugin &&
+      !this.isLensFeaturedPlugin(normalizedPluginName)
+    ) {
       academicPayload.main_input = uploadDir;
       if (!academicPayload.plugin_kwargs) {
         academicPayload.plugin_kwargs = {};
@@ -2831,12 +2931,31 @@ export class AcademicService {
         }
       }
     }
+    if (
+      uploadDir &&
+      academicPayload.function === 'plugin' &&
+      this.isLensFeaturedPlugin(normalizedPluginName)
+    ) {
+      const attachmentContext = await this.buildAcademicAttachmentContext(body.fileUrl, req);
+      const userPrompt = originalPrompt;
+      const taskInput = userPrompt
+        ? `${userPrompt}\n\n<attachment_context>\n${attachmentContext}\n</attachment_context>`
+        : attachmentContext;
+      academicPayload.main_input = taskInput;
+      academicPayload.plugin_kwargs.main_input = taskInput;
+      if (userPrompt) academicPayload.plugin_kwargs.user_prompt = userPrompt;
+    }
     if (academicPayload.function === 'plugin') {
       academicPayload.plugin_kwargs = this.normalizePluginKwargs(
         resolvedPluginName || rawPluginName || '',
         academicPayload.plugin_kwargs || {},
       );
     }
+
+    const billingInput =
+      academicPayload.function === 'plugin'
+        ? String(prompt || '')
+        : String(academicPayload.main_input || prompt || '');
 
     const allowQuickReadByReference =
       normalizedPluginName === this.normalizePluginName('论文速读') &&
@@ -2859,13 +2978,10 @@ export class AcademicService {
           content: fileRequiredMessage,
           status: 4,
         });
-      } catch (error) {
+      } catch (_error) {
         this.logger.warn(
           JSON.stringify({
             event: 'academic_file_required_update_failed',
-            requestId,
-            userId,
-            message: (error as Error)?.message || 'update failed',
           }),
         );
       }
@@ -2891,21 +3007,14 @@ export class AcademicService {
     this.logger.log(
       JSON.stringify({
         event: 'academic_chat_start',
-        requestId,
-        userId,
-        model: useModel,
-        modelName: useModelName,
         function: academicPayload.function,
         pluginName: academicPayload.plugin_name || '',
         coreFunction: academicPayload.core_function || '',
-        groupId,
       }),
     );
     this.logger.log(
       JSON.stringify({
         event: 'academic_chat_payload',
-        requestId,
-        userId,
         function: academicPayload.function,
         pluginName: academicPayload.plugin_name || '',
         coreFunction: academicPayload.core_function || '',
@@ -2919,24 +3028,19 @@ export class AcademicService {
     );
 
     try {
-      const { response: upstreamResponse, baseUrl: selectedAcademicBaseUrl } =
-        await this.fetchAcademicStream(
-          '/academic/chat-process',
-          academicPayload,
-          controller.signal,
-        );
+      const { response: upstreamResponse } = await this.fetchAcademicStream(
+        '/academic/chat-process',
+        academicPayload,
+        controller.signal,
+      );
 
       if (upstreamResponse.status >= 400) {
         const errorBody = await upstreamResponse.text();
         this.logger.error(
           JSON.stringify({
             event: 'academic_upstream_error',
-            requestId,
-            userId,
-            model: useModel,
-            baseUrl: selectedAcademicBaseUrl,
             status: upstreamResponse.status,
-            body: errorBody.slice(0, 800),
+            hasErrorBody: Boolean(errorBody),
           }),
         );
         throw new HttpException(`学术服务异常(${upstreamResponse.status})`, HttpStatus.BAD_GATEWAY);
@@ -2945,6 +3049,7 @@ export class AcademicService {
         throw new HttpException('学术服务无响应数据', HttpStatus.BAD_GATEWAY);
       }
       const upstreamBody = Readable.fromWeb(upstreamResponse.body as any);
+      upstreamAbortStream = upstreamBody;
 
       let buffer = '';
       const defaultIdleTimeoutMs = Number(process.env.ACADEMIC_STREAM_IDLE_TIMEOUT_MS || 180000);
@@ -2968,7 +3073,7 @@ export class AcademicService {
         process.env.ACADEMIC_STREAM_MAX_DURATION_ARXIV_MS || 600000,
       );
       const paperMaxDurationMs = Number(
-        process.env.ACADEMIC_STREAM_MAX_DURATION_PAPER_MS || 600000,
+        process.env.ACADEMIC_STREAM_MAX_DURATION_PAPER_MS || 240000,
       );
       const maxDurationMs = isArxivPlugin
         ? Math.max(arxivMaxDurationMs, 30000)
@@ -2980,6 +3085,7 @@ export class AcademicService {
       let idleTimer: NodeJS.Timeout | null = null;
       let maxDurationTimer: NodeJS.Timeout | null = null;
       let idleTimedOut = false;
+      let maxDurationTimedOut = false;
       let pendingSerializedLine = '';
       let lastThinkingPreview = '';
       let lastThinkingPreviewAt = 0;
@@ -3017,6 +3123,7 @@ export class AcademicService {
         if (!(maxDurationMs > 0)) return;
         if (maxDurationTimer) clearTimeout(maxDurationTimer);
         maxDurationTimer = setTimeout(() => {
+          maxDurationTimedOut = true;
           abortUpstream('max_duration_timeout');
         }, maxDurationMs);
       };
@@ -3063,7 +3170,7 @@ export class AcademicService {
                 resetIdleTimer();
               }
               const outboundLine = this.ensureAcademicNdjsonLine(safeLine, assistantLogId);
-              if (outboundLine) {
+              if (outboundLine && !this.isAcademicErrorFrame(safeLine)) {
                 res.write(`${outboundLine}\n`);
               }
               if (
@@ -3102,7 +3209,7 @@ export class AcademicService {
                 this.consumeAcademicLine(safeTail, state, false);
                 emitThinkingPreview(this.buildAcademicThinkingPreview(safeTail, state));
                 const outboundTail = this.ensureAcademicNdjsonLine(safeTail, assistantLogId);
-                if (outboundTail) {
+                if (outboundTail && !this.isAcademicErrorFrame(safeTail)) {
                   res.write(`${outboundTail}\n`);
                 }
                 if (
@@ -3118,6 +3225,16 @@ export class AcademicService {
           const contentForOutput = this.pickBestAcademicOutput(state);
           let finalContent = await buildDisplayContent(contentForOutput, !state.streamError);
           finalContent = this.preserveStablePolishDisplay(state, finalContent, contentForOutput);
+          if (timeoutFallbackBuilder && (idleTimedOut || maxDurationTimedOut)) {
+            try {
+              const documentFallback = await timeoutFallbackBuilder();
+              if (documentFallback) {
+                finalContent = documentFallback;
+                state.fullContent = documentFallback;
+                state.streamError = '';
+              }
+            } catch (_error) {}
+          }
           if (
             this.hasAcademicAuthPlaceholderRaw(
               state.fullContent,
@@ -3171,9 +3288,6 @@ export class AcademicService {
                 this.logger.log(
                   JSON.stringify({
                     event: 'academic_retry_recovered',
-                    requestId,
-                    userId,
-                    model: useModel,
                   }),
                 );
               }
@@ -3181,10 +3295,7 @@ export class AcademicService {
               this.logger.warn(
                 JSON.stringify({
                   event: 'academic_retry_failed',
-                  requestId,
-                  userId,
-                  model: useModel,
-                  message: (retryError as Error)?.message || 'retry failed',
+                  errorCategory: retryError instanceof HttpException ? 'http' : 'runtime',
                 }),
               );
             }
@@ -3321,10 +3432,7 @@ export class AcademicService {
             this.logger.warn(
               JSON.stringify({
                 event: 'academic_ignore_trailing_error',
-                requestId,
-                userId,
-                model: useModel,
-                streamError: String(state.streamError || '').slice(0, 200),
+                hasStreamError: Boolean(state.streamError),
               }),
             );
             state.streamError = '';
@@ -3360,7 +3468,7 @@ export class AcademicService {
             return;
           }
 
-          const promptTokens = await getTokenCount(prompt || '');
+          const promptTokens = await getTokenCount(billingInput);
           const completionTokens = await getTokenCount(
             `${state.fullReasoning}${state.fullContent}`,
           );
@@ -3417,14 +3525,9 @@ export class AcademicService {
           responseCompleted = true;
           res.end();
 
-          const durationMs = Date.now() - startTime;
           this.logger.log(
             JSON.stringify({
               event: 'academic_chat_end',
-              requestId,
-              userId,
-              model: useModel,
-              durationMs,
               promptTokens,
               completionTokens,
             }),
@@ -3434,12 +3537,8 @@ export class AcademicService {
           this.logger.error(
             JSON.stringify({
               event: 'academic_chat_finalize_error',
-              requestId,
-              userId,
-              model: useModel,
-              message: err?.message,
+              errorCategory: err instanceof HttpException ? 'http' : 'runtime',
             }),
-            err?.stack,
           );
           let fallbackContent = await buildDisplayContent(
             this.pickBestAcademicOutput(state),
@@ -3493,15 +3592,21 @@ export class AcademicService {
             prompt || String(academicPayload.main_input || ''),
           );
         }
+        const abortedByUpstream = /aborted/i.test(String(error?.message || ''));
         if (
           academicPayload.function === 'plugin' &&
           (this.isPdfPlugin(normalizedPluginName) ||
             this.isPaperQuickReadPlugin(normalizedPluginName)) &&
           body.fileUrl &&
-          (this.isAcademicPlaceholderContent(partialContent) ||
+          (
+            idleTimedOut ||
+            maxDurationTimedOut ||
+            abortedByUpstream ||
+            this.isAcademicPlaceholderContent(partialContent) ||
             /插件调用出错|Traceback|学术服务处理超时|无法读取论文内容|文件内容为空或无法提取/i.test(
               partialContent || '',
-            ))
+            )
+          )
         ) {
           const fallbackSummary = await this.buildPdfFallbackSummary(body.fileUrl, req);
           if (fallbackSummary) {
@@ -3548,8 +3653,10 @@ export class AcademicService {
             state.fileVectorResult) &&
             hasArxivSummary,
         );
-        const abortedByUpstream = /aborted/i.test(String(error?.message || ''));
-        if (abortedByUpstream && hasRenderablePartial) {
+        // 上游可能在已经发送完整内容后才触发流错误（例如 Arxiv 翻译收尾阶段的
+        // 连接关闭）。只要局部结果已经通过可展示内容判定，就提交这份结果；
+        // 空内容、鉴权占位和服务错误不会进入此分支。
+        if (hasRenderablePartial) {
           const gracefulContent =
             partialContent || (state.fileVectorResult ? '文件已生成，可在下方下载。' : '');
           const persistedGracefulContent = this.resolvePersistedAcademicContent(
@@ -3557,7 +3664,7 @@ export class AcademicService {
             gracefulContent,
             partialContent,
           );
-          const promptTokens = await getTokenCount(prompt || '');
+          const promptTokens = await getTokenCount(billingInput);
           const completionTokens = await getTokenCount(
             `${state.fullReasoning}${persistedGracefulContent}`,
           );
@@ -3613,12 +3720,8 @@ export class AcademicService {
         this.logger.error(
           JSON.stringify({
             event: 'academic_stream_error',
-            requestId,
-            userId,
-            model: useModel,
-            message: error.message,
+            errorCategory: error instanceof HttpException ? 'http' : 'runtime',
           }),
-          error.stack,
         );
         let fallbackContent = partialContent;
         if (idleTimedOut && !fallbackContent) {
@@ -3655,14 +3758,10 @@ export class AcademicService {
       clearForceCloseTimer();
       const err = error as Error;
       this.logger.error(
-        JSON.stringify({
-          event: 'academic_request_failed',
-          requestId,
-          userId,
-          model: useModel,
-          message: err?.message,
+      JSON.stringify({
+        event: 'academic_request_failed',
+        errorCategory: err instanceof HttpException ? 'http' : 'runtime',
         }),
-        err?.stack,
       );
       let fallbackContent = await buildDisplayContent(this.pickBestAcademicOutput(state), false);
       fallbackContent = this.preserveStablePolishDisplay(state, fallbackContent);
@@ -3701,21 +3800,15 @@ export class AcademicService {
   async academicWorkflowProcess(body: AcademicWorkflowBody, req: Request, res: Response) {
     const requestId = (req as any).requestId;
     const userId = req.user?.id;
-    const startTime = Date.now();
 
     await this.userBalanceService.checkUserCertification(userId);
     await this.userService.checkUserStatus(req.user);
     const workflowBalance = await this.ensureAcademicWorkflowMember(userId);
 
-    const openaiBaseModelConfig = await this.globalConfigService.getConfigs(['openaiBaseModel']);
-    const openaiBaseModel =
-      typeof openaiBaseModelConfig === 'string'
-        ? openaiBaseModelConfig
-        : openaiBaseModelConfig?.openaiBaseModel;
     const requestedModel = String(body.model || '').trim();
     const requestedModelName = String(body.modelName || '').trim();
     const resolvedModel = await this.resolveAcademicModelInfo(
-      requestedModel || (requestedModelName ? '' : String(openaiBaseModel || '').trim()),
+      requestedModel,
       requestedModelName,
     );
     if (!resolvedModel || !resolvedModel.modelInfo) {
@@ -3753,8 +3846,8 @@ export class AcademicService {
     if (groupId) {
       try {
         await this.chatGroupService.updateTime(groupId);
-      } catch (error) {
-        this.logger.warn(`Failed to update workflow group time: ${(error as Error).message}`);
+      } catch (_error) {
+        this.logger.warn('academic_workflow_group_time_update_failed');
       }
     }
 
@@ -3953,9 +4046,9 @@ export class AcademicService {
     if (body.fileUrl) {
       try {
         uploadDir = await this.pullFilesToAcademic(body.fileUrl, String(req.user.id), req);
-      } catch (error) {
-        uploadErrorMessage = String((error as Error)?.message || '文件上传处理失败');
-        this.logger.warn(`Failed to pull files to academic workflow: ${uploadErrorMessage}`);
+      } catch (_error) {
+        uploadErrorMessage = '文件上传处理失败';
+        this.logger.warn('academic_workflow_file_upload_failed');
       }
     }
 
@@ -4238,20 +4331,14 @@ export class AcademicService {
         this.logger.log(
           JSON.stringify({
             event: 'academic_workflow_payload',
-            requestId,
-            userId,
-            chatId: assistantLogId,
             step: step.index,
             function: academicPayload.function,
-            llmModel: String(academicPayload.llm_kwargs?.llm_model || '').trim(),
             hasApiKey: Boolean(String(academicPayload.llm_kwargs?.api_key || '').trim()),
             apiKeyPassthrough: Boolean(academicPayload.llm_kwargs?.api_key_passthrough),
             hasApiEndpoint: Boolean(String(academicPayload.llm_kwargs?.api_endpoint || '').trim()),
             hasMaxToken:
               academicPayload.llm_kwargs?.max_token !== undefined &&
               academicPayload.llm_kwargs?.max_token !== null,
-            modelInfoId: Number(modelInfo?.id || 0),
-            modelInfoKeyLength: String(modelInfo?.key || '').trim().length,
           }),
         );
 
@@ -4398,11 +4485,8 @@ export class AcademicService {
               this.logger.warn(
                 JSON.stringify({
                   event: 'academic_workflow_retry_failed',
-                  requestId,
-                  userId,
-                  model: useModel,
                   step: step.index,
-                  message: (retryError as Error)?.message || 'retry failed',
+                  errorCategory: retryError instanceof HttpException ? 'http' : 'runtime',
                 }),
               );
             }
@@ -4679,10 +4763,6 @@ export class AcademicService {
       this.logger.log(
         JSON.stringify({
           event: 'academic_workflow_end',
-          requestId,
-          userId,
-          model: useModel,
-          durationMs: Date.now() - startTime,
           stepCount: normalizedWorkflowSteps.length,
           promptTokens: totalPromptTokens,
           completionTokens: totalCompletionTokens,
@@ -4770,13 +4850,9 @@ export class AcademicService {
       this.logger.error(
         JSON.stringify({
           event: 'academic_workflow_failed',
-          requestId,
-          userId,
-          model: useModel,
           step: currentStep?.displayName || '',
-          message: err?.message,
+          errorCategory: err instanceof HttpException ? 'http' : 'runtime',
         }),
-        err?.stack,
       );
     }
   }
@@ -5054,6 +5130,54 @@ export class AcademicService {
       result = `${result.trim()}...`;
     }
     return result.trim();
+  }
+
+  private async readAcademicAttachment(
+    item: { url: string; name?: string },
+    req?: Request,
+  ): Promise<AcademicAttachmentContextSource | null> {
+    const localPath = this.resolveLocalUploadedFilePath(item.url);
+    const fileName = String(item.name || path.basename(localPath || item.url.split('?')[0]) || 'file');
+    const extension = this.getAcademicFileExtension('', fileName);
+    if (localPath) {
+      try {
+        return { buffer: await fs.readFile(localPath), fileName, extension };
+      } catch (_error) {}
+    }
+
+    const resolvedUrl = await this.resolveFileUrl(item.url, req);
+    if (!resolvedUrl) return null;
+    const response = await axios.get(resolvedUrl, {
+      responseType: 'arraybuffer',
+      timeout: 30000,
+      validateStatus: () => true,
+    });
+    if (response.status >= 400) return null;
+    return { buffer: Buffer.from(response.data), fileName, extension };
+  }
+
+  private async buildAcademicAttachmentContext(fileUrl: string, req?: Request) {
+    const files = this.parseFileUrls(fileUrl);
+    if (!files.length) return '';
+
+    return composeAcademicAttachmentContext(
+      files,
+      async item => this.readAcademicAttachment(item as { url: string; name?: string }, req),
+      async (source: AcademicAttachmentContextSource) => {
+        const extension = this.getAcademicFileExtension('', source.fileName);
+        if (extension === 'pdf') return String((await pdf(source.buffer))?.text || '');
+        if (extension === 'docx') {
+          return String((await mammoth.extractRawText({ buffer: source.buffer }))?.value || '');
+        }
+        if (extension === 'tex' || extension === 'bib') {
+          return this.extractLatexPlainText(source.buffer.toString('utf8'));
+        }
+        if (this.academicTextContextExtensions.has(extension)) {
+          return source.buffer.toString('utf8');
+        }
+        return '';
+      },
+    );
   }
 
   private async buildPdfFallbackSummary(fileUrl: string, req?: Request) {
@@ -6427,6 +6551,19 @@ export class AcademicService {
     }
   }
 
+  private isAcademicErrorFrame(line: string) {
+    try {
+      const payload = JSON.parse(String(line || ''));
+      if (!payload || typeof payload !== 'object') return false;
+      const finishReason = String(payload.finishReason || payload.finish_reason || '')
+        .trim()
+        .toLowerCase();
+      return finishReason === 'error' || Boolean(payload.error || payload.streamError);
+    } catch (_error) {
+      return false;
+    }
+  }
+
   private consumeAcademicLine(
     line: string,
     state: AcademicStreamState,
@@ -7314,12 +7451,11 @@ export class AcademicService {
     if (!requiresAcademicUpload && localReusableFiles.length > 0) {
       try {
         return await this.createAcademicLinkedWorkspace(localReusableFiles, userName);
-      } catch (error) {
+      } catch (_error) {
         this.logger.warn(
           JSON.stringify({
             event: 'academic_workspace_link_fallback',
-            userName,
-            message: (error as Error)?.message || 'link workspace failed',
+            errorCategory: 'runtime',
           }),
         );
       }
@@ -7378,7 +7514,6 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_upload_failed',
             path: '/academic/upload',
-            baseUrl,
             status: response.status,
           }),
         );
@@ -7388,8 +7523,7 @@ export class AcademicService {
           JSON.stringify({
             event: 'academic_upload_error',
             path: '/academic/upload',
-            baseUrl,
-            message: (error as Error)?.message || 'upload failed',
+            errorCategory: error instanceof HttpException ? 'http' : 'runtime',
           }),
         );
       }

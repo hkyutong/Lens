@@ -1,14 +1,17 @@
 <template>
   <!-- 本体部分 -->
-  <div
-    :class="['vue-puzzle-vcode', { show_: show }]"
+  <dialog
+    ref="dialogRef"
+    :aria-label="t('lens.captcha.title')"
+    @cancel.prevent="onClose"
+    :class="['lens-dialog vue-puzzle-vcode', { show_: show }]"
     @mousedown="onCloseMouseDown"
     @mouseup="onCloseMouseUp"
     @touchstart="onCloseMouseDown"
     @touchend="onCloseMouseUp"
   >
     <div
-      class="vue-auth-box_ rounded-lg bg-white dark:bg-gray-800"
+      class="vue-auth-box_ rounded-[var(--radius-panel)] bg-[var(--surface-card)]"
       @mousedown.stop
       @touchstart.stop
     >
@@ -16,17 +19,17 @@
         <!-- 主图，有缺口 -->
         <canvas
           ref="canvas1"
-          :width="canvasWidth"
+          :width="effectiveCanvasWidth"
           :height="canvasHeight"
-          :style="`width:${canvasWidth}px;height:${canvasHeight}px`"
+          :style="`width:${effectiveCanvasWidth}px;height:${canvasHeight}px`"
         />
         <!-- 成功后显示的完整图 -->
         <canvas
           ref="canvas3"
           :class="['auth-canvas3_', { show: isSuccess }]"
-          :width="canvasWidth"
+          :width="effectiveCanvasWidth"
           :height="canvasHeight"
-          :style="`width:${canvasWidth}px;height:${canvasHeight}px`"
+          :style="`width:${effectiveCanvasWidth}px;height:${canvasHeight}px`"
         />
         <!-- 小图 -->
         <canvas
@@ -38,7 +41,7 @@
             styleWidth -
             sliderBaseSize -
             (puzzleBaseSize - sliderBaseSize) *
-              ((styleWidth - sliderBaseSize) / (canvasWidth - sliderBaseSize))
+              ((styleWidth - sliderBaseSize) / (effectiveCanvasWidth - sliderBaseSize))
           }px)`"
         />
         <div :class="['loading-box_', { hide_: !loading }]">
@@ -56,18 +59,26 @@
         <div
           :class="['flash_', { show: isSuccess }]"
           :style="`transform: translateX(${
-            isSuccess ? `${canvasWidth + canvasHeight * 0.578}px` : `-${canvasHeight * 0.578}px`
+            isSuccess ? `${effectiveCanvasWidth + canvasHeight * 0.578}px` : `-${canvasHeight * 0.578}px`
           }) skew(-30deg, 0);`"
         ></div>
-        <img class="reset_" @click="reset" :src="resetSvg" />
+        <button type="button" class="reset_" @click="reset" :aria-label="t('lens.captcha.refresh')"><img :src="resetSvg" alt="" /></button>
       </div>
+      <button type="button" class="captcha-close btn-icon" @click="onClose" :aria-label="t('lens.header.close')">×</button>
       <div class="auth-control_">
         <div class="range-box bg-gray-100 dark:bg-gray-700" :style="`height:${sliderBaseSize}px`">
-          <div class="range-text">{{ sliderText }}</div>
+          <div class="range-text">{{ sliderText || t('lens.captcha.instruction') }}</div>
           <div class="range-slider" ref="range-slider" :style="`width:${styleWidth}px`">
             <div
               :class="['range-btn', { isDown: mouseDown }]"
               :style="`width:${sliderBaseSize}px`"
+              role="slider"
+              tabindex="0"
+              :aria-label="sliderText || t('lens.captcha.instruction')"
+              :aria-valuemin="sliderBaseSize"
+              :aria-valuemax="effectiveCanvasWidth"
+              :aria-valuenow="styleWidth"
+              @keydown="onRangeKeyDown"
               @mousedown="onRangeMouseDown($event)"
               @touchstart="onRangeMouseDown($event)"
             >
@@ -79,18 +90,26 @@
         </div>
       </div>
     </div>
-  </div>
+  </dialog>
 </template>
 <script>
 import resetSvg from '@/assets/reset.png'
+import { ref } from 'vue'
+import { useNativeDialog } from '@/hooks/useNativeDialog'
+import { t } from '@/locales'
 export default {
+  setup(props) {
+    const dialogRef = ref(null)
+    useNativeDialog(dialogRef, () => props.show)
+    return { dialogRef, t }
+  },
   props: {
     canvasWidth: { type: Number, default: 310 }, // 主canvas的宽
     canvasHeight: { type: Number, default: 160 }, // 主canvas的高
     // 是否出现，由父级控制
     show: { type: Boolean, default: false },
     puzzleScale: { type: Number, default: 1 }, // 拼图块的大小缩放比例
-    sliderSize: { type: Number, default: 40 }, // 滑块的大小
+    sliderSize: { type: Number, default: 44 }, // 滑块的大小
     range: { type: Number, default: 10 }, // 允许的偏差值
     // 所有的背景图片
     imgs: {
@@ -98,20 +117,21 @@ export default {
     },
     successText: {
       type: String,
-      default: '验证通过！',
+      default: '',
     },
     failText: {
       type: String,
-      default: '验证失败，请重试',
+      default: '',
     },
     sliderText: {
       type: String,
-      default: '拖动滑块完成拼图',
+      default: '',
     },
   },
 
   data() {
     return {
+      viewportWidth: window.innerWidth,
       mouseDown: false, // 鼠标是否在按钮上按下
       startWidth: 50, // 鼠标点下去时父级的width
       startX: 0, // 鼠标按下时的X
@@ -135,7 +155,7 @@ export default {
 
   /** 生命周期 **/
   mounted() {
-    document.body.appendChild(this.$el)
+    window.addEventListener('resize', this.onResize)
     document.addEventListener('mousemove', this.onRangeMouseMove, false)
     document.addEventListener('mouseup', this.onRangeMouseUp, false)
 
@@ -148,9 +168,10 @@ export default {
       this.reset()
     }
   },
-  beforeDestroy() {
+  beforeUnmount() {
     clearTimeout(this.timer1)
-    document.body.removeChild(this.$el)
+    window.removeEventListener('resize', this.onResize)
+    document.body.classList.remove('vue-puzzle-overflow')
     document.removeEventListener('mousemove', this.onRangeMouseMove, false)
     document.removeEventListener('mouseup', this.onRangeMouseUp, false)
 
@@ -178,13 +199,16 @@ export default {
 
   /** 计算属性 **/
   computed: {
+    effectiveCanvasWidth() {
+      return Math.min(this.canvasWidth, Math.max(220, this.viewportWidth - 64))
+    },
     // styleWidth是底部用户操作的滑块的父级，就是轨道在鼠标的作用下应该具有的宽度
     styleWidth() {
       const w = this.startWidth + this.newX - this.startX
       return w < this.sliderBaseSize
         ? this.sliderBaseSize
-        : w > this.canvasWidth
-          ? this.canvasWidth
+        : w > this.effectiveCanvasWidth
+          ? this.effectiveCanvasWidth
           : w
     },
     // 图中拼图块的60 * 用户设定的缩放比例计算之后的值 0.2~2
@@ -193,12 +217,33 @@ export default {
     },
     // 处理一下sliderSize，弄成整数，以免计算有偏差
     sliderBaseSize() {
-      return Math.max(Math.min(Math.round(this.sliderSize), Math.round(this.canvasWidth * 0.5)), 10)
+      return Math.max(Math.min(Math.round(this.sliderSize), Math.round(this.effectiveCanvasWidth * 0.5)), 10)
     },
   },
 
   /** 方法 **/
   methods: {
+    onRangeKeyDown(event) {
+      if (!this.isCanSlide || this.isSubmting) return
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        this.submit()
+        return
+      }
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      event.preventDefault()
+      const step = event.shiftKey ? 10 : 1
+      const next = event.key === 'Home' ? this.sliderBaseSize
+        : event.key === 'End' ? this.effectiveCanvasWidth
+        : this.styleWidth + (event.key === 'ArrowRight' ? step : -step)
+      this.startWidth = Math.max(this.sliderBaseSize, Math.min(this.effectiveCanvasWidth, next))
+      this.startX = 0
+      this.newX = 0
+    },
+    onResize() {
+      this.viewportWidth = window.innerWidth
+      if (this.show) this.reset()
+    },
     // 关闭
     onClose() {
       if (!this.mouseDown && !this.isSubmting) {
@@ -260,11 +305,11 @@ export default {
       const img = document.createElement('img')
       ctx.fillStyle = 'rgba(255,255,255,1)'
       ctx3.fillStyle = 'rgba(255,255,255,1)'
-      ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
-      ctx2.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
+      ctx.clearRect(0, 0, this.effectiveCanvasWidth, this.canvasHeight)
+      ctx2.clearRect(0, 0, this.effectiveCanvasWidth, this.canvasHeight)
 
       // 取一个随机坐标，作为拼图块的位置
-      this.pinX = this.getRandom(this.puzzleBaseSize, this.canvasWidth - this.puzzleBaseSize - 20) // 留20的边距
+      this.pinX = this.getRandom(this.puzzleBaseSize, this.effectiveCanvasWidth - this.puzzleBaseSize - 20) // 留20的边距
       this.pinY = this.getRandom(20, this.canvasHeight - this.puzzleBaseSize - 20) // 主图高度 - 拼图块自身高度 - 20边距
       img.crossOrigin = 'anonymous' // 匿名，想要获取跨域的图片
       img.onload = () => {
@@ -292,7 +337,7 @@ export default {
         }
 
         ctx.drawImage(img, x, y, w, h)
-        ctx3.fillRect(0, 0, this.canvasWidth, this.canvasHeight)
+        ctx3.fillRect(0, 0, this.effectiveCanvasWidth, this.canvasHeight)
         ctx3.drawImage(img, x, y, w, h)
 
         // 设置小图的内阴影
@@ -330,7 +375,7 @@ export default {
 
         // 清理
         ctx.restore()
-        ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
+        ctx.clearRect(0, 0, this.effectiveCanvasWidth, this.canvasHeight)
 
         // 画缺口
         ctx.save()
@@ -394,7 +439,7 @@ export default {
     // 工具 - 设置图片尺寸cover方式贴合canvas尺寸 w/h
     makeImgSize(img) {
       const imgScale = img.width / img.height
-      const canvasScale = this.canvasWidth / this.canvasHeight
+      const canvasScale = this.effectiveCanvasWidth / this.canvasHeight
       let x = 0,
         y = 0,
         w = 0,
@@ -403,9 +448,9 @@ export default {
         h = this.canvasHeight
         w = imgScale * h
         y = 0
-        x = (this.canvasWidth - w) / 2
+        x = (this.effectiveCanvasWidth - w) / 2
       } else {
-        w = this.canvasWidth
+        w = this.effectiveCanvasWidth
         h = w / imgScale
         x = 0
         y = (this.canvasHeight - h) / 2
@@ -466,13 +511,13 @@ export default {
     makeImgWithCanvas() {
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
-      canvas.width = this.canvasWidth
+      canvas.width = this.effectiveCanvasWidth
       canvas.height = this.canvasHeight
       ctx.fillStyle = `rgb(${this.getRandom(100, 255)},${this.getRandom(
         100,
         255
       )},${this.getRandom(100, 255)})`
-      ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight)
+      ctx.fillRect(0, 0, this.effectiveCanvasWidth, this.canvasHeight)
       // 随机画10个图形
       for (let i = 0; i < 12; i++) {
         ctx.fillStyle = `rgb(${this.getRandom(100, 255)},${this.getRandom(
@@ -521,12 +566,12 @@ export default {
         this.pinX -
           (this.styleWidth - this.sliderBaseSize) +
           (this.puzzleBaseSize - this.sliderBaseSize) *
-            ((this.styleWidth - this.sliderBaseSize) / (this.canvasWidth - this.sliderBaseSize)) -
+            ((this.styleWidth - this.sliderBaseSize) / (this.effectiveCanvasWidth - this.sliderBaseSize)) -
           3
       )
       if (x < this.range) {
         // 成功
-        this.infoText = this.successText
+        this.infoText = this.successText || t('lens.captcha.success')
         this.infoBoxFail = false
         this.infoBoxShow = true
         this.isCanSlide = false
@@ -540,7 +585,7 @@ export default {
         }, 800)
       } else {
         // 失败
-        this.infoText = this.failText
+        this.infoText = this.failText || t('lens.captcha.failed')
         this.infoBoxFail = true
         this.infoBoxShow = true
         this.isCanSlide = false
@@ -592,6 +637,15 @@ export default {
     opacity: 1;
     pointer-events: auto;
   }
+}
+.captcha-close {
+  position: absolute;
+  right: 4px;
+  top: -48px;
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+  background: var(--surface-card);
 }
 .vue-auth-box_ {
   position: absolute;
@@ -725,17 +779,22 @@ export default {
       }
     }
     .reset_ {
+      display: grid;
+      place-items: center;
+      border: 0;
+      padding: 10px;
+      background: var(--surface-card);
+      img { width: 20px; height: 20px; }
       position: absolute;
       top: 2px;
       right: 2px;
-      width: 35px;
-      height: auto;
+      width: 44px;
+      height: 44px;
       z-index: 12;
       cursor: pointer;
-      transition: transform 200ms;
-      transform: rotate(0deg);
+      transition: background-color 150ms;
       &:hover {
-        transform: rotate(-90deg);
+        background: var(--academic-blue-soft);
       }
     }
   }

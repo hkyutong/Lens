@@ -1,3 +1,8 @@
+import localCredentialLoader from './local_test_credentials.cjs';
+
+// A reset-password assertion must obtain its expected secret without embedding it in source.
+const expectedResetPassword = process.env.LENS_TEST_RESET_PASSWORD || localCredentialLoader.localTestCredentials().password;
+
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -351,34 +356,11 @@ const resolveAcademicModelForGate = async token => {
     }
   }
 
-  if (validCandidates.length > 0) {
-    return {
-      ok: true,
-      model: validCandidates[0].model,
-      modelName: validCandidates[0].modelName || validCandidates[0].model,
-      source: 'models/list:first',
-      candidates: validCandidates.slice(0, 20),
-    }
-  }
-
-  const baseConfigRs = await request('/models/baseConfig', { method: 'GET', token, timeoutMs: 30000 })
-  const baseModel = String(baseConfigRs.json?.data?.modelInfo?.model || '').trim()
-  const baseModelName = String(baseConfigRs.json?.data?.modelInfo?.modelName || baseModel || '').trim()
-  if (baseModel) {
-    return {
-      ok: true,
-      model: baseModel,
-      modelName: baseModelName || baseModel,
-      source: 'models/baseConfig',
-      candidates: [],
-    }
-  }
-
   return {
     ok: false,
     model: '',
     modelName: '',
-    source: 'none',
+    source: validCandidates.length > 0 ? 'models/list:deepseek-v3.2-missing' : 'models/list:empty',
     candidates: [],
   }
 }
@@ -495,7 +477,7 @@ const main = async () => {
     })
     const loginAfterReset = await request('/auth/login', {
       method: 'POST',
-      body: { username: userEmail, password: '123456' },
+      body: { username: userEmail, password: expectedResetPassword },
       timeoutMs: 30000,
     })
     addResult('admin', '后台修改用户（重置密码）', resetPass.ok && loginAfterReset.ok, {
@@ -511,7 +493,7 @@ const main = async () => {
     })
     const loginWhenLocked = await request('/auth/login', {
       method: 'POST',
-      body: { username: userEmail, password: '123456' },
+      body: { username: userEmail, password: expectedResetPassword },
       timeoutMs: 30000,
     })
     const unlockUser = await request('/user/updateStatus', {
@@ -522,7 +504,7 @@ const main = async () => {
     })
     const loginAfterUnlock = await request('/auth/login', {
       method: 'POST',
-      body: { username: userEmail, password: '123456' },
+      body: { username: userEmail, password: expectedResetPassword },
       timeoutMs: 30000,
     })
     addResult('admin', '后台禁用用户并立即生效',

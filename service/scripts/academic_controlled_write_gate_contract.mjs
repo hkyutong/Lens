@@ -35,7 +35,7 @@ const baseEnv = {
   LENS_ACADEMIC_WRITE_TIMEOUT_MS: '5000',
 };
 
-const createFetchMock = ({ academicStatus = 200 } = {}) => {
+const createFetchMock = ({ academicStatus = 200, directUserInfo = false } = {}) => {
   const calls = [];
   let balanceReadCount = 0;
 
@@ -49,12 +49,15 @@ const createFetchMock = ({ academicStatus = 200 } = {}) => {
       redirect: options.redirect,
     });
 
-    if (route === 'GET /api/auth/getInfo') return jsonResponse({ userInfo: { id: 42 } });
+    if (route === 'GET /api/auth/getInfo') {
+      return jsonResponse(directUserInfo ? { id: 42 } : { userInfo: { id: 42 } });
+    }
     if (route === 'GET /api/balance/query') {
       balanceReadCount += 1;
       return jsonResponse({
         sumModel3Count: balanceReadCount === 1 ? 10 : 9,
         useModel3Count: balanceReadCount === 1 ? 0 : 1,
+        useModel3Token: balanceReadCount === 1 ? 20 : 20,
         packageId: 1,
       });
     }
@@ -85,6 +88,14 @@ assert.equal(
   safeMock.calls.every(call => call.authorized && call.redirect === 'error'),
   true,
 );
+
+const directIdentityMock = createFetchMock({ directUserInfo: true });
+const directIdentityRun = await runAcademicControlledWriteGate({
+  env: baseEnv,
+  fetchImpl: directIdentityMock.fetchMock,
+});
+assert.equal(directIdentityRun.exitCode, 0);
+assert.equal(directIdentityRun.result?.passed, true);
 
 const residueMock = createFetchMock();
 const missingResidueConfirmation = await runAcademicControlledWriteGate({

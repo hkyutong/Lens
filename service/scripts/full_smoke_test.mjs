@@ -1,16 +1,59 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:9520/api'
-const LOGIN_USER = process.env.LOGIN_USER || 'super'
-const LOGIN_PASS = process.env.LOGIN_PASS || '123456'
+const require = createRequire(import.meta.url)
+const { localTestCredentials } = require('./local_test_credentials.cjs')
+const localCredentials =
+  process.env.LOGIN_USER && process.env.LOGIN_PASS
+    ? null
+    : (() => {
+        try {
+          return localTestCredentials()
+        } catch (_error) {
+          return null
+        }
+      })()
+const LOGIN_USER = process.env.LOGIN_USER || localCredentials?.username || ''
+const LOGIN_PASS = process.env.LOGIN_PASS || localCredentials?.password || ''
 const TARGET_MODEL = process.env.SMOKE_MODEL || 'gpt-5-nano'
 const TARGET_MODEL_NAME = process.env.SMOKE_MODEL_NAME || 'GPT-5 nano'
 const SMOKE_CORE_ONLY = String(process.env.SMOKE_CORE_ONLY || 'false').toLowerCase() === 'true'
+const SMOKE_SKIP_CORE = String(process.env.SMOKE_SKIP_CORE || 'false').toLowerCase() === 'true'
 const SMOKE_PLUGIN_LIMIT = Math.max(Number(process.env.SMOKE_PLUGIN_LIMIT || 0), 0)
+const SMOKE_PLUGIN_NAME = String(process.env.SMOKE_PLUGIN_NAME || '').trim()
+const SMOKE_LONG_TIMEOUT_MS = Math.min(
+  Math.max(Number(process.env.SMOKE_LONG_TIMEOUT_MS || 300000), 1000),
+  300000,
+)
+const SMOKE_SESSION_MARKER = 'lens-smoke-e2e'
+
+let activeSmokeToken = ''
+let activeSmokeGroupId = 0
+
+const cleanupSmokeSession = async () => {
+  if (!activeSmokeToken || !activeSmokeGroupId) {
+    return { attempted: false, succeeded: true }
+  }
+  try {
+    const response = await request('/group/del', {
+      method: 'POST',
+      token: activeSmokeToken,
+      body: { groupId: activeSmokeGroupId },
+      timeoutMs: 20000,
+    })
+    return { attempted: true, succeeded: response.ok }
+  } catch (_error) {
+    return { attempted: true, succeeded: false }
+  } finally {
+    activeSmokeToken = ''
+    activeSmokeGroupId = 0
+  }
+}
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const serviceDir = path.resolve(scriptDir, '..')
 const lensDir = path.resolve(serviceDir, '..')
@@ -92,7 +135,14 @@ const decodeJwtPayload = token => {
 const resolveModelMeta = async token => {
   const rs = await request('/models/list', { token, timeoutMs: 20000 })
   const modelMaps = rs.json?.data?.modelMaps || rs.json?.modelMaps || {}
-  const allModels = Object.values(modelMaps).flatMap(list => (Array.isArray(list) ? list : []))
+  const allModels = Object.values(modelMaps).flatMap(list => {
+    if (Array.isArray(list)) return list
+    if (list && typeof list === 'object') {
+      if ('model' in list || 'modelName' in list) return [list]
+      return Object.values(list).filter(item => item && typeof item === 'object')
+    }
+    return []
+  })
   const matched =
     allModels.find(item => String(item?.model || '').toLowerCase() === TARGET_MODEL.toLowerCase()) ||
     allModels.find(item => String(item?.modelName || '').toLowerCase() === TARGET_MODEL_NAME.toLowerCase()) ||
@@ -364,6 +414,30 @@ const streamAcademic = async ({ token, payload, timeoutMs = 60000 }) => {
     hasFileVector: false,
     hasAnyContent: false,
     error: '',
+    errorKind: '',
+    streamErrorSeen: false,
+  }
+  const consumeObject = obj => {
+    if (!obj || typeof obj !== 'object') return
+    const content = obj.content ?? obj.delta ?? obj.text
+    if (Array.isArray(content) ? content.length > 0 : typeof content === 'string' && content.trim()) {
+      result.hasAnyContent = true
+    }
+    if (typeof obj.finalContent === 'string' && obj.finalContent.trim()) {
+      result.finalContent = obj.finalContent
+      result.hasAnyContent = true
+    }
+    const finish = String(obj.finishReason || obj.finish_reason || '').trim()
+    if (finish) {
+      result.finishReason =
+        finish.toLowerCase() === 'error' || result.finishReason.toLowerCase() === 'error'
+          ? 'error'
+          : finish
+    }
+    if (obj.fileVectorResult) result.hasFileVector = true
+    if (obj.streamError) result.streamErrorSeen = true
+    const error = obj.streamError || obj.error
+    if (error) result.error = String(error)
   }
   try {
     const res = await fetch(`${BASE}/academic/chat-process`, {
@@ -384,9 +458,24 @@ const streamAcademic = async ({ token, payload, timeoutMs = 60000 }) => {
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    const deadlineAt = Date.now() + timeoutMs
+    const readWithDeadline = async () => {
+      const remaining = Math.max(deadlineAt - Date.now(), 1)
+      let readTimer
+      try {
+        return await Promise.race([
+          reader.read(),
+          new Promise((_, reject) => {
+            readTimer = setTimeout(() => reject(new Error('stream_read_timeout')), remaining)
+          }),
+        ])
+      } finally {
+        if (readTimer) clearTimeout(readTimer)
+      }
+    }
 
     while (true) {
-      const { done, value } = await reader.read()
+      const { done, value } = await readWithDeadline()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
       let idx = buffer.indexOf('\n')
@@ -403,23 +492,7 @@ const streamAcademic = async ({ token, payload, timeoutMs = 60000 }) => {
           obj = JSON.parse(line)
         } catch (_e) {}
         if (obj && typeof obj === 'object') {
-          const content = obj.content
-          if (Array.isArray(content) && content.length > 0) {
-            result.hasAnyContent = true
-          }
-          if (typeof obj.finalContent === 'string' && obj.finalContent.trim()) {
-            result.finalContent = obj.finalContent
-            result.hasAnyContent = true
-          }
-          if (typeof obj.finishReason === 'string') {
-            result.finishReason = obj.finishReason
-          }
-          if (obj.fileVectorResult) {
-            result.hasFileVector = true
-          }
-          if (obj.streamError) {
-            result.error = String(obj.streamError)
-          }
+          consumeObject(obj)
         } else {
           if (line.trim()) result.hasAnyContent = true
         }
@@ -432,12 +505,7 @@ const streamAcademic = async ({ token, payload, timeoutMs = 60000 }) => {
       result.lines.push(line)
       try {
         const obj = JSON.parse(line)
-        if (typeof obj.finalContent === 'string' && obj.finalContent.trim()) {
-          result.finalContent = obj.finalContent
-          result.hasAnyContent = true
-        }
-        if (typeof obj.finishReason === 'string') result.finishReason = obj.finishReason
-        if (obj.fileVectorResult) result.hasFileVector = true
+        consumeObject(obj)
       } catch (_e) {
         result.hasAnyContent = true
       }
@@ -445,6 +513,7 @@ const streamAcademic = async ({ token, payload, timeoutMs = 60000 }) => {
 
     const isErrorFinish = String(result.finishReason || '').toLowerCase() === 'error'
     result.ok =
+      !result.error &&
       !isErrorFinish &&
       (result.finishReason === 'stop' || Boolean(result.finalContent) || result.hasFileVector)
     if (!result.ok && !result.error) {
@@ -452,7 +521,8 @@ const streamAcademic = async ({ token, payload, timeoutMs = 60000 }) => {
     }
     return result
   } catch (e) {
-    result.error = e?.message || 'stream_error'
+    result.errorKind = e?.name || typeof e
+    result.error = e?.name ? `stream_${e.name}` : e?.message || 'stream_error'
     return result
   } finally {
     clearTimeout(timer)
@@ -461,7 +531,46 @@ const streamAcademic = async ({ token, payload, timeoutMs = 60000 }) => {
 
 const formatCase = c => `${c.kind}:${c.name}`
 
-const main = async () => {
+const buildSmokeInput = testCase => {
+  if (testCase.kind !== 'plugin') return '请简要说明测试通过，并给出一条可核验的研究建议。'
+  const name = String(testCase.name || '')
+  if (name === '研究设计体检') {
+    return '研究主题：评估在线学习干预对本科生统计焦虑与课程成绩的影响，计划开展为期八周的随机对照研究。'
+  }
+  if (name === '审稿意见应答') {
+    return '1. 请补充样本选择依据与纳入标准。\n2. 请说明统计方法和稳健性检验。'
+  }
+  if (name === '文献检索策略') {
+    return '研究主题：生成关于在线学习干预与统计焦虑关系的系统检索策略。'
+  }
+  if (name === '整理研究笔记') {
+    return '研究主题：将以下研究笔记整理为事实、作者观点、推论和下一步行动。笔记显示样本量为120人，干预组成绩有所提高，但尚未完成长期随访。'
+  }
+  if (name === '比较多篇论文' || name === '文献综述工作台') {
+    return [
+      '论文：在线学习干预与统计焦虑',
+      '研究问题是在线学习是否降低统计焦虑；采用八周随机对照设计；局限是随访时间较短。',
+      '',
+      '论文：统计课程中的认知支持',
+      '研究问题是认知支持如何影响课程成绩；采用混合方法；局限是样本来自单一院校。',
+    ].join('\n')
+  }
+  if (name === '生成教学材料') {
+    return '研究主题：为本科生设计一节关于因果推断基础的课堂教学材料，包含学习目标、活动、练习和评分标准。'
+  }
+  if (name === '研究问题拆解') {
+    return '研究主题：拆解在线学习干预是否降低本科生统计焦虑并改善课程成绩这一可检验问题。'
+  }
+  if (name === '研究方案设计') {
+    return '研究主题：设计一项评估在线学习干预对统计焦虑影响的随机对照研究，明确步骤、交付物、验收标准和前置依赖。'
+  }
+  return '研究主题：评估在线学习干预对本科生统计焦虑与课程成绩的影响，并列出可核验的研究建议。'
+}
+
+const runSmoke = async () => {
+  if (!LOGIN_USER || !LOGIN_PASS) {
+    throw new Error('local_test_credentials_unavailable')
+  }
   const summary = { pass: [], fail: [] }
 
   const login = await request('/auth/login', {
@@ -472,6 +581,7 @@ const main = async () => {
     throw new Error(`login_failed: ${login.status} ${login.text.slice(0, 200)}`)
   }
   const token = login.json.data
+  activeSmokeToken = token
   const tokenPayload = decodeJwtPayload(token)
   const userId = Number(tokenPayload?.id || 0)
   const role = String(tokenPayload?.role || '')
@@ -484,9 +594,14 @@ const main = async () => {
     modelType: modelMeta.modelType,
   })
 
-  const groupRes = await request('/group/create', { method: 'POST', token, body: {} })
+  const groupRes = await request('/group/create', {
+    method: 'POST',
+    token,
+    body: { params: SMOKE_SESSION_MARKER },
+  })
   const groupId = groupRes.json?.data?.id || groupRes.json?.id
   if (!groupId) throw new Error(`group_create_failed: ${groupRes.text.slice(0, 200)}`)
+  activeSmokeGroupId = Number(groupId)
   await prepareSampleFiles()
 
   const coreRes = await request('/academic/core-function-list', { method: 'POST', token, body: {} })
@@ -495,20 +610,24 @@ const main = async () => {
   const plugins = pluginRes.json?.data?.rows || []
 
   const cases = []
-  for (const core of cores) {
-    cases.push({ kind: 'core', name: core.displayName || core.name, requestName: core.name })
+  if (!SMOKE_SKIP_CORE) {
+    for (const core of cores) {
+      cases.push({ kind: 'core', name: core.displayName || core.name, requestName: core.name })
+    }
   }
   if (!SMOKE_CORE_ONLY) {
-    const filteredPlugins = plugins.filter(
-      plugin => String(plugin.displayName || plugin.name) !== '不启用',
-    )
+    const filteredPlugins = plugins
+      .filter(plugin => String(plugin.displayName || plugin.name) !== '不启用')
+      .filter(plugin => !SMOKE_PLUGIN_NAME || String(plugin.displayName || plugin.name) === SMOKE_PLUGIN_NAME)
     const pluginsToRun =
       SMOKE_PLUGIN_LIMIT > 0 ? filteredPlugins.slice(0, SMOKE_PLUGIN_LIMIT) : filteredPlugins
     for (const plugin of pluginsToRun) {
       cases.push({
         kind: 'plugin',
         name: plugin.displayName || plugin.name,
-        requestName: plugin.name,
+        requestName: /^Lens(?:\s|[｜|:：])/.test(String(plugin.name || '').trim())
+          ? plugin.displayName || plugin.name
+          : plugin.name || plugin.displayName,
       })
     }
   }
@@ -529,7 +648,7 @@ const main = async () => {
       plugin_name: testCase.kind === 'plugin' ? testCase.requestName : undefined,
       core_function: testCase.kind === 'core' ? testCase.requestName : undefined,
       plugin_kwargs: {},
-      main_input: /Arxiv/.test(testCase.name) ? '1706.03762' : '请简要说明测试通过',
+      main_input: /Arxiv/.test(testCase.name) ? '1706.03762' : buildSmokeInput(testCase),
       model: modelMeta.model,
       modelName: modelMeta.modelName,
       modelType: modelMeta.modelType,
@@ -546,7 +665,7 @@ const main = async () => {
     const timeoutMs = /Arxiv|LaTeX|Word|PDF|论文速读|解析整个Python项目|批量生成函数注释|注释整个Python项目|解析项目源代码|历史上的今天/.test(
       testCase.name,
     )
-      ? 180000
+      ? SMOKE_LONG_TIMEOUT_MS
       : 60000
     let rs = await streamAcademic({ token, payload, timeoutMs })
     if (!rs.ok) {
@@ -555,15 +674,25 @@ const main = async () => {
     const outputText = String(rs.finalContent || rs.lines.join('\n') || '')
     const hardErrorPattern =
       /(?:Traceback|插件调用出错|学术后端未返回可展示内容|已收到请求，但未返回可展示内容|学术服务连接异常|服务暂时不可用)/i
-    const hasHardError = hardErrorPattern.test(outputText)
+    const hasHardError =
+      Boolean(rs.error) ||
+      String(rs.finishReason || '').toLowerCase() === 'error' ||
+      hardErrorPattern.test(outputText)
 
     const row = {
       case: formatCase(testCase),
+      status: rs.status,
+      lineCount: rs.lines.length,
       finishReason: rs.finishReason || '',
       finalLen: rs.finalContent.length,
       hasFileVector: rs.hasFileVector,
       hasAnyContent: rs.hasAnyContent,
       error: rs.error || '',
+      errorKind: rs.errorKind || '',
+      streamErrorSeen: rs.streamErrorSeen,
+      dataLineCount: rs.lines.filter(line => /^data\s*:/i.test(line)).length,
+      jsonLineCount: rs.lines.filter(line => /^\s*\{/.test(line)).length,
+      finishMarkerSeen: rs.lines.some(line => /finishReason|\[DONE\]/i.test(line)),
       preview: outputText.slice(0, 100),
       hardError: hasHardError,
     }
@@ -617,26 +746,43 @@ const main = async () => {
     }
   }
 
-  console.log(
-    JSON.stringify(
-      {
-        summary,
-        admin,
-        groupId,
-        modelMeta,
-        balanceGuard,
-        totalCases: cases.length,
-        passCount: summary.pass.length,
-        failCount: summary.fail.length,
-      },
-      null,
-      2,
-    ),
-  )
-  process.exit(summary.fail.length > 0 ? 1 : 0)
+  const result = {
+    summary,
+    admin,
+    groupId,
+    modelMeta,
+    balanceGuard,
+    totalCases: cases.length,
+    passCount: summary.pass.length,
+    failCount: summary.fail.length,
+  }
+  return result
 }
 
-main().catch(err => {
-  console.error('[full_smoke_test] fatal:', err)
-  process.exit(2)
-})
+const main = async () => {
+  try {
+    const result = await runSmoke()
+    const cleanup = await cleanupSmokeSession()
+    return { ...result, cleanup }
+  } catch (error) {
+    await cleanupSmokeSession()
+    throw error
+  }
+}
+
+export { main }
+
+const isMain =
+  process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+
+if (isMain) {
+  main()
+    .then(result => {
+      console.log(JSON.stringify(result, null, 2))
+      process.exit(result.failCount > 0 || !result.cleanup.succeeded ? 1 : 0)
+    })
+    .catch(err => {
+      console.error('[full_smoke_test] fatal:', err)
+      process.exit(2)
+    })
+}

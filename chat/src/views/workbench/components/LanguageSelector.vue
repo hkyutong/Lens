@@ -6,6 +6,9 @@ import type { Language } from '@/store/modules/app/helper'
 import { CheckOne, Down } from '@icon-park/vue-next'
 import { computed, ref } from 'vue'
 
+const props = withDefaults(defineProps<{ position?: 'top-right' | 'bottom-right' }>(), {
+  position: 'top-right',
+})
 const appStore = useAppStore()
 const isMenuOpen = ref(false)
 
@@ -36,12 +39,15 @@ function changeLanguage(language: Language) {
 </script>
 
 <template>
-  <DropdownMenu v-model="isMenuOpen" position="bottom-right" min-width="10rem">
+  <DropdownMenu v-model="isMenuOpen" :position="props.position" min-width="10rem" menu-class="menu-items-academic">
     <template #trigger>
       <button
         type="button"
-        class="btn-pill btn-sm research-chip-button"
+        class="btn-pill btn-sm research-chip-button language-selector-trigger"
         :aria-label="t('lens.header.language')"
+        :title="t('lens.header.language')"
+        :aria-expanded="isMenuOpen"
+        aria-haspopup="menu"
       >
         <span class="research-chip-button__label">{{ currentShort }}</span>
         <Down
@@ -53,11 +59,14 @@ function changeLanguage(language: Language) {
       </button>
     </template>
     <template #menu="{ close }">
-      <div class="min-w-[10rem]">
-        <div
+      <div class="research-language-menu min-w-[10rem]">
+        <button
           v-for="item in languages"
+          type="button"
           :key="item.value"
-          class="menu-item menu-item-md"
+          class="menu-item menu-item-md text-left"
+          role="menuitemradio"
+          :aria-checked="currentLanguage === item.value"
           :class="{ 'menu-item-active': currentLanguage === item.value }"
           @click="
             () => {
@@ -70,9 +79,9 @@ function changeLanguage(language: Language) {
             <div class="menu-item-title">{{ item.label }}</div>
           </div>
           <div v-if="currentLanguage === item.value" class="flex-shrink-0">
-            <CheckOne theme="filled" size="16" class="text-gray-500" aria-hidden="true" />
+            <CheckOne theme="filled" size="16" class="text-[var(--accent-strong)]" aria-hidden="true" />
           </div>
-        </div>
+        </button>
       </div>
     </template>
   </DropdownMenu>
@@ -84,9 +93,11 @@ function changeLanguage(language: Language) {
   align-items: center;
   gap: 0.28rem;
   cursor: pointer;
-  min-height: 44px;
+  min-height: var(--control-height);
   padding: 0 13px;
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  background: transparent;
   transition:
     border-color 0.16s ease,
     background-color 0.16s ease;

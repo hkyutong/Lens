@@ -5,6 +5,7 @@ import { useChatStore } from '@/store'
 import { message } from '@/utils/message'
 import { computed, inject, nextTick, ref, watch } from 'vue'
 import ProjectListItem from './ProjectListItem.vue'
+import ResearchSearchField from '../ResearchSearchField.vue'
 
 const emit = defineEmits<{ close: [] }>()
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
@@ -13,7 +14,8 @@ const ms = message()
 const createNewChatGroup = inject('createNewChatGroup', () =>
   Promise.resolve()
 ) as () => Promise<void>
-const searchInputRef = ref<HTMLInputElement | null>(null)
+const searchInputRef = ref<InstanceType<typeof ResearchSearchField>>()
+const searchButtonRef = ref<HTMLButtonElement>()
 const searchVisible = ref(false)
 const renderKey = ref(0)
 
@@ -60,6 +62,8 @@ async function toggleSearch() {
   searchVisible.value = !searchVisible.value
   if (!searchVisible.value) {
     keyword.value = ''
+    await nextTick()
+    searchButtonRef.value?.focus()
     return
   }
   await nextTick()
@@ -72,38 +76,37 @@ async function toggleSearch() {
     <header class="research-projects__header">
       <div>
         <strong>{{ t('lens.header.projects') }}</strong>
-        <p>{{ t('lens.sidebar.researchProject') }}</p>
       </div>
-      <button
-        v-if="!props.embedded"
-        type="button"
-        :aria-label="t('lens.header.close')"
-        @click="emit('close')"
-      >
-        <SvgIcon icon="ri:close-line" />
-      </button>
+      <div class="research-projects__actions">
+        <button v-if="projects.length" ref="searchButtonRef" type="button"
+          :aria-label="t('lens.sidebar.searchProject')" :aria-expanded="searchVisible"
+          @click="toggleSearch">
+          <SvgIcon icon="ri:search-line" aria-hidden="true" />
+        </button>
+        <button v-if="!props.embedded" type="button" :aria-label="t('lens.header.close')"
+          @click="emit('close')">
+          <SvgIcon icon="ri:close-line" aria-hidden="true" />
+        </button>
+      </div>
     </header>
 
     <button type="button" class="research-projects__new" @click="createProject">
       <SvgIcon icon="ri:add-line" />{{ t('lens.sidebar.newProject') }}
     </button>
 
-    <input
-      v-if="searchVisible"
-      ref="searchInputRef"
-      v-model="keyword"
-      type="search"
-      class="research-projects__search"
-      :placeholder="t('lens.sidebar.searchProject')"
-      @keydown.esc="toggleSearch"
-    />
+    <ResearchSearchField v-if="searchVisible" ref="searchInputRef" v-model="keyword"
+      class="research-projects__search" :label="t('lens.sidebar.searchProject')"
+      @keydown.esc.stop.prevent="toggleSearch" />
 
     <div class="research-projects__body custom-scrollbar">
       <div v-if="!projects.length" class="research-projects__empty">
         <SvgIcon icon="ri:folder-open-line" />
-        <span>{{ t('lens.sidebar.researchProject') }}</span>
+        <span>{{ t('lens.sidebar.noRecords') }}</span>
       </div>
       <template v-else>
+        <p v-if="keyword && !pinnedProjects.length && !recentProjects.length" class="research-projects__empty">
+          {{ t('lens.sidebar.noSearchResults') }}
+        </p>
         <ProjectListItem
           v-if="pinnedProjects.length"
           :key="`pinned-${renderKey}`"
@@ -116,10 +119,8 @@ async function toggleSearch() {
           :key="`recent-${renderKey}`"
           :title="t('lens.sidebar.researchProject')"
           :data-sources="recentProjects"
-          :show-search-action="true"
           @select="selectProject"
           @delete="deleteProject"
-          @search="toggleSearch"
         />
       </template>
     </div>
@@ -139,27 +140,21 @@ async function toggleSearch() {
 }
 .research-projects__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--paper-border);
+  padding-bottom: 8px;
 }
 .research-projects__header strong {
   color: var(--text-main);
   font-size: 15px;
   font-weight: 700;
 }
-.research-projects__header p {
-  margin: 4px 0 0;
-  color: var(--ink-faint);
-  font-size: 10px;
-}
 .research-projects__header button {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text-sub);
 }
 .research-projects__header button:hover {
@@ -167,32 +162,23 @@ async function toggleSearch() {
 }
 .research-projects__new {
   display: flex;
-  min-height: 38px;
+  min-height: 44px;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 16px;
-  border: 1px solid var(--academic-blue);
-  border-radius: 8px;
-  background: var(--academic-blue);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 650;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 12px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--academic-accent-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 500;
 }
-.research-projects__search {
-  min-height: 38px;
-  margin-top: 10px;
-  padding: 0 11px;
-  border: 1px solid var(--paper-border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  color: var(--text-main);
-  font-size: 11px;
-  outline: none;
-}
-.research-projects__search:focus {
-  border-color: var(--academic-border);
-}
+.research-projects__new:hover { background: var(--academic-surface); }
+.research-projects__actions { display: flex; align-items: center; gap: 4px; }
+.research-projects__actions svg { width: 16px; height: 16px; }
+.research-projects :deep(.research-search-field) { margin-top: 10px; }
 .research-projects__body {
   min-height: 0;
   flex: 1;
@@ -206,8 +192,8 @@ async function toggleSearch() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--ink-faint);
-  font-size: 11px;
+  color: var(--text-sub);
+  font-size: 13px;
 }
 .research-projects__empty svg {
   width: 24px;

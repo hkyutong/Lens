@@ -933,14 +933,14 @@ module.exports = {
           fontSize: '1rem',
           lineHeight: '1rem',
           fontWeight: '600',
-          backgroundColor: '#4f46e5',
-          color: '#ffffff',
+          backgroundColor: 'var(--academic-accent-soft)',
+          color: 'var(--accent-strong)',
           transition: 'all 0.2s',
           '&:hover:not(:disabled)': {
-            backgroundColor: '#6366f1',
+            backgroundColor: 'var(--academic-surface)',
           },
           '&:focus-visible': {
-            outline: '2px solid transparent',
+            outline: '2px solid var(--focus-ring)',
             outlineOffset: '2px',
           },
           '&:disabled': {
@@ -948,10 +948,10 @@ module.exports = {
             cursor: 'not-allowed',
           },
           '.dark &': {
-            backgroundColor: '#818cf8',
-            color: '#ffffff',
+            backgroundColor: 'var(--academic-accent-soft)',
+            color: 'var(--accent-strong)',
             '&:hover:not(:disabled)': {
-              backgroundColor: '#6366f1',
+              backgroundColor: 'var(--academic-surface)',
             },
           },
         },
@@ -1052,38 +1052,21 @@ module.exports = {
          */
         '.input': {
           outline: 'none',
-          transition: 'all 0.2s',
-          backgroundColor: '#ffffff',
-          color: '#424242',
-          borderWidth: '1px',
-          borderColor: '#e3e3e3',
-          borderStyle: 'solid',
-          '::placeholder': { color: '#9b9b9b' },
-          '&:hover:not(:disabled)': { borderColor: '#cdcdcd' },
+          transition: 'border-color 0.16s ease, background-color 0.16s ease',
+          backgroundColor: 'var(--surface-card)',
+          color: 'var(--text-main)',
+          border: '1px solid var(--input-border)',
+          borderRadius: 'var(--radius-control)',
+          caretColor: 'var(--academic-accent)',
+          '::placeholder': { color: 'var(--input-placeholder)' },
+          '&:hover:not(:disabled)': { borderColor: 'var(--input-border-hover)' },
           '&:focus:not(:disabled)': {
-            borderColor: '#4f46e5',
-            boxShadow: '0 0 0 2px #4f46e522',
+            borderColor: 'var(--input-border-focus)',
+            boxShadow: 'none',
           },
-          '&.is-error': {
-            borderColor: '#ef4444',
-            '&:focus': { boxShadow: '0 0 0 2px #ef444433' },
-          },
+          '&:focus-visible': { outline: '2px solid var(--focus-ring)', outlineOffset: '2px' },
+          '&.is-error, &.is-error:focus': { borderColor: 'var(--input-border-error)' },
           '&:disabled': { opacity: '.6', cursor: 'not-allowed' },
-          '.dark &': {
-            backgroundColor: '#2f2f2f',
-            color: '#cdcdcd',
-            borderColor: '#424242',
-            '::placeholder': { color: '#9b9b9b' },
-            '&:hover:not(:disabled)': { borderColor: '#676767' },
-            '&:focus:not(:disabled)': {
-              borderColor: '#818cf8',
-              boxShadow: '0 0 0 2px #818cf822',
-            },
-            '&.is-error': {
-              borderColor: '#f87171',
-              '&:focus': { boxShadow: '0 0 0 2px #f8717133' },
-            },
-          },
         },
 
         /* 输入框尺寸 */
@@ -1395,7 +1378,7 @@ module.exports = {
           transition: 'all 0.2s',
           cursor: 'pointer',
           fontWeight: '500',
-          borderRadius: '0.5rem' /* 8px */,
+          borderRadius: 'var(--radius-control)' /* 8px */,
           outline: 'none',
           '&:focus': {
             outline: 'none',
@@ -1413,7 +1396,7 @@ module.exports = {
           padding: '0.5rem 0.75rem' /* px-3 py-2 */,
           fontSize: '0.875rem' /* text-sm */,
           fontWeight: '500' /* font-medium */,
-          borderRadius: '0.5rem' /* rounded-lg */,
+          borderRadius: 'var(--radius-control)' /* rounded-lg */,
           backgroundColor: 'transparent',
           color: '#676767' /* gray-600 */,
           transition: 'all 0.2s',
@@ -1432,7 +1415,7 @@ module.exports = {
           '.dark &': {
             color: '#b4b4b4' /* gray-400 */,
             '&:hover:not(:disabled)': {
-              backgroundColor: '#2f2f2f' /* gray-750 */,
+              backgroundColor: 'var(--surface-card)' /* gray-750 */,
             },
           },
         },
@@ -1452,7 +1435,7 @@ module.exports = {
           },
         },
         '.menu-button-filled': {
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--surface-card)',
           color: '#424242' /* gray-700 */,
           borderWidth: '1px',
           borderColor: '#e3e3e3' /* gray-200 */,
@@ -1460,9 +1443,9 @@ module.exports = {
             borderColor: '#cdcdcd' /* gray-300 */,
           },
           '.dark &': {
-            backgroundColor: '#2f2f2f' /* gray-750 */,
+            backgroundColor: 'var(--surface-card)' /* gray-750 */,
             color: '#cdcdcd' /* gray-300 */,
-            borderColor: '#424242' /* gray-700 */,
+            borderColor: 'var(--paper-border)' /* gray-700 */,
             '&:hover': {
               borderColor: '#676767' /* gray-600 */,
             },
@@ -1486,14 +1469,14 @@ module.exports = {
           width: 'auto',
           minWidth: '10rem',
           overflow: 'hidden',
-          backgroundColor: '#ffffff',
-          borderRadius: '0.5rem',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-          border: '1px solid #e3e3e3' /* gray-200 */,
+          backgroundColor: 'var(--surface-card)',
+          borderRadius: 'var(--radius-control)',
+          boxShadow: 'var(--shadow-soft)',
+          border: '1px solid var(--paper-border)'  /* gray-200 */,
           zIndex: '50',
           '.dark &': {
-            backgroundColor: '#2f2f2f' /* gray-750 */,
-            borderColor: '#424242' /* gray-700 */,
+            backgroundColor: 'var(--surface-card)' /* gray-750 */,
+            borderColor: 'var(--paper-border)' /* gray-700 */,
           },
           /* 自定义滚动条样式 */
           '&.custom-scrollbar': {
@@ -1504,16 +1487,24 @@ module.exports = {
               backgroundColor: 'transparent',
             },
             '&::-webkit-scrollbar-thumb': {
-              backgroundColor: '#9b9b9b',
+              backgroundColor: 'var(--paper-border)',
               borderRadius: '4px',
             },
             '.dark &::-webkit-scrollbar-thumb': {
-              backgroundColor: '#676767',
+              backgroundColor: 'var(--paper-border)',
             },
           },
         },
 
         /* 菜单项容器位置变体 */
+        '.menu-items-academic': {
+          backgroundColor: 'var(--surface-panel)',
+          borderColor: 'color-mix(in srgb, var(--paper-border) 70%, transparent)',
+          '.dark &': {
+            backgroundColor: 'var(--surface-panel)',
+            borderColor: 'color-mix(in srgb, var(--paper-border) 70%, transparent)',
+          },
+        },
         '.menu-items-top': {
           bottom: '100%',
           left: '0',
@@ -1554,27 +1545,13 @@ module.exports = {
          * 单个菜单选项
          */
         '.menu-item': {
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0.5rem 0.75rem',
-          fontSize: '0.875rem',
-          lineHeight: '1.25rem',
-          color: '#424242' /* gray-700 */,
-          cursor: 'pointer',
-          userSelect: 'none',
-          transition: 'all 0.15s',
-          borderRadius: '0.5rem',
-          margin: '0.25rem',
-          gap: '0.75rem',
-          '&:hover, &:focus': {
-            backgroundColor: '#f0f0f0',
-          },
-          '.dark &': {
-            color: '#cdcdcd' /* gray-300 */,
-            '&:hover, &:focus': {
-              backgroundColor: '#3b3b3b',
-            },
-          },
+          display: 'flex', alignItems: 'center', minHeight: '44px',
+          padding: '0.5rem 0.75rem', fontSize: '0.875rem', lineHeight: '1.25rem',
+          color: 'var(--text-main)', cursor: 'pointer', userSelect: 'none',
+          transition: 'background-color 0.16s ease', borderRadius: 'var(--radius-small)',
+          margin: '0.25rem', gap: '0.75rem', width: 'calc(100% - 0.5rem)',
+          '&:hover': { backgroundColor: 'var(--academic-surface)' },
+          '&:focus-visible': { outline: '2px solid var(--focus-ring)', outlineOffset: '-2px' },
         },
 
         /* 菜单项尺寸变体 */
@@ -1630,7 +1607,7 @@ module.exports = {
         /* 菜单项标题 */
         '.menu-item-title': {
           fontWeight: '500',
-          color: '#424242' /* gray-700 */,
+          color: 'var(--text-main)' /* gray-700 */,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -1642,7 +1619,7 @@ module.exports = {
         /* 菜单项描述 */
         '.menu-item-description': {
           fontSize: '0.75rem',
-          color: '#9b9b9b' /* gray-500 */,
+          color: 'var(--text-sub)' /* gray-500 */,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -1664,12 +1641,7 @@ module.exports = {
 
         /* 菜单项变体 */
         '.menu-item-active': {
-          backgroundColor: '#f0f0f0',
-          color: '#424242',
-          '.dark &': {
-            backgroundColor: '#3b3b3b',
-            color: '#cdcdcd',
-          },
+          backgroundColor: 'var(--academic-accent-soft)', color: 'var(--accent-strong)',
         },
         '.menu-item-disabled': {
           color: '#9b9b9b' /* gray-500 */,

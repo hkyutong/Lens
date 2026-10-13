@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import { fetchLoginAPI, fetchSendCode } from '@/api'
 import { YUTOAI_LEGAL_LINKS } from '@/constants/legalLinks'
-import { useBasicLayout } from '@/hooks/useBasicLayout'
+import { useNativeDialog } from '@/hooks/useNativeDialog'
+import SvgIcon from '@/components/common/SvgIcon/index.vue'
 import { t } from '@/locales'
 import { useAuthStore } from '@/store'
 import { message } from '@/utils/message'
@@ -22,7 +23,6 @@ const ms = message()
 const loading = ref(false)
 const authStore = useAuthStore()
 const lastSendPhoneCodeTime = ref(0)
-const { isMobile } = useBasicLayout()
 const isShow = ref(false)
 
 // 验证码登录表单
@@ -81,7 +81,9 @@ const validateContactOnly = () => {
 }
 
 const agreedToPolicies = ref(false)
+const policyDialog = ref<HTMLDialogElement | null>(null)
 const showPolicyModal = ref(false)
+useNativeDialog(policyDialog, () => showPolicyModal.value)
 const policyTitle = ref('')
 const policyUrl = ref('')
 const termsUrl = YUTOAI_LEGAL_LINKS.terms
@@ -121,7 +123,7 @@ async function handleSendCaptcha() {
       res = await fetchSendCode(params)
       const { success } = res
       if (success) {
-        ms.success(res.data)
+        ms.success(t('lens.account.codeSent'))
         // 记录重新发送倒计时
         lastSendPhoneCodeTime.value = 60
         changeLastSendPhoneCodeTime()
@@ -135,7 +137,7 @@ function handlerSubmit(event: Event) {
   event.preventDefault()
 
   if (!agreedToPolicies.value) {
-    return ms.error('请阅读并同意《服务协议》和《隐私政策》')
+    return ms.error(t('lens.login.agreementRequired'))
   }
 
   if (validateForm()) {
@@ -172,13 +174,13 @@ async function loginAction() {
     authStore.setLoginDialog(false)
   } catch (error: any) {
     loading.value = false
-    ms.error(sanitizeUserFacingErrorMessage(error?.message || '', 0, '登录失败，请稍后重试'))
+    ms.error(sanitizeUserFacingErrorMessage(error?.message || '', 0, t('lens.login.failed')))
   }
 }
 </script>
 
 <template>
-  <div class="w-full h-full flex flex-col justify-between" :class="isMobile ? 'px-5 ' : 'px-10 '">
+  <div class="w-full h-full flex flex-col justify-between">
     <!-- 密码登录表单 -->
     <form
       v-if="loginMode === 'password'"
@@ -188,15 +190,16 @@ async function loginAction() {
     >
       <div>
         <div class="flex flex-col gap-2">
-          <label for="username" class="block text-sm/6 font-medium text-gray-900 dark:text-gray-300"
-            >邮箱</label
+          <label for="username" class="login-field-label block text-sm/6 font-medium"
+            >{{ t('lens.login.accountLabel') }}</label
           >
           <div>
             <input
               id="username"
+              autocomplete="username"
               type="text"
               v-model="passwordForm.username"
-              :placeholder="t('login.enterEmail')"
+              :placeholder="t('login.enterUsername')"
               class="input input-md w-full"
             />
           </div>
@@ -206,12 +209,13 @@ async function loginAction() {
           <div class="flex flex-col gap-2">
             <label
               for="password"
-              class="block text-sm/6 font-medium text-gray-900 dark:text-gray-300"
+              class="login-field-label block text-sm/6 font-medium"
               >{{ t('login.password') }}</label
             >
             <div>
               <input
                 id="password"
+                autocomplete="current-password"
                 type="password"
                 v-model="passwordForm.password"
                 :placeholder="t('login.enterYourPassword')"
@@ -224,28 +228,31 @@ async function loginAction() {
 
       <div>
         <div class="mt-8 mb-6">
-          <div class="flex items-start justify-center">
+          <div class="login-policy-row">
+            <label class="login-policy-check" for="agreement-password">
             <input
               id="agreement-password"
               v-model="agreedToPolicies"
               type="checkbox"
-              class="mt-0.5 h-4 w-4 rounded border-white/40 bg-white text-[#080808] focus:ring-black/20"
+              :aria-label="t('lens.login.agreementLabel')"
+              class="lens-checkbox"
             />
-            <p class="ml-2 text-xs text-white/60 leading-5">
+            </label>
+            <p class="login-policy-copy text-xs leading-5">
               <button
                 type="button"
-                class="font-medium text-white opacity-80 hover:opacity-100 no-underline"
-                @click="openPolicy('服务协议', termsUrl)"
+                class="login-policy-link font-medium no-underline"
+                @click="openPolicy(t('lens.login.terms'), termsUrl)"
               >
-                《服务协议》
+                {{ t('lens.login.terms') }}
               </button>
-              和
+              <span>{{ t('lens.login.and') }}</span>
               <button
                 type="button"
-                class="font-medium text-white opacity-80 hover:opacity-100 no-underline"
-                @click="openPolicy('隐私政策', privacyUrl)"
+                class="login-policy-link font-medium no-underline"
+                @click="openPolicy(t('lens.login.privacy'), privacyUrl)"
               >
-                《隐私政策》
+                {{ t('lens.login.privacy') }}
               </button>
             </p>
           </div>
@@ -262,10 +269,10 @@ async function loginAction() {
         </button>
         <button
           type="button"
-          class="mt-4 text-sm text-white/70 hover:text-white text-center w-full"
+          class="login-switch mt-4 text-sm text-center w-full"
           @click="emit('changeLoginType', 'captcha')"
         >
-          使用验证码登录
+          {{ t('lens.login.useCode') }}
         </button>
       </div>
     </form>
@@ -279,12 +286,13 @@ async function loginAction() {
     >
       <div>
         <div class="flex flex-col gap-2">
-          <label for="contact" class="block text-sm/6 font-medium text-gray-900 dark:text-gray-300"
-            >邮箱</label
+          <label for="contact" class="login-field-label block text-sm/6 font-medium"
+            >{{ t('login.email') }}</label
           >
           <div>
             <input
               id="contact"
+              autocomplete="email"
               type="text"
               v-model="captchaForm.contact"
               :placeholder="t('login.enterEmail')"
@@ -297,13 +305,14 @@ async function loginAction() {
           <div class="flex flex-col gap-2">
             <label
               for="captchaId"
-              class="block text-sm/6 font-medium text-gray-900 dark:text-gray-300"
-              >验证码</label
+              class="login-field-label block text-sm/6 font-medium"
+              >{{ t('lens.login.verificationCode') }}</label
             >
             <div class="relative px-1">
               <div class="flex relative">
                 <input
                   id="captchaId"
+                  autocomplete="one-time-code"
                   type="text"
                   v-model="captchaForm.captchaId"
                   :placeholder="t('login.enterCode')"
@@ -320,7 +329,7 @@ async function loginAction() {
                   </span>
                   {{
                     lastSendPhoneCodeTime > 0
-                      ? `${lastSendPhoneCodeTime}秒`
+                      ? t('lens.login.codeCountdown', { seconds: lastSendPhoneCodeTime })
                       : t('login.sendVerificationCode')
                   }}
                 </button>
@@ -341,28 +350,31 @@ async function loginAction() {
 
       <div>
         <div class="mt-8 mb-6">
-          <div class="flex items-start justify-center">
+          <div class="login-policy-row">
+            <label class="login-policy-check" for="agreement-captcha">
             <input
               id="agreement-captcha"
               v-model="agreedToPolicies"
               type="checkbox"
-              class="mt-0.5 h-4 w-4 rounded border-white/40 bg-white text-[#080808] focus:ring-black/20"
+              :aria-label="t('lens.login.agreementLabel')"
+              class="lens-checkbox"
             />
-            <p class="ml-2 text-xs text-white/60 leading-5">
+            </label>
+            <p class="login-policy-copy text-xs leading-5">
               <button
                 type="button"
-                class="font-medium text-white opacity-80 hover:opacity-100 no-underline"
-                @click="openPolicy('服务协议', termsUrl)"
+                class="login-policy-link font-medium no-underline"
+                @click="openPolicy(t('lens.login.terms'), termsUrl)"
               >
-                《服务协议》
+                {{ t('lens.login.terms') }}
               </button>
-              和
+              <span>{{ t('lens.login.and') }}</span>
               <button
                 type="button"
-                class="font-medium text-white opacity-80 hover:opacity-100 no-underline"
-                @click="openPolicy('隐私政策', privacyUrl)"
+                class="login-policy-link font-medium no-underline"
+                @click="openPolicy(t('lens.login.privacy'), privacyUrl)"
               >
-                《隐私政策》
+                {{ t('lens.login.privacy') }}
               </button>
             </p>
           </div>
@@ -375,21 +387,24 @@ async function loginAction() {
           <span v-if="loading" class="inline-block mr-2">
             <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
           </span>
-          验证码登录
+          {{ t('lens.login.codeLogin') }}
         </button>
         <button
           type="button"
-          class="mt-4 text-sm text-white/70 hover:text-white text-center w-full"
+          class="login-switch mt-4 text-sm text-center w-full"
           @click="emit('changeLoginType', 'password')"
         >
-          使用密码登录
+          {{ t('lens.login.usePassword') }}
         </button>
       </div>
     </form>
 
-    <div
+    <dialog
+      ref="policyDialog"
+      :aria-label="policyTitle"
+      @cancel.prevent="closePolicy"
       v-if="showPolicyModal"
-      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+      class="lens-dialog fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
     >
       <div
         class="bg-white dark:bg-gray-900 rounded-xl shadow-lg w-[90vw] h-[80vh] max-w-3xl overflow-hidden flex flex-col"
@@ -397,24 +412,85 @@ async function loginAction() {
         <div
           class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800"
         >
-          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{
+          <span class="login-policy-title text-sm font-medium">{{
             policyTitle
           }}</span>
           <button
             type="button"
-            class="btn-icon btn-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+            class="login-policy-close"
             @click="closePolicy"
-            aria-label="关闭"
+:aria-label="t('lens.header.close')"
           >
-            ✕
+            <SvgIcon icon="ri:close-line" />
           </button>
         </div>
         <iframe
           :src="policyUrl"
+          :title="policyTitle"
           class="w-full flex-1 border-0"
           referrerpolicy="no-referrer"
         ></iframe>
       </div>
-    </div>
+    </dialog>
   </div>
 </template>
+
+<style scoped>
+.login-field-label {
+  color: var(--text-sub);
+}
+
+.login-policy-row {
+  display: grid;
+  grid-template-columns: 44px max-content 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.login-policy-check { display: grid; width: 44px; min-width: 44px; height: 44px; place-items: center; cursor: pointer; }
+.login-policy-copy { display: flex; min-width: 0; align-items: center; gap: 4px; margin: 0; color: var(--text-sub); white-space: nowrap; }
+.login-policy-link { display: inline-flex; align-items: center; vertical-align: middle; }
+
+.login-policy-title {
+  color: var(--text-main);
+}
+
+.login-policy-close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-sub);
+}
+
+.login-policy-close svg { width: 16px; height: 16px; }
+.login-policy-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.login-policy-close:hover {
+  color: var(--text-main);
+}
+
+.login-policy-link,
+.login-switch {
+  min-height: 44px;
+  color: var(--accent);
+  transition: color 160ms ease;
+}
+
+.login-policy-link:hover,
+.login-switch:hover {
+  color: var(--accent-strong);
+}
+
+.login-policy-copy :deep(button:focus-visible),
+.login-switch:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+@media (max-width: 359px) {
+  .login-policy-copy { font-size: 11px; gap: 3px; }
+}
+</style>

@@ -22,6 +22,7 @@ const authStore = useAuthStore()
 const useGlobalStore = useGlobalStoreWithOut()
 const loading = ref(true)
 const packageList = ref<Pkg[]>([])
+const packageLoadFailed = ref(false)
 const ms = message()
 const dialogLoading = ref(false)
 const model3Name = computed(() => authStore.globalConfig.model3Name || t('goods.basicModelQuota'))
@@ -82,6 +83,7 @@ const payChannel = computed(() => {
 
 interface Props {
   visible: boolean
+  mode?: 'full' | 'pricing'
 }
 
 interface PlanPreset {
@@ -303,7 +305,7 @@ function getDisplayPricePeriodLabel() {
 onMounted(() => {
   if (props.visible) {
     // 组件挂载时检查登录状态
-    if (checkLoginStatus()) {
+    if (isLogin.value || props.mode !== 'pricing') {
       openDrawerAfter()
       if (isWxEnv.value) jsapiInitConfig()
     }
@@ -459,12 +461,17 @@ async function handleBuyGoods(pkg: Pkg) {
 }
 
 async function openDrawerAfter() {
+  if (props.mode === 'pricing' && !isLogin.value) {
+    loading.value = false
+    return
+  }
   // 首先检查登录状态
   if (!checkLoginStatus()) {
     return
   }
 
   loading.value = true
+  packageLoadFailed.value = false
   try {
     // 清空当前套餐列表，避免显示旧数据
     packageList.value = []
@@ -477,11 +484,11 @@ async function openDrawerAfter() {
       selectName.value = displayPackages.value[0].name
     }
     // 获取签到记录
-    await getSigninLog()
+    if (props.mode !== 'pricing') await getSigninLog()
     loading.value = false
   } catch (error) {
     loading.value = false
-    console.error('加载升级套餐数据失败:', error)
+    packageLoadFailed.value = true
   }
 }
 
@@ -587,7 +594,6 @@ async function getSigninLog() {
       signInData.value = normalizeSignInRecords(res.data)
     }
   } catch (error) {
-    console.error('加载签到数据失败:', error)
   }
 }
 
@@ -603,7 +609,6 @@ async function handleSignIn() {
     signInLoading.value = false
   } catch (error) {
     signInLoading.value = false
-    console.error('签到失败:', error)
   }
 }
 
@@ -632,15 +637,19 @@ function checkLoginStatus() {
   return true
 }
 
-// 监听登录状态变化
+// An independently mounted purchase page must refresh after login.
 watch(isLogin, newLoginStatus => {
-  // 如果组件可见但用户登出了，立即关闭设置弹窗并打开登录弹窗
-  if (props.visible && !newLoginStatus) {
-    // 显示消息提醒
-    ms.warning(t('lens.member.loggedOut'))
-    useGlobalStore.updateSettingsDialog(false)
-    authStore.setLoginDialog(true)
+  if (!props.visible) return
+  if (newLoginStatus) {
+    void openDrawerAfter()
+    if (isWxEnv.value) void jsapiInitConfig()
+    return
   }
+  packageList.value = []
+  activeView.value = 'main'
+  selectedPackage.value = null
+  loading.value = false
+  if (props.mode !== 'pricing') checkLoginStatus()
 })
 
 // 添加对visible属性的监听，确保组件可见时重新加载数据
@@ -659,18 +668,18 @@ watch(
 </script>
 
 <template>
-  <div class="h-full overflow-y-auto custom-scrollbar p-1">
+  <div class="research-member" :class="{ 'research-member--pricing': props.mode === 'pricing' }">
     <!-- 主视图 -->
     <div v-if="activeView === 'main'">
       <!-- 套餐列表卡片 -->
       <div
-        class="mb-5 flex flex-col space-y-6 rounded-[28px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-panel)]"
+        class="research-member__section"
       >
         <div
-          class="mb-1 flex flex-col gap-3 border-b border-[var(--paper-border)] pb-4 md:flex-row md:items-center md:justify-between"
+          class="research-member__header"
         >
-          <div>
-            <div class="text-[18px] font-semibold text-[var(--text-main)]">
+          <div v-if="props.mode !== 'pricing'">
+            <div class="research-member__heading">
               {{ t('lens.member.planList') }}
             </div>
             <div class="mt-1 text-sm text-[var(--text-sub)]">
@@ -679,16 +688,19 @@ watch(
           </div>
 
           <div
-            class="inline-flex items-center self-start rounded-full border border-[var(--paper-border)] bg-[var(--surface-panel)] p-1.5"
+            class="research-member__billing"
+            role="group"
+            :aria-label="t('lens.member.planList')"
           >
             <button
               type="button"
               :class="[
                 billingCycle === 'monthly'
-                  ? 'bg-[var(--surface-card)] text-[var(--text-main)] shadow-[var(--shadow-soft)]'
+                  ? 'bg-[var(--surface-card)] text-[var(--text-main)] '
                   : 'text-[var(--text-sub)]',
-                'rounded-full px-5 py-2.5 text-sm font-medium transition-colors',
+                'min-h-[44px] rounded-full px-3 py-2 text-sm font-medium transition-colors',
               ]"
+              :aria-pressed="billingCycle === 'monthly'"
               @click="billingCycle = 'monthly'"
             >
               {{ t('lens.member.monthly') }}
@@ -697,15 +709,16 @@ watch(
               type="button"
               :class="[
                 billingCycle === 'annual'
-                  ? 'bg-[var(--surface-card)] text-[var(--text-main)] shadow-[var(--shadow-soft)]'
+                  ? 'bg-[var(--surface-card)] text-[var(--text-main)] '
                   : 'text-[var(--text-sub)]',
-                'rounded-full px-5 py-2.5 text-sm font-medium transition-colors',
+                'min-h-[44px] rounded-full px-3 py-2 text-sm font-medium transition-colors',
               ]"
+              :aria-pressed="billingCycle === 'annual'"
               @click="billingCycle = 'annual'"
             >
               <span>{{ t('lens.member.annual') }}</span>
               <span
-                class="ml-2 inline-flex rounded-full bg-[var(--text-main)] px-2.5 py-1 text-[10px] font-semibold leading-none text-[var(--bg-body)]"
+                class="ml-2 inline-flex rounded-full bg-[var(--text-main)] px-2.5 py-1 text-[12px] font-semibold leading-none text-[var(--bg-body)]"
               >
                 {{ t('lens.member.annualBetter') }}
               </span>
@@ -713,33 +726,54 @@ watch(
           </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+        <div
+          v-if="props.mode === 'pricing' && !isLogin"
+          class="member-plan-state"
+          :aria-label="t('lens.member.loggedOut')"
+        >
+          <p>{{ t('lens.member.loginRequired') }}</p>
+          <button type="button" class="research-member__purchase" @click="authStore.setLoginDialog(true)">
+            {{ t('lens.sidebar.login') }}
+          </button>
+        </div>
+        <div v-else-if="loading && !displayPackages.length" class="research-member__plans" :aria-label="t('lens.member.loadingPlans')" aria-busy="true">
+          <div v-for="index in 3" :key="index" class="research-member__plan research-member__skeleton" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+        <div v-else-if="!displayPackages.length" class="member-plan-state" role="status" :aria-busy="loading">
+          <span>{{ loading ? t('lens.member.loadingPlans') : packageLoadFailed ? t('lens.member.loadPlansFailed') : t('lens.member.noPlans') }}</span>
+          <button v-if="packageLoadFailed && !loading" type="button" class="btn btn-secondary btn-md" @click="openDrawerAfter">
+            {{ t('lens.workspace.retry') }}
+          </button>
+        </div>
+        <div v-else class="research-member__plans">
           <div
-            v-for="(item, index) in displayPackages"
-            :key="index"
+            v-for="item in displayPackages"
+            :key="item.id"
             :class="[
               item.name == selectName
-                ? 'border-[var(--text-main)] shadow-[var(--shadow-panel)]'
-                : 'border-[var(--paper-border)] shadow-[var(--shadow-soft)]',
-              'flex h-full min-h-[520px] flex-col rounded-[28px] border bg-[var(--surface-card)] p-7 transition-all hover:shadow-[var(--shadow-panel)]',
+                ? 'border-[var(--text-main)] '
+                : 'border-[var(--paper-border)] ',
+              'flex h-full flex-col rounded-[var(--radius-panel)] border bg-[var(--surface-card)] p-5 transition-colors',
             ]"
             @click="handleSelect(item)"
-          >
-            <div class="relative">
-              <b class="text-[25px] font-medium leading-[1.08] text-[var(--text-main)]">
+            class="research-member__plan">
+            <div class="research-member__plan-heading">
+              <b class="text-[22px] font-medium leading-[1.08] text-[var(--text-main)]">
                 {{ getDisplayPlanName(item) }}
               </b>
             </div>
 
-            <div class="mt-6">
-              <div class="flex items-end gap-1">
-                <span class="mb-[10px] text-[16px] font-normal leading-none text-[var(--text-sub)]">
+            <div class="research-member__price">
+              <div class="research-member__price-line">
+                <span class="research-member__currency">
                   {{ getDisplayPricePrefix(item) }}
                 </span>
-                <span class="text-[46px] font-medium leading-none tracking-[-0.045em] text-[var(--text-main)]">
+                <span class="research-member__price-number">
                   {{ getDisplayPriceValue(item) }}
                 </span>
-                <span class="mb-[7px] ml-1 flex flex-col text-[12px] font-normal leading-[1.1] text-[var(--text-sub)]">
+                <span class="research-member__price-unit">
                   <span>{{ getDisplayPriceCurrencyLabel(item) }}</span>
                   <span>{{ getDisplayPricePeriodLabel() }}</span>
                 </span>
@@ -752,35 +786,30 @@ watch(
               </div>
             </div>
 
-            <p class="mt-5 min-h-[84px] max-w-[34ch] text-[15px] leading-7 text-[var(--text-sub)]">
+            <p class="research-member__description">
               {{ getPlanSummary(item) }}
             </p>
 
-            <div class="mt-7">
+            <div class="research-member__action">
               <button
+                type="button"
                 @click.stop="handleSuccess(item)"
-                class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)]"
+                class="research-member__purchase"
               >
                 {{ t('lens.member.openNow') }}
               </button>
             </div>
 
-            <div class="mt-8 space-y-4 border-t border-[var(--paper-border)] pt-6">
-              <div
-                v-for="feature in getPlanFeatureLabels(item)"
-                :key="feature"
-                class="flex items-start gap-3"
-              >
-                <span
-                  class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--paper-border)] bg-[var(--surface-panel)] text-[11px] font-semibold text-[var(--text-main)]"
-                >
-                  ✦
-                </span>
-                <span class="text-[15px] leading-7 text-[var(--text-main)]">{{ feature }}</span>
-              </div>
-            </div>
+            <ul class="research-member__features">
+              <li v-for="feature in getPlanFeatureLabels(item)" :key="feature">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="m4 10 4 4 8-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span>{{ feature }}</span>
+              </li>
+            </ul>
 
-            <div class="mt-auto space-y-3 border-t border-[var(--paper-border)] pt-6">
+            <div class="research-member__allowance">
               <div v-if="!isHideModel3Point" class="flex items-end justify-between gap-4">
                 <span class="text-sm font-medium text-[var(--text-sub)]">{{ model3Name }}</span>
                 <span class="text-base font-semibold text-[var(--text-main)]">
@@ -806,21 +835,21 @@ watch(
         </div>
       </div>
       <!-- 签到和余额并排显示区域 -->
-      <div class="mb-4 grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+      <div v-if="props.mode !== 'pricing'" class="research-member__extras">
         <!-- 签到日历卡片 - 左侧 -->
         <div
-          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-soft)]"
+          class="research-member__section"
         >
           <!-- 卡片标题 -->
           <div
-            class="mb-1 border-b border-[var(--paper-border)] pb-4 text-[18px] font-semibold text-[var(--text-main)]"
+            class="research-member__heading"
           >
             {{ t('lens.member.signInReward') }}
           </div>
 
           <!-- 签到信息 -->
           <div
-            class="mb-2 rounded-[20px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-4 text-sm leading-7 text-[var(--text-sub)]"
+            class="mb-2 rounded-[var(--radius-control)] border border-[var(--paper-border)] bg-[var(--surface-card)] p-4 text-sm leading-7 text-[var(--text-sub)]"
           >
             <span>{{ t('lens.member.signInGift') }}</span>
             <span v-if="signInModel3Count > 0 && !isHideModel3Point"
@@ -858,8 +887,7 @@ watch(
                 class="py-2"
               ></div>
               <div v-for="day in days" :key="day.signInDate" class="py-2">
-                <button
-                  type="button"
+                <span
                   :class="[
                     day.isToday
                       ? 'bg-[var(--btn-bg-primary)] text-[var(--btn-text-primary)]'
@@ -870,17 +898,17 @@ watch(
                   ]"
                 >
                   <time :datetime="day.signInDate">{{ day.day }}</time>
-                </button>
+                </span>
               </div>
             </div>
           </div>
 
           <!-- 签到按钮 -->
-          <div class="mt-4 border-t border-[var(--paper-border)] pt-4">
+          <div class="research-member__action">
             <button
               @click="handleSignIn"
               :disabled="hasSignedInToday || signInLoading"
-              class="inline-flex w-full items-center justify-center rounded-[999px] bg-[var(--btn-bg-primary)] px-6 py-3 text-[15px] font-medium text-[var(--btn-text-primary)] transition hover:bg-[var(--btn-bg-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              class="research-member__purchase"
             >
               <span v-if="signInLoading">{{ t('lens.member.signingIn') }}</span>
               <span v-else-if="hasSignedInToday">{{ t('lens.member.signedIn') }}</span>
@@ -891,11 +919,11 @@ watch(
 
         <!-- 钱包余额卡片 - 右侧 -->
         <div
-          class="flex h-full flex-col space-y-5 rounded-[28px] border border-[var(--paper-border)] bg-[var(--surface-card)] p-6 shadow-[var(--shadow-soft)]"
+          class="research-member__section"
         >
           <!-- 卡片标题 -->
           <div
-            class="mb-1 border-b border-[var(--paper-border)] pb-4 text-[18px] font-semibold text-[var(--text-main)]"
+            class="research-member__heading"
           >
             {{ t('lens.member.quotaInfo') }}
           </div>
@@ -907,7 +935,7 @@ watch(
               v-if="!isHideModel3Point"
               class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">{{ model3Name }}</div>
+              <div class="min-w-0 text-[var(--text-sub)]">{{ model3Name }}</div>
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel3Count > 999999
@@ -927,7 +955,7 @@ watch(
               v-if="!isHideModel4Point"
               class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">{{ model4Name }}</div>
+              <div class="min-w-0 text-[var(--text-sub)]">{{ model4Name }}</div>
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumModel4Count > 99999
@@ -947,7 +975,7 @@ watch(
               v-if="!isHideDrawMjPoint"
               class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">{{ drawMjName }}</div>
+              <div class="min-w-0 text-[var(--text-sub)]">{{ drawMjName }}</div>
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
                   userBalance.sumDrawMjCount > 99999
@@ -966,11 +994,11 @@ watch(
             <div
               class="flex items-center justify-between gap-4 py-1.5"
             >
-              <div class="shrink-0 whitespace-nowrap text-[var(--text-sub)]">
+              <div class="min-w-0 text-[var(--text-sub)]">
                 {{ t('lens.member.memberStatus') }}
               </div>
               <div
-                class="whitespace-nowrap text-lg font-bold"
+                class="min-w-0 text-right text-sm font-semibold"
                 :class="isMember ? 'text-[var(--text-main)]' : 'text-[var(--text-sub)]'"
               >
                 {{
@@ -985,7 +1013,7 @@ watch(
           <!-- 卡密兑换部分移至此处 -->
           <div
             v-if="showCrami"
-            class="mt-4 flex-grow border-t border-[var(--paper-border)] pt-4"
+            class="research-member__redeem"
           >
             <div class="mb-3 text-base font-medium text-[var(--text-main)]">
               {{ t('lens.member.cardRedeem') }}
@@ -993,8 +1021,9 @@ watch(
             <div class="flex items-center space-x-2">
               <input
                 v-model="code"
+                :aria-label="t('usercenter.enterCardDetails')"
                 :placeholder="t('usercenter.enterCardDetails')"
-                class="h-12 w-full rounded-[16px] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 text-[var(--text-main)] outline-none transition focus:border-[var(--text-main)]"
+                class="h-12 min-w-0 w-full rounded-[var(--radius-control)] border border-[var(--paper-border)] bg-[var(--surface-panel)] px-4 text-[var(--text-main)] transition focus:border-[var(--text-main)]"
                 type="text"
               />
               <button
@@ -1021,31 +1050,346 @@ watch(
 </template>
 
 <style scoped>
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+.research-member {
+  color: inherit;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+.research-member .research-member__section {
+  padding: 0;
+  border: 0;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
+.research-member .research-member__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.research-member .research-member__heading {
+  min-width: 0;
+}
+
+.research-member .research-member__heading :is(h2,h3,h4) {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.research-member .research-member__heading p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.research-member .research-member__billing {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--academic-blue) 9%, var(--paper-bg));
+}
+
+.research-member .research-member__billing button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 3px);
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: none;
+}
+
+.research-member .research-member__plans {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  align-items: stretch;
+}
+
+.research-member .research-member__plan {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 14px;
+  padding: 18px 16px;
+  border: 1px solid var(--paper-border);
+  border-radius: 18px;
+  background: var(--paper-bg);
+  box-shadow: none;
+}
+
+.research-member .research-member__plan-heading {
+  min-height: 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: inherit;
+}
+
+.research-member .research-member__plan-heading :is(h2,h3,h4,p) {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.research-member .research-member__price {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.research-member .research-member__price-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 0;
+  height: auto;
+}
+
+.research-member .research-member__currency {
+  font-size: 12px;
+  font-weight: 400;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.research-member .research-member__price-number {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.research-member .research-member__price-unit {
+  font-size: 12px;
+  font-weight: 400;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.research-member .research-member__description {
+  min-height: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.research-member .research-member__action {
+  margin: 0;
+  padding: 0;
+}
+
+.research-member .research-member__purchase {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  box-shadow: none;
+  border: 0;
+  background: var(--academic-blue);
+  color: var(--btn-text-primary);
+}
+
+.research-member .research-member__features {
+  display: flex; flex-direction: column; gap: 6px; min-height: 0; margin: 0; padding: 0; border: 0; font-size: 13px; line-height: 1.6;
+}
+
+.research-member .research-member__features > * {
+  display: flex; align-items: flex-start; gap: 10px; margin: 0; font-size: 13px; line-height: 1.6;
+}
+
+.research-member .research-member__allowance {
+  display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; min-width: 0; margin: 0; font-size: 13px; line-height: 1.6;
+}
+
+.research-member .research-member__allowance :last-child {
+  font-size: 13px; font-weight: 400;
+}
+
+.research-member .research-member__redeem {
+  padding: 0;
+  border: 0;
   background: transparent;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(155, 155, 155, 0.5);
-  border-radius: 20px;
-  border: transparent;
+.research-member .research-member__extras {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  align-items: start;
+  gap: 24px;
+  margin-top: 28px;
+  padding: 0;
+  border: 0;
 }
 
-/* 暗黑模式下滚动条样式 */
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 100, 100, 0.5);
+.research-member .research-member__extras > * {
+  min-width: 0;
+  padding: 0;
+  border: 0;
 }
 
-.dark .custom-scrollbar {
-  scrollbar-color: rgba(100, 100, 100, 0.5) transparent;
+.research-member .research-member__extras :is(h2,h3,h4) {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+@media (max-width: 1099px) {
+  .research-member .research-member__plans {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .research-member .research-member__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .research-member .research-member__plans {
+    grid-template-columns: minmax(0,1fr);
+    gap: 12px;
+  }
+
+  .research-member .research-member__plan {
+    padding: 18px;
+    gap: 12px;
+  }
+
+  .research-member .research-member__description {
+    min-height: 0;
+  }
+
+  .research-member .research-member__extras {
+    grid-template-columns: minmax(0,1fr);
+    gap: 24px;
+    margin-top: 24px;
+  }
+}
+
+.research-member .research-member__heading > :first-child {
+  display: none;
+}
+
+.research-member .research-member__heading > :last-child {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+.research-member .research-member__plan-heading > * {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.research-member .research-member__purchase:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--academic-blue) 88%, var(--paper-bg));
+}
+
+.research-member .research-member__purchase:focus-visible {
+  outline: 2px solid var(--academic-blue);
+  outline-offset: 3px;
+}
+
+.research-member .research-member__purchase:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.research-member .research-member__allowance > * { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; margin: 0; }
+.research-member .research-member__allowance > * > :first-child { font-size: 13px; font-weight: 400; white-space: nowrap; color: color-mix(in srgb, currentColor 65%, transparent); }
+.research-member .research-member__allowance > * > :last-child { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.research-member .research-member__features:empty { display: none; }
+
+.research-member__features svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 2px;
+  color: var(--academic-accent);
+}
+
+.member-plan-state {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+  color: var(--text-sub);
+  text-align: center;
+}
+
+.member-plan-state .research-member__purchase { width: auto; min-width: 128px; }
+.research-member__skeleton span {
+  display: block;
+  height: 16px;
+  border-radius: var(--radius-small);
+  background: var(--surface-muted);
+}
+.research-member__skeleton span:first-child { width: 40%; height: 24px; }
+.research-member__skeleton span:nth-child(2) { width: 65%; height: 38px; margin-top: 16px; }
+.research-member__skeleton span:last-child { height: 44px; margin-top: 32px; }
+
+.research-member--pricing .research-member__header {
+  justify-content: center;
+  margin-bottom: 32px;
+}
+.research-member--pricing .research-member__billing {
+  border-radius: 999px;
+  background: var(--surface-panel);
+}
+.research-member--pricing .research-member__billing button { border-radius: 999px; }
+.research-member--pricing .research-member__billing button span:last-child {
+  background: var(--academic-accent-soft);
+  color: var(--academic-accent);
+}
+.research-member--pricing .research-member__plans { gap: 20px; }
+.research-member--pricing .research-member__plan {
+  padding: 28px;
+  gap: 20px;
+  border-radius: 16px;
+  background: var(--surface-card);
+}
+.research-member--pricing .research-member__plan-heading > * { font-size: 22px; }
+.research-member--pricing .research-member__price-number { font-size: 38px; letter-spacing: -0.025em; }
+.research-member--pricing .research-member__description { min-height: 4.8em; font-size: 14px; }
+.research-member--pricing .research-member__features { gap: 12px; list-style: none; }
+.research-member--pricing .research-member__features > * { font-size: 14px; }
+.research-member--pricing .research-member__allowance {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid var(--paper-border);
+}
+.research-member--pricing .research-member__purchase { font-size: 14px; font-weight: 600; }
+@media (max-width: 720px) {
+  .research-member--pricing .research-member__header { align-items: center; margin-bottom: 24px; }
+  .research-member--pricing .research-member__plan { padding: 24px; }
+  .research-member--pricing .research-member__description { min-height: 0; }
 }
 </style>

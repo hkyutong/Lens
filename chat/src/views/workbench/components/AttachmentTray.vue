@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Close } from '@icon-park/vue-next'
+import { t } from '@/locales'
 import { ref, watch } from 'vue'
 
 interface FileItem {
@@ -63,14 +64,10 @@ watch(
             <img
               :src="file.url"
               class="max-h-16 border border-gray-100 shadow-sm dark:border-gray-700 rounded-md"
-              alt="预览图片"
+              :alt="t('lens.footer.imagePreview')"
             />
-            <div
-              class="absolute top-1 right-1 cursor-pointer bg-white dark:bg-gray-700 rounded-full p-1 shadow-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              @click="handleClearData(savedFiles.indexOf(file), true)"
-            >
-              <Close class="w-3 h-3" />
-            </div>
+            <button
+              type="button" class="attachment-remove" :aria-label="t('lens.footer.removeMaterial')" @click="handleClearData(savedFiles.indexOf(file), true)"><Close class="w-4 h-4" /></button>
           </div>
 
           <!-- 再显示文件 -->
@@ -80,7 +77,7 @@ watch(
             :key="'saved-file-' + index"
           >
             <div
-              class="px-3 flex items-center justify-start rounded-xl h-10 text-gray-700 dark:text-gray-400 border border-gray-100 shadow-sm dark:border-gray-700 transition-colors relative"
+              class="px-3 flex items-center justify-start rounded-[var(--radius-control)] min-h-[44px] text-[var(--text-main)] border border-[var(--paper-border)] bg-[var(--surface-card)] transition-colors relative"
             >
               <!-- 统一加载指示器 - 处理文件转换加载状态 -->
               <div
@@ -92,16 +89,12 @@ watch(
                 </div>
               </div>
 
-              <span class="text-gray-500 max-w-48 truncate mr-4">{{ file.name }}</span>
+              <span class="text-[var(--text-sub)] max-w-48 truncate mr-9">{{ file.name }}</span>
             </div>
             <!-- 删除按钮 -->
-            <div
+            <button
               v-if="convertingFileIndex !== savedFiles.indexOf(file)"
-              class="absolute top-1 right-1 cursor-pointer bg-opacity dark:bg-gray-750 rounded-full p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              @click="handleClearData(savedFiles.indexOf(file), true)"
-            >
-              <Close class="w-3 h-3" />
-            </div>
+              type="button" class="attachment-remove" :aria-label="t('lens.footer.removeMaterial')" @click="handleClearData(savedFiles.indexOf(file), true)"><Close class="w-4 h-4" /></button>
           </div>
         </template>
 
@@ -115,28 +108,20 @@ watch(
             <img
               :src="dataBase64List[index]"
               class="max-h-16 border border-gray-100 shadow-sm dark:border-gray-700 rounded-xl"
-              alt="预览图片"
+              :alt="t('lens.footer.imagePreview')"
             />
-            <div
-              class="absolute top-1 right-1 cursor-pointer bg-white dark:bg-gray-700 rounded-full p-1 shadow-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              @click="handleClearData(index, false)"
-            >
-              <Close class="w-3 h-3" />
-            </div>
+            <button
+              type="button" class="attachment-remove" :aria-label="t('lens.footer.removeMaterial')" @click="handleClearData(index, false)"><Close class="w-4 h-4" /></button>
           </div>
 
           <div v-else class="relative inline-block mr-2 mb-2">
             <div
-              class="px-3 flex items-center justify-start rounded-xl h-10 text-gray-700 dark:text-gray-400 border border-gray-100 shadow-sm dark:border-gray-700 transition-colors relative"
+              class="px-3 flex items-center justify-start rounded-[var(--radius-control)] min-h-[44px] text-[var(--text-main)] border border-[var(--paper-border)] bg-[var(--surface-card)] transition-colors relative"
             >
-              <span class="text-gray-500 max-w-48 truncate mr-4">{{ file.name }}</span>
+              <span class="text-[var(--text-sub)] max-w-48 truncate mr-9">{{ file.name }}</span>
             </div>
-            <div
-              class="absolute top-1 right-1 cursor-pointer bg-opacity dark:bg-gray-750 rounded-full p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              @click="handleClearData(index, false)"
-            >
-              <Close class="w-3 h-3" />
-            </div>
+            <button
+              type="button" class="attachment-remove" :aria-label="t('lens.footer.removeMaterial')" @click="handleClearData(index, false)"><Close class="w-4 h-4" /></button>
           </div>
         </template>
       </div>
@@ -145,6 +130,9 @@ watch(
 </template>
 
 <style scoped>
+.attachment-remove { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: var(--radius-control); color: var(--text-sub); background: var(--surface-card); }
+.attachment-remove:hover { background: var(--academic-blue-soft); color: var(--academic-blue); }
+
 .animate-spin {
   animation: spin 1s linear infinite;
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/locales'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore } from '@/store'
 import { MdPreview } from 'md-editor-v3'
@@ -16,6 +17,7 @@ const appStore = useAppStore()
 const darkMode = computed(() => appStore.theme === 'dark')
 const globalConfig = computed(() => authStore.globalConfig)
 const { isMobile } = useBasicLayout()
+
 </script>
 
 <template>
@@ -24,12 +26,9 @@ const { isMobile } = useBasicLayout()
     <div
       class="p-4 bg-white dark:bg-gray-700 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-4 flex flex-col space-y-4"
     >
+      <div class="text-base font-semibold text-[var(--text-main)] pb-2 border-b border-gray-200 dark:border-gray-700">{{ t('lens.usageNotice.title') }}</div>
       <!-- 卡片标题 -->
-      <div
-        class="text-base font-semibold text-gray-900 dark:text-gray-100 pb-2 border-b border-gray-200 dark:border-gray-700"
-      >
-        {{ globalConfig.agreementTitle || '用户协议' }}
-      </div>
+
 
       <!-- 用户协议内容 -->
       <div
@@ -40,7 +39,7 @@ const { isMobile } = useBasicLayout()
           editorId="preview-only"
           :modelValue="globalConfig.agreementInfo"
           :theme="darkMode ? 'dark' : 'light'"
-          class="dark:bg-gray-700 w-full"
+          class="bg-transparent w-full"
         />
       </div>
     </div>

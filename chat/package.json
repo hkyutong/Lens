@@ -15,7 +15,7 @@
     "start:f": "vite",
     "all": "npm-run-all --parallel start:h start:f",
     "dev": "vite",
-    "build-check": "run-p type-check build-only",
+    "build-check": "npm run type-check && npm run build-only",
     "release-check": "npm run build-check && npm run verify:research-contract && npm run verify:release-candidate",
     "build-only": "vite build --mode=production",
     "preview": "vite preview",
