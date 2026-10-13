@@ -152,6 +152,14 @@ def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
             item["relation"] = "缺口"
         elif spec.name == "Lens｜研究方案设计":
             item["status"] = "proposal"
+            if index == 1:
+                reference = next((
+                    {"source_id": source_id, "quote": text[:240].strip()}
+                    for source_id, text in task_input.sources.items()
+                    if len(text[:240].strip()) >= 6
+                ), None)
+                if reference:
+                    item["refs"] = [reference]
         return item
 
     if spec.name == "Lens｜研究设计体检":
@@ -188,6 +196,10 @@ def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
         "JSON.parse 直接解析的 JSON 对象，禁止 Markdown、前后说明和尾随逗号。"
         f"保持原任务字段、状态和来源引用规则不变。{row_rule}"
         + field_rule
+        + "refs 必须是数组，最多 8 项；不引用资料时填写 []。"
+        + "每条引用只能包含 source_id、quote 两个字段，字段名不可翻译或替换。"
+        + "source_id 必须是所提供资料中的既有标识；quote 必须是该资料原文中的连续摘录，长度为 6 至 240 字符。"
+        + "不得用资料标识字符串、字段别名或改写后的句子代替引用对象。\n"
         + "完整输出示例（必须保留 rows 数量，不能返回空数组）：\n"
         + json.dumps(example, ensure_ascii=False)
         + "\n任务："

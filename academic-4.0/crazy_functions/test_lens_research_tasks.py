@@ -51,7 +51,15 @@ class LensResearchTaskJsonTests(unittest.TestCase):
                 self.assertIn(spec.instruction, prompt)
                 rows = json.loads(example).get("rows", [])
                 expected_status = "proposal" if key == "Lens｜研究方案设计" else "missing"
-                self.assertTrue(all(row["status"] == expected_status and row["refs"] == [] for row in rows))
+                self.assertTrue(all(row["status"] == expected_status for row in rows))
+                if key == "Lens｜研究方案设计":
+                    self.assertTrue(rows[0]["refs"])
+                    self.assertTrue(all(
+                        set(ref) == {"source_id", "quote"}
+                        for row in rows for ref in row["refs"]
+                    ))
+                else:
+                    self.assertTrue(all(row["refs"] == [] for row in rows))
                 if spec.fields:
                     self.assertIn("顶层只能有 rows", prompt)
                     self.assertIn("不得翻译或另加包装层", prompt)

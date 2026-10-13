@@ -6572,10 +6572,15 @@ export class AcademicService {
   ) {
     const normalizedLine = this.normalizeAcademicStreamLine(line);
     if (!normalizedLine) return;
+    let incrementalContent = false;
     const appendContent = (text: string) => {
       const value = String(text ?? '');
       if (!value.length) return;
-      let merged = this.mergeAcademicContent(state.fullContent || '', value);
+      // Deltas may legitimately repeat words or closing delimiters. Only
+      // legacy snapshots use overlap recovery; native and OpenAI deltas append.
+      let merged = incrementalContent
+        ? `${state.fullContent || ''}${value}`
+        : this.mergeAcademicContent(state.fullContent || '', value);
       if (/警告，文本过长将进行截断，Token溢出数[:：]\s*\d+/i.test(merged)) {
         merged = this.dedupeAcademicTruncationWarnings(merged);
       }
@@ -6607,7 +6612,8 @@ export class AcademicService {
         return true;
       };
       const rawLooksSerialized =
-        this.looksLikeAcademicJsonFragment(raw) || this.hasSerializedPayloadMarkers(raw);
+        this.hasSerializedPayloadMarkers(raw) ||
+        (!incrementalContent && this.looksLikeAcademicJsonFragment(raw));
       // 纯文本分片走 fast-path，避免每个 chunk 做 JSON/序列化重解析，降低流式延迟。
       if (!rawLooksSerialized) {
         let quickText = this.sanitizeAcademicDeltaText(raw);
@@ -6734,13 +6740,26 @@ export class AcademicService {
         }
         return raw;
       };
+      const extractDeltaContent = (value: any): string => {
+        if (typeof value === 'string') {
+          // The envelope was already decoded. User JSON inside a content field
+          // is answer text, not another transport envelope to unwrap.
+          return this.hasSerializedPayloadMarkers(value)
+            ? this.extractTextFromSerializedContent(value)
+            : value;
+        }
+        if (Array.isArray(value)) return value.map(extractDeltaContent).join('');
+        if (value && typeof value === 'object' && typeof value.text === 'string')
+          return extractDeltaContent(value.text);
+        return '';
+      };
       const choiceContent = Array.isArray(payload.choices)
         ? this.joinAcademicTextSegments(
             payload.choices.map(
               (choice: any) =>
-                extractOpenAIContent(choice?.delta?.content) ||
+                extractDeltaContent(choice?.delta?.content) ||
                 extractOpenAIContent(choice?.message?.content) ||
-                extractOpenAIContent(choice?.content),
+                extractDeltaContent(choice?.content),
             ),
           )
         : '';
@@ -6751,15 +6770,27 @@ export class AcademicService {
             ),
           )
         : '';
+      const deltaContent = extractDeltaContent(payload?.delta?.content);
+      const nativeContent = Array.isArray(payload?.content)
+        ? extractDeltaContent(payload.content)
+        : extractTextField(payload?.content);
       const primaryContent = this.pickPrimaryAcademicText([
         choiceContent,
-        extractOpenAIContent(payload?.delta?.content),
-        extractTextField(payload?.content),
+        deltaContent,
+        nativeContent,
         extractTextField(payload?.text),
         extractTextField(payload?.message),
         extractTextField(payload?.response),
         outputContent,
       ]);
+      incrementalContent = Boolean(
+        (primaryContent && primaryContent === deltaContent) ||
+        (primaryContent && primaryContent === nativeContent && Array.isArray(payload?.content)) ||
+        (primaryContent && primaryContent === choiceContent && Array.isArray(payload.choices) &&
+          payload.choices.some((choice: any) =>
+            extractDeltaContent(choice?.delta?.content) || extractDeltaContent(choice?.content),
+          )),
+      );
       appendSanitizedContent(primaryContent);
       if (payload.reasoning_content) {
         const text = extractTextField(payload.reasoning_content);
@@ -6769,7 +6800,7 @@ export class AcademicService {
         }
       }
       if (payload.finalContent) {
-        const text = extractTextField(payload.finalContent);
+        const text = extractDeltaContent(payload.finalContent);
         const safeText = this.sanitizeAcademicChunk(text);
         if (safeText && !this.shouldDropAcademicNoise(safeText)) {
           const current = state.fullContent || '';
@@ -6777,7 +6808,7 @@ export class AcademicService {
             if (safeText.startsWith(current)) {
               const suffix = safeText.slice(current.length);
               if (suffix) {
-                state.fullContent = this.mergeAcademicContent(current, suffix);
+                state.fullContent = safeText;
               }
             }
           } else {
@@ -6801,7 +6832,7 @@ export class AcademicService {
         });
       }
       if (payload.full_content) {
-        const text = extractTextField(payload.full_content);
+        const text = extractDeltaContent(payload.full_content);
         const safeText = this.sanitizeAcademicChunk(text);
         if (safeText && !this.shouldDropAcademicNoise(safeText)) {
           const current = state.fullContent || '';
@@ -6809,7 +6840,7 @@ export class AcademicService {
             if (safeText.startsWith(current)) {
               const suffix = safeText.slice(current.length);
               if (suffix) {
-                state.fullContent = this.mergeAcademicContent(current, suffix);
+                state.fullContent = safeText;
               }
             }
           } else {
