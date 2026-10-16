@@ -519,6 +519,10 @@ def run_release(*, artifact_bundle=None, deploy=False, host_key_reviewed=False) 
             return completed
     except ReleaseError as error:
         code = error.code
+    except PermissionError:
+        # Keep local socket denial distinct from remote/authentication
+        # failures while returning only a fixed, non-sensitive classification.
+        code = "connection_permission_denied" if stage is None else "release_connection_permission_denied"
     except BaseException:
         code = "connection_blocked" if stage is None else "transport_failed"
     # Once dispatch can have changed production, disconnected execution is
