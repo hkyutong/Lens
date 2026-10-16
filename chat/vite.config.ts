@@ -90,6 +90,11 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: './',
+    define: {
+      'import.meta.env.VITE_GLOB_API_URL': JSON.stringify(
+        viteEnv.VITE_GLOB_API_URL || (isBuild ? '/api' : ''),
+      ),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),
