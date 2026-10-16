@@ -72,7 +72,7 @@ const siteUrl = computed(() => authStore.globalConfig?.siteUrl || '')
 const productName = 'Lens'
 const publisherName = 'YutoAI'
 const brandName = `${productName} by ${publisherName}`
-const brandSeoTitle = 'Lens - YutoAI 科研工作台'
+const brandSeoTitle = 'Lens 学术GPT'
 const siteDescription =
   'Lens 是 YutoAI 旗下的 AI 学术工作台，面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织。'
 const siteKeywords =

@@ -7,7 +7,7 @@ import { t } from '@/locales'
 import { useAuthStore } from '@/store'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import SliderCaptcha from './SliderCaptcha.vue'
 
 interface Props {
@@ -21,9 +21,14 @@ const emit = defineEmits<{
 const formRef = ref<HTMLFormElement | null>(null)
 const ms = message()
 const loading = ref(false)
+const loginError = ref('')
 const authStore = useAuthStore()
 const lastSendPhoneCodeTime = ref(0)
 const isShow = ref(false)
+
+watch(() => props.loginMode, () => {
+  loginError.value = ''
+})
 
 // 验证码登录表单
 const captchaForm = ref({
@@ -135,9 +140,11 @@ async function handleSendCaptcha() {
 /* 登录处理 */
 function handlerSubmit(event: Event) {
   event.preventDefault()
+  loginError.value = ''
 
   if (!agreedToPolicies.value) {
-    return ms.error(t('lens.login.agreementRequired'))
+    loginError.value = t('lens.login.agreementRequired')
+    return
   }
 
   if (validateForm()) {
@@ -166,7 +173,10 @@ async function loginAction() {
 
     const { success } = res
 
-    if (!success) return
+    if (!success) {
+      loginError.value = t('lens.login.failed')
+      return
+    }
 
     ms.success(t('login.loginSuccess'))
     authStore.setToken(res.data)
@@ -174,13 +184,20 @@ async function loginAction() {
     authStore.setLoginDialog(false)
   } catch (error: any) {
     loading.value = false
-    ms.error(sanitizeUserFacingErrorMessage(error?.message || '', 0, t('lens.login.failed')))
+    loginError.value = sanitizeUserFacingErrorMessage(error?.message || '', 0, t('lens.login.failed'))
   }
 }
 </script>
 
 <template>
   <div class="w-full h-full flex flex-col justify-between">
+    <p
+      v-if="loginError"
+      role="alert"
+      class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+    >
+      {{ loginError }}
+    </p>
     <!-- 密码登录表单 -->
     <form
       v-if="loginMode === 'password'"
