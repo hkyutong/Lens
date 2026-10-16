@@ -7,7 +7,7 @@ const api = axios.create({
   baseURL:
     import.meta.env.DEV && import.meta.env.VITE_OPEN_PROXY === 'true'
       ? '/proxy/'
-      : import.meta.env.VITE_APP_API_BASEURL,
+      : import.meta.env.VITE_APP_API_BASEURL || '/api',
   timeout: 1000 * 60,
   responseType: 'json',
 });

@@ -43,6 +43,7 @@ export default async ({ mode, command }) => {
       sourcemap: env.VITE_BUILD_SOURCEMAP === 'true',
     },
     define: {
+      'import.meta.env.VITE_APP_TITLE': JSON.stringify(env.VITE_APP_TITLE || 'Lens 学术GPT'),
       __SYSTEM_INFO__: JSON.stringify({
         pkg: {
           version: pkg.version,
@@ -53,6 +54,13 @@ export default async ({ mode, command }) => {
       }),
     },
     plugins: [
+      {
+        name: 'lens-admin-title-fallback',
+        transformIndexHtml: {
+          order: 'post',
+          handler: (html) => html.replaceAll('%VITE_APP_TITLE%', 'Lens 学术GPT'),
+        },
+      },
       ...createVitePlugins(env, command === 'build'),
       enableTypeCheck && checker({ typescript: true }),
     ].filter(Boolean),
