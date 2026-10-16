@@ -1,7 +1,7 @@
 // Latest available ECB reference snapshot when configured. This rate is for
 // display and compatible CNY pricing; the payment provider settles its currency.
-export const PACKAGE_USD_TO_CNY_RATE = 7.489 / 1.1188;
-export const PACKAGE_EXCHANGE_RATE_DATE = '2026-10-13';
+export const PACKAGE_USD_TO_CNY_RATE = 6.686217;
+export const PACKAGE_EXCHANGE_RATE_DATE = '2026-10-16';
 export const PACKAGE_EXCHANGE_RATE_SOURCE =
   'https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html';
 

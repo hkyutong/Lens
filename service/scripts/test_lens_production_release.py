@@ -142,8 +142,11 @@ class ProductionReleaseTests(unittest.TestCase):
         self.assertNotIn("confidential", json.dumps(result.to_dict()))
 
     def test_permission_exception_has_closed_classification(self):
-        with mock.patch.object(release.safe_ops, "_trusted_connection", side_effect=PermissionError(1, "denied")):
-            result = release.run_release()
+        with mock.patch.object(
+            release.safe_ops, "load_project_entry", return_value=object()
+        ):
+            with mock.patch.object(release.safe_ops, "_trusted_connection", side_effect=PermissionError(1, "denied")):
+                result = release.run_release()
         self.assertEqual(result.error, "connection_permission_denied")
         self.assertNotIn("PermissionError", json.dumps(result.to_dict()))
 

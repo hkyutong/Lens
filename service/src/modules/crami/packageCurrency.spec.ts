@@ -35,9 +35,9 @@ import { PayService } from '../pay/pay.service';
 import { CramiService } from './crami.service';
 
 const plans = [
-  { name: 'Plus', usdPrice: 5, price: 33.47, weight: 1 },
-  { name: 'Pro', usdPrice: 12, price: 80.33, weight: 2 },
-  { name: 'Max', usdPrice: 25, price: 167.34, weight: 3 },
+  { name: 'Plus', usdPrice: 5, price: 33.43, weight: 1 },
+  { name: 'Pro', usdPrice: 12, price: 80.23, weight: 2 },
+  { name: 'Max', usdPrice: 25, price: 167.16, weight: 3 },
 ];
 
 const makePackage = (plan = plans[0]) => ({
@@ -161,7 +161,7 @@ describe('package currency and settlement compatibility', () => {
     const legacy = Object.freeze({ ...makePackage(), price: 98.76, usdPrice: undefined });
     const original = getPackageBillingOffer(legacy, 'monthly');
     const before = { ...original };
-    getPackageBillingOffer({ ...legacy, usdPrice: 25, price: 167.34 }, 'annual');
+    getPackageBillingOffer({ ...legacy, usdPrice: 25, price: 167.16 }, 'annual');
     expect(original).toEqual(before);
     expect(legacy.price).toBe(98.76);
     expect(legacy.usdPrice).toBeUndefined();
@@ -194,7 +194,7 @@ describe('package currency and settlement compatibility', () => {
     const { service } = createOrderService(pkg as any);
     const order = await service.create(17, 1, 2, 'synthetic', 'monthly');
     const snapshot = { ...order };
-    pkg.price = 167.34;
+    pkg.price = 167.16;
     pkg.usdPrice = 25 as any;
     await service.create(17, 1, 1, 'synthetic', 'annual');
     expect(order).toEqual(snapshot);
@@ -203,7 +203,7 @@ describe('package currency and settlement compatibility', () => {
 
   it('passes a historical CNY order total to the existing payment path', async () => {
     const oldOrder = { userId: 17, orderId: 'synthetic-order', goodsId: 1, total: 197.52 };
-    const currentPackage = { ...makePackage(plans[2]), price: 167.34 };
+    const currentPackage = { ...makePackage(plans[2]), price: 167.16 };
     const orders = { findOne: jest.fn(async () => oldOrder) };
     const packages = { findOne: jest.fn(async () => currentPackage) };
     const config = { getConfigs: jest.fn(async () => ({
