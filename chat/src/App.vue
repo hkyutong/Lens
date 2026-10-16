@@ -69,14 +69,13 @@ const wechatSilentLoginStatus = computed(
 )
 const showWatermark = computed(() => Number(authStore.globalConfig?.showWatermark) === 1)
 const siteUrl = computed(() => authStore.globalConfig?.siteUrl || '')
-const productName = 'Lens'
+const productName = 'Lens 学术GPT'
 const publisherName = 'YutoAI'
-const brandName = `${productName} by ${publisherName}`
-const brandSeoTitle = 'Lens 学术GPT'
+const brandSeoTitle = productName
 const siteDescription =
-  'Lens 是 YutoAI 旗下的 AI 学术工作台，面向论文阅读、学术写作、Arxiv 处理、LaTeX 翻译与研究工作流组织。'
+  'Lens 学术GPT 是 YutoAI 旗下的 AI 学术工作台，支持论文阅读、研究方案、文献整理、LaTeX 翻译和学术写作辅助。AI 结果需人工核验。'
 const siteKeywords =
-  'AI SEO, 学术AI, AI学术平台, AI科研工作台, 论文速读, PDF理解, Arxiv摘要, LaTeX翻译, 英文润色, BibTeX, YutoAI'
+  'Lens 学术GPT, Lens Academic GPT, 学术AI, 论文阅读, 研究方案, 文献整理, LaTeX翻译, 学术写作, YutoAI'
 
 function toAbsoluteUrl(url: string) {
   const normalized = String(url || '').trim()
@@ -113,7 +112,8 @@ function updateStructuredData(description: string, canonicalUrl: string, imageUr
     {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
-      name: brandName,
+      name: productName,
+      alternateName: ['Lens Academic GPT', 'Lens'],
       url: canonicalUrl,
       description,
       inLanguage: 'zh-CN',
@@ -188,7 +188,7 @@ function syncDocumentSeo() {
   )
   setOrCreateMeta('meta[property="og:type"]', { property: 'og:type' }, 'website')
   setOrCreateMeta('meta[property="og:locale"]', { property: 'og:locale' }, 'zh_CN')
-  setOrCreateMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, brandName)
+  setOrCreateMeta('meta[property="og:site_name"]', { property: 'og:site_name' }, productName)
   setOrCreateMeta('meta[property="og:title"]', { property: 'og:title' }, brandSeoTitle)
   setOrCreateMeta('meta[property="og:description"]', { property: 'og:description' }, description)
   setOrCreateMeta('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl)

@@ -52,9 +52,9 @@
       if (settingsStore.settings.app.enableDynamicTitle && settingsStore.title) {
         const title =
           typeof settingsStore.title === 'function' ? settingsStore.title() : settingsStore.title;
-        document.title = `${title} - ${import.meta.env.VITE_APP_TITLE}`;
+        document.title = `${title} - ${import.meta.env.VITE_APP_TITLE} · 管理后台`;
       } else {
-        document.title = import.meta.env.VITE_APP_TITLE;
+        document.title = `${import.meta.env.VITE_APP_TITLE} · 管理后台`;
       }
     },
     {

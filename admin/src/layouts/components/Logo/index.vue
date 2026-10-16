@@ -16,8 +16,6 @@
     },
   );
 
-  const { pkg } = __SYSTEM_INFO__;
-
   const settingsStore = useSettingsStore();
 
   const title = ref(import.meta.env.VITE_APP_TITLE);
@@ -35,6 +33,6 @@
     :title="title"
   >
     <!-- <img v-if="showLogo" :src="logo" class="logo h-[30px] w-[30px] object-contain"> -->
-    <span v-if="showTitle" class="block truncate font-bold">{{ title }}-{{ pkg.version }}</span>
+    <span v-if="showTitle" class="block truncate font-bold">{{ title }}</span>
   </RouterLink>
 </template>

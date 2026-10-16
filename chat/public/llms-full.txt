@@ -1,4 +1,4 @@
-# Lens by YutoAI Extended Guide for Language Models
+# Lens Academic GPT (Lens 学术GPT) Extended Guide for Language Models
 
 Lens is a web-based AI academic workspace by YutoAI, built for research-heavy tasks.
 

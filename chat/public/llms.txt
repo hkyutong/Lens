@@ -1,4 +1,4 @@
-# Lens by YutoAI
+# Lens Academic GPT (Lens 学术GPT)
 
 > Lens is YutoAI's AI research workspace for academic reading, writing, translation, PDF analysis, Arxiv workflows, LaTeX processing, and structured research conversations.
 
