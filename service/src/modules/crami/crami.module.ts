@@ -1,3 +1,4 @@
+import { ModelsEntity } from '../models/models.entity';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
@@ -27,7 +28,7 @@ import { CramiPackageEntity } from './cramiPackage.entity';
       UserBalanceEntity,
       FingerprintLogEntity,
       ChatLogEntity,
-      ChatGroupEntity,
+      ChatGroupEntity, ModelsEntity
     ]),
   ],
   providers: [CramiService, UserBalanceService],

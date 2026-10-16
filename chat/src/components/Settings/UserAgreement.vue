@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { sanitizeMarkdownPreviewHtml } from '../../utils/markdownPreviewHtml'
 import { t } from '@/locales'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore } from '@/store'
@@ -35,7 +36,7 @@ const { isMobile } = useBasicLayout()
         class="overflow-y-auto custom-scrollbar"
         :class="{ 'max-h-[calc(70vh-160px)]': !isMobile }"
       >
-        <MdPreview
+        <MdPreview :sanitize="sanitizeMarkdownPreviewHtml"
           editorId="preview-only"
           :modelValue="globalConfig.agreementInfo"
           :theme="darkMode ? 'dark' : 'light'"

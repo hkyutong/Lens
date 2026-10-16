@@ -4,6 +4,8 @@ meta:
 </route>
 
 <script lang="ts" setup>
+import type { PublicAssetPurpose } from '@/api/modules/upload'
+
   import apiConfig from '@/api/modules/config';
   import uploadApi from '@/api/modules/upload';
   import { Plus, Refresh } from '@element-plus/icons-vue';
@@ -12,7 +14,6 @@ meta:
     FormInstance,
     FormRules,
     UploadProps,
-    UploadRequestHandler,
     UploadRequestOptions,
   } from 'element-plus';
   import { ElMessage } from 'element-plus';
@@ -89,12 +90,12 @@ meta:
     return pathname.substring(pathname.lastIndexOf('/') + 1);
   }
 
-  function uploadFile(file: any, successHandler: any, originalValue?: string, successMsg?: string) {
+  function uploadFile(file: any, successHandler: any, purpose: PublicAssetPurpose, originalValue?: string, successMsg?: string) {
     const form = new FormData();
     form.append('file', file);
 
     uploadApi
-      .uploadFile(form, 'system/others')
+      .uploadFile(form, purpose)
       .then((response) => {
         // 创建模拟的响应对象，结构与el-upload期望的一致
         successHandler({
@@ -123,13 +124,13 @@ meta:
   }
 
   // 自定义上传方法
-  const customUpload: UploadRequestHandler = (options: UploadRequestOptions) => {
+  const customUpload = (options: UploadRequestOptions, purpose: PublicAssetPurpose) => {
     const { file, onSuccess, onError } = options;
     const form = new FormData();
     form.append('file', file);
 
     return uploadApi
-      .uploadFile(form, 'system/others')
+      .uploadFile(form, purpose)
       .then((response) => {
         // 直接传递整个response，而不仅仅是response.data
         if (onSuccess) {
@@ -166,7 +167,7 @@ meta:
         ElMessage.info('正在重新上传Logo...');
         const originalValue = formInline.clientLogoPath; // 保存原始值
         const file = await downloadFile(formInline.clientLogoPath);
-        uploadFile(file, handleLogoSuccess, originalValue, '重新上传Logo成功');
+        uploadFile(file, handleLogoSuccess, 'logo', originalValue, '重新上传Logo成功');
       } catch (error) {
         console.error('下载Logo文件失败', error);
         ElMessage.error('重新上传Logo失败，请检查链接是否有效');
@@ -180,7 +181,7 @@ meta:
         ElMessage.info('正在重新上传网站图标...');
         const originalValue = formInline.clientFaviconPath; // 保存原始值
         const file = await downloadFile(formInline.clientFaviconPath);
-        uploadFile(file, handleFaviconSuccess, originalValue, '重新上传网站图标成功');
+        uploadFile(file, handleFaviconSuccess, 'favicon', originalValue, '重新上传网站图标成功');
       } catch (error) {
         console.error('下载网站图标文件失败', error);
         ElMessage.error('重新上传网站图标失败，请检查链接是否有效');
@@ -194,7 +195,7 @@ meta:
         ElMessage.info('正在重新上传AI头像...');
         const originalValue = formInline.robotAvatar; // 保存原始值
         const file = await downloadFile(formInline.robotAvatar);
-        uploadFile(file, handleRobotAvatarSuccess, originalValue, '重新上传AI头像成功');
+        uploadFile(file, handleRobotAvatarSuccess, 'robot-avatar', originalValue, '重新上传AI头像成功');
       } catch (error) {
         console.error('下载AI头像文件失败', error);
         ElMessage.error('重新上传AI头像失败，请检查链接是否有效');
@@ -208,7 +209,7 @@ meta:
         ElMessage.info('正在重新上传用户默认头像...');
         const originalValue = formInline.userDefaultAvatar; // 保存原始值
         const file = await downloadFile(formInline.userDefaultAvatar);
-        uploadFile(file, handleUserDefaultAvatarSuccess, originalValue, '重新上传用户默认头像成功');
+        uploadFile(file, handleUserDefaultAvatarSuccess, 'default-avatar', originalValue, '重新上传用户默认头像成功');
       } catch (error) {
         console.error('下载用户默认头像文件失败', error);
         ElMessage.error('重新上传用户默认头像失败，请检查链接是否有效');
@@ -358,7 +359,7 @@ meta:
                   <el-upload
                     class="avatar-uploader"
                     :show-file-list="false"
-                    :http-request="customUpload"
+                    :http-request="options => customUpload(options, 'logo')"
                     :on-success="handleLogoSuccess"
                     :before-upload="beforeLogoUpload"
                     style="display: flex; align-items: center; justify-content: center"
@@ -401,7 +402,7 @@ meta:
                   <el-upload
                     class="avatar-uploader"
                     :show-file-list="false"
-                    :http-request="customUpload"
+                    :http-request="options => customUpload(options, 'favicon')"
                     :on-success="handleFaviconSuccess"
                     :before-upload="beforeLogoUpload"
                     style="display: flex; align-items: center; justify-content: center"
@@ -444,7 +445,7 @@ meta:
                   <el-upload
                     class="avatar-uploader"
                     :show-file-list="false"
-                    :http-request="customUpload"
+                    :http-request="options => customUpload(options, 'robot-avatar')"
                     :on-success="handleRobotAvatarSuccess"
                     :before-upload="beforeLogoUpload"
                     style="display: flex; align-items: center; justify-content: center"
@@ -487,7 +488,7 @@ meta:
                   <el-upload
                     class="avatar-uploader"
                     :show-file-list="false"
-                    :http-request="customUpload"
+                    :http-request="options => customUpload(options, 'default-avatar')"
                     :on-success="handleUserDefaultAvatarSuccess"
                     :before-upload="beforeLogoUpload"
                     style="display: flex; align-items: center; justify-content: center"

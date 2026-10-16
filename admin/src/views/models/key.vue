@@ -4,6 +4,8 @@ meta:
 </route>
 
 <script lang="ts" setup>
+import type { PublicAssetPurpose } from '@/api/modules/upload'
+
   import ApiModels from '@/api/modules/models';
   import uploadApi from '@/api/modules/upload';
   import { utcToShanghaiTime } from '@/utils/utcFormatTime';
@@ -12,7 +14,6 @@ meta:
     FormInstance,
     FormRules,
     UploadProps,
-    UploadRequestHandler,
     UploadRequestOptions,
   } from 'element-plus';
   import { ElMessage } from 'element-plus';
@@ -52,6 +53,12 @@ meta:
 
   const formPackageRef = ref<FormInstance>();
   const activeModelKeyId = ref(0);
+  const TEXT_MODEL_TIER_LABELS: Record<number, string> = {
+    1: '基础（Plus；YutoGPT 5.5 / GPT-6 luna）',
+    2: '高级（Pro；GPT-6.1 Sol）',
+    3: '顶级（Max；Claude Opus 5.5）',
+  };
+
   const formPackage = reactive({
     keyType: 1,
     modelName: '',
@@ -357,7 +364,7 @@ meta:
         ElMessage.info('正在重新上传模型头像...');
         const originalValue = formPackage.modelAvatar; // 保存原始值
         const file = await downloadFile(formPackage.modelAvatar);
-        uploadFile(file, handleAvatarSuccess, originalValue);
+        uploadFile(file, handleAvatarSuccess, 'model-avatar', originalValue);
       } catch (error) {
         console.error('下载模型头像文件失败', error);
         ElMessage.error('重新上传模型头像失败，请检查链接是否有效');
@@ -365,12 +372,12 @@ meta:
     }
   }
 
-  function uploadFile(file: any, successHandler: any, originalValue?: string) {
+  function uploadFile(file: any, successHandler: any, purpose: PublicAssetPurpose, originalValue?: string) {
     const form = new FormData();
     form.append('file', file);
 
     uploadApi
-      .uploadFile(form, 'system/models')
+      .uploadFile(form, purpose)
       .then((response) => {
         // 创建模拟的响应对象，与el-upload期望的结构一致
         successHandler({
@@ -393,13 +400,13 @@ meta:
   }
 
   // 自定义上传方法
-  const customUpload: UploadRequestHandler = (options: UploadRequestOptions) => {
+  const customUpload = (options: UploadRequestOptions, purpose: PublicAssetPurpose) => {
     const { file, onSuccess, onError } = options;
     const form = new FormData();
     form.append('file', file);
 
     return uploadApi
-      .uploadFile(form, 'system/models')
+      .uploadFile(form, purpose)
       .then((response) => {
         if (onSuccess) {
           // 对于普通上传（而非重新上传）显示上传成功的消息
@@ -771,7 +778,7 @@ meta:
             <template #append>
               <el-upload
                 class="avatar-uploader"
-                :http-request="customUpload"
+                :http-request="options => customUpload(options, 'model-avatar')"
                 :show-file-list="false"
                 :on-success="handleAvatarSuccess"
                 :before-upload="beforeAvatarUpload"
@@ -877,7 +884,7 @@ meta:
             <el-option
               v-for="item in DEDUCTTYPELIST"
               :key="item.value"
-              :label="item.label"
+              :label="TEXT_MODEL_TIER_LABELS[item.value] || item.label"
               :value="item.value"
             />
           </el-select>

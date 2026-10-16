@@ -1,3 +1,8 @@
+const fsModelPolicy = require('node:fs');
+const vmModelPolicy = require('node:vm');
+const tsModelPolicy = require('typescript');
+const modelPolicyExports = {};
+vmModelPolicy.runInNewContext(tsModelPolicy.transpileModule(fsModelPolicy.readFileSync(require('node:path').resolve(__dirname, '../src/common/utils/academicModelAccess.ts'), 'utf8'), { compilerOptions: { module: tsModelPolicy.ModuleKind.CommonJS, target: tsModelPolicy.ScriptTarget.ES2020 } }).outputText, { exports: modelPolicyExports });
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -12,7 +17,7 @@ const constants = ast.statements.filter(node => ts.isVariableStatement(node) && 
 const methodNames = ['resolveAcademicModelInfo', 'isModelEnabled', 'resolveAcademicRuntimeFallbackModelInfo'];
 const methods = service.members.filter(node => ts.isMethodDeclaration(node) && methodNames.includes(node.name.getText(ast)));
 const compile = constants.map(node => node.getText(ast)).join('\n') + '\nclass Resolver {' + methods.map(node => node.getText(ast)).join('\n') + '}\nResolver;';
-const Resolver = vm.runInNewContext(ts.transpileModule(compile, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText);
+const Resolver = vm.runInNewContext(ts.transpileModule(compile, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, { ...modelPolicyExports });
 
 const row = (model, enabled = true) => ({ model, modelName: model, status: enabled });
 function fixture(rows) {

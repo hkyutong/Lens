@@ -1,15 +1,8 @@
+import { Get, Param, BadRequestException, Body, Controller, Post, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { AdminAuthGuard } from '@/common/auth/adminAuth.guard';
+import { PublicAssetPurpose } from '../attachment/publicAsset.service';
 import { JwtAuthGuard } from '@/common/auth/jwtAuth.guard';
-import { BadRequestException,
-  Body,
-  Controller,
-  Post,
-  Query,
-  Req,
-  Res,
-  UploadedFile,
-  UseGuards,
-  UseInterceptors,
-} from '@nestjs/common';
+
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
@@ -40,15 +33,15 @@ export class UploadController {
   }
 
   @Post('file/download')
-  @ApiOperation({ summary: '下载已上传文件（代理）' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async downloadUploadedFile(
     @Body('source') source: string,
     @Body('name') name: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
-    return this.uploadService.proxyUploadedFile(source, name, res);
+    return this.uploadService.proxyUploadedFile(source, name, res, Number(req.user.id));
   }
 
   // @Post('fileFromUrl')
@@ -56,4 +49,27 @@ export class UploadController {
   // async uploadFileFromUrl(@Body() { url, dir = 'ai' }): Promise<any> {
   //   return this.uploadService.uploadFileFromUrl({ url, dir });
   // }
+
+  @Get('attachment/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async downloadAttachment(@Param('id') id: string, @Req() req: Request, @Res() res: Response) {
+    return this.uploadService.proxyUploadedFile('attachment:' + id, '', res, Number(req.user.id));
+  }
+
+  @Post('public-asset')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async uploadPublicAsset(@UploadedFile() file: any, @Query('purpose') purpose: PublicAssetPurpose, @Req() req: Request) {
+    return this.uploadService.uploadPublicAsset(file, purpose, req.user);
+  }
+
+  @Post('avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async uploadAvatar(@UploadedFile() file: any, @Req() req: Request) {
+    return this.uploadService.uploadAvatar(file, req.user);
+  }
 }

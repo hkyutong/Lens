@@ -1,3 +1,4 @@
+import { AttachmentEntity } from '../attachment/attachment.entity';
 import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource, DataSourceOptions } from 'typeorm';
@@ -41,6 +42,7 @@ import { VerificationEntity } from '../verification/verification.entity';
           // entities: [__dirname + '/../**/*.entity{.ts,.js}'], // <-- Remove glob pattern
           entities: [
             // <-- Use explicit array of imported classes
+            AttachmentEntity,
             Share,
             AutoReplyEntity,
             CramiEntity,

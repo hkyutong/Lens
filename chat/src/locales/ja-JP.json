@@ -43,12 +43,17 @@
       "readOnlyNotice": "このページは閲覧専用で、編集・削除・再生成の操作はありません。"
     },
     "modelSelector": {
+      "notIncluded": "このモデルは現在のプランに含まれていません",
       "defaultModel": "デフォルトモデル",
       "switchModel": "モデルを切り替え",
       "noModels": "切り替え可能なモデルがありません",
       "switchTo": "{name} に切り替え",
       "modelIcon": "{name} モデルアイコン",
-      "switchFailed": "モデルの切り替えに失敗しました。後でもう一度お試しください。"
+      "switchFailed": "モデルの切り替えに失敗しました。後でもう一度お試しください。",
+      "upgradeRequired": "{plan} へのアップグレードが必要",
+      "unavailable": "現在利用できません",
+      "restrictedModel": "{model}（{plan} が必要）",
+      "unavailableModel": "{model}（現在利用不可）"
     },
     "language": {
       "zh-CN": "简体中文",
@@ -95,19 +100,19 @@
       "plusAvailable1": "論文要約、Arxiv 要約、Arxiv 英文要約",
       "plusAvailable2": "中国語校正、英語校正、中英翻訳",
       "plusAvailable3": "マインドマップ、コード解説、参考文献の BibTeX 化",
-      "plusNote": "PDF 精読、PDF 一括要約、Word 一括要約、LaTeX 上級ツールは含まれません。",
+      "plusNote": "YutoGPT 5.5、GPT-6 luna を利用できます。モデルは現在利用可能な一覧に準じます。 PDF 精読、PDF 一括要約、Word 一括要約、LaTeX 上級ツールは含まれません。",
       "proSummary": "高頻度の論文読解と原稿処理",
       "proWorkflow": "最大 2 ステップ",
       "proAvailable1": "Plus の全機能を含む",
       "proAvailable2": "PDF 精読、PDF 一括要約、Word 一括要約",
       "proAvailable3": "LaTeX 要約、精密翻訳、英語校正、中国語校正、ハイライト修正",
-      "proNote": "「PDF 精読 → 英語校正」のような標準的な研究フローに適しています。",
+      "proNote": "Plus のモデルに GPT-6.1 Sol が追加されます。モデルは現在利用可能な一覧に準じます。 「PDF 精読 → 英語校正」のような標準的な研究フローに適しています。",
       "maxSummary": "重度の研究と完整な研究フロー",
       "maxWorkflow": "最大 3 ステップ",
       "maxAvailable1": "Pro の全機能を含む",
       "maxAvailable2": "Lens で現在開放されているすべての学術機能を利用可能",
       "maxAvailable3": "「論文速読 → 中国語校正 → マインドマップ」などの完整なフローに対応",
-      "maxNote": "長い論文、複数ファイル、複雑な研究タスクに適しています。",
+      "maxNote": "Pro のモデルに Claude Opus 5.5 が追加されます。モデルは現在利用可能な一覧に準じます。 長い論文、複数ファイル、複雑な研究タスクに適しています。",
       "billingTitle": "課金と有効期限",
       "billingRule1": "月額プランと月間カードコードは 30 日間の対応クォータを付与します。",
       "billingRule2": "年額プランと年間カードコードは 365 日間で 12 か月分のクォータを付与します。",
@@ -117,7 +122,8 @@
       "taskRule1": "機能編成は順番に実行され、前のステップが完了してから次のステップに進みます。",
       "taskRule2": "PDF、Word、LaTeX、長い論文、上流モデルの遅延により待ち時間が長くなる場合があります。",
       "taskRule3": "キー、身分証、契約書、顧客資料、アカウントパスワードなどの機密内容をアップロードしないでください。",
-      "taskRule4": "AI 出力には誤りが含まれる可能性があります。重要な結論、引用、実験情報は必ず確認してください。"
+      "taskRule4": "AI 出力には誤りが含まれる可能性があります。重要な結論、引用、実験情報は必ず確認してください。",
+      "comparisonLabel": "プランの機能比較"
     },
     "member": {
       "signInReward": "チェックイン特典",
@@ -152,27 +158,25 @@
       "max": "Max",
       "pro": "Pro",
       "plus": "Plus",
-      "plusSummary": "軽量な研究、日常の質問、基本的な執筆に向いています。",
-      "proSummary": "高頻度の学術執筆、深い読解、整った成果物の作成に適しています。",
-      "maxSummary": "集中的な研究、全モデル層の利用、高負荷ワークフロー向けです。",
+      "plusSummary": "日常の学習と基本的な学術文書の作成向け。YutoGPT 5.5、GPT-6 luna を利用できます。モデルは現在利用可能な一覧に準じます。",
+      "proSummary": "頻繁な研究執筆と詳細な読解向け。GPT-6.1 Sol が追加されます。モデルは現在利用可能な一覧に準じます。",
+      "maxSummary": "複雑な研究と一連のワークフロー向け。Claude Opus 5.5 が追加されます。モデルは現在利用可能な一覧に準じます。",
       "annualSave": "年間契約で {value}% 節約",
       "pricePerMonth": "/月",
       "pricePerYear": "/年",
       "monthlyEquivalent": "月あたり ￥{value}",
       "usdPerMonth": "{value} USD/月",
       "features": {
-        "basicModels": "基本モデル",
-        "advancedModelsLite": "少量の高性能モデル",
-        "advancedModels": "高性能モデル",
-        "allModels": "全モデル層",
+        "basicModels": "YutoGPT 5.5 · GPT-6 luna",
+        "advancedModels": "GPT-6.1 Sol",
+        "allModels": "YutoGPT 5.5 · GPT-6 luna · GPT-6.1 Sol · Claude Opus 5.5",
         "paperSummary": "論文要約",
         "englishPolish": "英文校正",
         "pdfDeepRead": "PDF 精読",
         "latexTranslation": "LaTeX 翻訳",
         "bibtex": "参考文献を BibTeX 化",
         "fullResearchTools": "研究ツール一式",
-        "complexReasoning": "複雑な推論",
-        "specialModels": "最上位モデル"
+        "complexReasoning": "複雑な推論"
       },
       "loadingPlans": "プランを読み込み中…",
       "loadPlansFailed": "プランを読み込めませんでした。再試行してください",
@@ -290,7 +294,8 @@
       "featureSearchStrategy": "文献検索戦略",
       "featureSearchStrategyDesc": "検索語・データベース・基準を設計",
       "featureSearchStrategyPrompt": "概念、キーワード、ブール検索式、データベース、採択・除外基準、検索記録テンプレートを提案してください。必要時に範囲を確認し、検索を実行したと偽ったり、文献や件数を捏造したりしないでください。\n\n研究テーマ：",
-      "featureUnavailable": "この特色機能はまだ接続されていません。しばらくしてから再試行してください。"
+      "featureUnavailable": "この特色機能はまだ接続されていません。しばらくしてから再試行してください。",
+      "scrollToBottom": "一番下へスクロール"
     },
     "footer": {
       "placeholderLoggedOut": "ログインすると資料のアップロードと保存ができます",
@@ -483,7 +488,8 @@
       "shareLoading": "共有リンクを作成しています...",
       "shareSuccess": "共有リンクをコピーしました",
       "shareLinkCopyFailed": "共有リンクは作成されましたが、自動コピーに失敗しました。ブラウザの権限を確認してください。",
-      "shareFailed": "共有に失敗しました。後でもう一度お試しください。"
+      "shareFailed": "共有に失敗しました。後でもう一度お試しください。",
+      "imageAlt": "画像"
     },
     "academicEntities": {
       "core": {
@@ -644,7 +650,8 @@
       "monthlyTotal": "月払いの年間合計",
       "savings": "割引額",
       "remaining": "{seconds}秒",
-      "qrCode": "支払いQRコード"
+      "qrCode": "支払いQRコード",
+      "actualPayment": "実際のお支払い：{amount} CNY"
     },
     "captcha": {
       "title": "セキュリティ認証",
@@ -653,5 +660,78 @@
       "failed": "認証できませんでした。再試行してください",
       "instruction": "スライダーでパズルを完成させてください"
     }
+  },
+  "login": {
+    "loginSuccess": "ログインしました",
+    "enterUsername": "ユーザー名を入力してください",
+    "password": "パスワード",
+    "enterYourPassword": "パスワードを入力してください",
+    "loginAccount": "ログイン",
+    "email": "メールアドレス",
+    "enterEmail": "メールアドレスを入力してください",
+    "enterCode": "認証コードを入力してください",
+    "sendVerificationCode": "認証コードを送信"
+  },
+  "pay": {
+    "wechat": "WeChat",
+    "alipay": "Alipay",
+    "paymentTimeExpired": "決済の有効期限が切れました。もう一度お手続きください。",
+    "wechatPay": "WeChat Pay",
+    "alipayPay": "Alipay",
+    "paymentSuccess": "決済が完了しました",
+    "productPayment": "商品のお支払い",
+    "amountDue": "お支払い金額：",
+    "siteAdminEnabledRedirect": "安全な決済の準備ができました。次へ進んでアップグレードを完了してください。",
+    "clickToPay": "決済へ進む",
+    "open": "開く",
+    "scanToPay": "コードを読み取って支払う",
+    "completePaymentWithin": "お支払いは",
+    "timeToCompletePayment": "以内に完了してください。"
+  },
+  "goods": {
+    "basicModelQuota": "標準ポイント",
+    "advancedModelQuota": "上位ポイント",
+    "drawingQuota": "最上位ポイント",
+    "purchaseSuccess": "購入が完了しました",
+    "paymentNotSuccessful": "決済がまだ完了していません",
+    "paymentNotEnabled": "現在、決済をご利用いただけません",
+    "paymentSuccess": "決済が完了しました"
+  },
+  "usercenter": {
+    "pleaseEnterCardDetails": "引き換えコードを入力してください",
+    "cardRedeemSuccess": "引き換えが完了しました",
+    "points": "ポイント",
+    "enterCardDetails": "引き換えコードを貼り付けるか入力してください"
+  },
+  "chat": {
+    "copyCode": "コードをコピー",
+    "copy": "コピー",
+    "delete": "削除",
+    "regenerate": "再生成",
+    "readAloud": "読み上げ",
+    "networkMode": "ウェブ検索",
+    "rename": "名前を変更",
+    "more": "その他",
+    "unfavorite": "お気に入りから削除",
+    "favoriteConversations": "お気に入りに追加",
+    "deleteConversation": "会話を削除"
+  },
+  "common": {
+    "edit": "編集",
+    "cancel": "キャンセル",
+    "update": "更新"
+  },
+  "uploadErrors": {
+    "notIncluded": "現在のプランではファイルをアップロードできません。",
+    "limitReached": "ファイルのアップロード回数の上限に達しました。しばらくしてから再度お試しください。",
+    "fileTooLarge": "ファイルが大きすぎます。より小さいファイルを選んでください。",
+    "sizeLimit": "ファイルサイズは {size} MB 以下にしてください。",
+    "temporarilyUnavailable": "現在ファイルをアップロードできません。しばらくしてから再度お試しください。"
+  },
+  "packageUploadFeatures": {
+    "dailyLimit": "アップロード成功回数：1日 {count} 回",
+    "unlimited": "アップロード成功回数：1日の回数制限なし",
+    "disabled": "このプランにはファイルアップロードは含まれません",
+    "fileAllowance": "プランの1ファイル上限：{size} MiB（共通のアップロードルールも適用）"
   }
 }

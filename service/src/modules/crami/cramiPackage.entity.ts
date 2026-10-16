@@ -51,4 +51,7 @@ export class CramiPackageEntity extends BaseEntity {
 
   @Column({ comment: '套餐包含的应用分类列表', default: '', nullable: true })
   appCats: string;
+
+  @Column({ type: 'text', nullable: true, select: false })
+  entitlements?: string | null;
 }

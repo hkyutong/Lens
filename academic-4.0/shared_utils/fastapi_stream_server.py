@@ -28,7 +28,7 @@ import tempfile
 from fastapi.websockets import WebSocketState
 from loguru import logger
 from queue import Queue
-from fastapi import FastAPI, WebSocket, File, UploadFile, Form
+from fastapi import FastAPI, WebSocket, File, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from datetime import datetime
 from typing import List, Optional, Any, Union
@@ -39,6 +39,10 @@ from enum import auto, Enum
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+from shared_utils.lens_request_security import bind_request_context
+from shared_utils.lens_request_security import load_private_configuration
+load_private_configuration()
+from shared_utils.lens_request_security import (LensPrivateBridgeMiddleware, current_identity, current_user_name, request_allowed_roots, request_input_root, request_logging_root, path_within, prepare_request_inputs, report_reference, open_report_reference, open_request_file, iter_report_bytes)
 from toolbox import ChatBotWithCookies, sanitize_chatbot_text
 from shared_utils.lens_storage import cleanup_lens_runtime_artifacts
 from shared_utils.lens_storage import ensure_lens_export_dir
@@ -102,13 +106,11 @@ def _setup_academic_logger():
         except Exception as exc:
             last_error = exc
     ACADEMIC_LOG_PATH = "stderr-only"
-    logger.warning(
-        f"Academic log file init failed, fallback to stderr only: {last_error}"
-    )
+    logger.warning("academic_event")
 
 
 _setup_academic_logger()
-logger.info(f"Academic log file: {ACADEMIC_LOG_PATH}")
+logger.info("academic_event")
 
 
 
@@ -155,6 +157,11 @@ class AcademicStreamRequest(BaseModel):
 TERMINATE_MSG = UserInterfaceMsg(function="TERMINATE", special_state={"stop": True})
 
 def setup_initial_com(initial_msg: UserInterfaceMsg):
+    identity = current_identity()
+    if not identity:
+        raise ValueError('Request identity required')
+    initial_msg.llm_kwargs['user_name'] = identity.user_name
+    initial_msg.chatbot_cookies['user_name'] = identity.user_name
     """
     设置插件参数
 
@@ -222,6 +229,10 @@ def _extract_chatbot_value(chatbot_obj):
 
 
 def _build_stream_context(req: AcademicStreamRequest):
+    identity = current_identity()
+    if not identity:
+        raise ValueError('Request identity required')
+    req.user_name = identity.user_name
     from toolbox import get_conf, get_plugin_default_kwargs, default_user_name
     com = get_plugin_default_kwargs()
     llm_kwargs = com["llm_kwargs"]
@@ -262,41 +273,41 @@ import re
 
 
 def _stage_lens_result_files(files, user_name):
-    if not isinstance(files, list) or not files:
-        return []
-    time_tag = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    export_dir = ensure_lens_export_dir(user_name, time_tag)
-    staged_paths = []
-    used_names = set()
-
-    for index, raw_path in enumerate(files):
-        src = os.path.abspath(str(raw_path or "").strip())
-        if not src or not os.path.exists(src):
-            continue
-        base_name = os.path.basename(src) or f"file-{index + 1}"
-        stem, suffix = os.path.splitext(base_name)
-        candidate_name = base_name
-        serial = 1
-        while candidate_name in used_names:
-            candidate_name = f"{stem}-{serial}{suffix}"
-            serial += 1
-        used_names.add(candidate_name)
-        target = os.path.join(export_dir, candidate_name)
-        try:
-            os.symlink(src, target)
-        except FileExistsError:
-            pass
-        except Exception:
+    identity = current_identity()
+    if not identity:
+        return files or []
+    from shared_utils.lens_storage import ensure_lens_export_dir
+    import uuid
+    export_dir = ensure_lens_export_dir(identity.user_name, str(uuid.uuid4()))
+    if not path_within(export_dir, request_logging_root()):
+        raise ValueError('Report output rejected')
+    staged_files = []
+    try:
+        for index, file in enumerate(files or []):
+            descriptor, filename = open_request_file(file)
+            destination = os.path.join(export_dir, str(index) + '-' + os.path.basename(filename))
             try:
-                os.link(src, target)
+                with open(destination, 'xb') as output:
+                    for chunk in iter_report_bytes(descriptor):
+                        output.write(chunk)
+                os.chmod(destination, 0o600)
             except Exception:
-                shutil.copy2(src, target)
-        staged_paths.append(target)
-    return staged_paths or files
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+                raise
+            staged_files.append(destination)
+    except (ValueError, OSError):
+        import shutil
+        shutil.rmtree(export_dir, ignore_errors=True)
+        raise ValueError('Report staging failed') from None
+    return staged_files
 
 
 def _validate_payload_paths(main_input, plugin_kwargs, strict_main_input=True):
-    allowed_roots = [root for root in get_allowed_storage_roots() if root]
+    prepare_request_inputs()
+    allowed_roots = [root for root in request_allowed_roots() if root]
     allowed_prefixes = [root.replace("\\", "/") for root in allowed_roots]
 
     def is_path_candidate(part: str) -> bool:
@@ -395,7 +406,7 @@ def _iter_ndjson_from_updates(generator, chat_id=None):
                 promoted_files.update(new_files)
                 user_name = str(cookies.get("user_name") or "default_user").strip() or "default_user"
                 staged_files = _stage_lens_result_files(new_files, user_name)
-                payload = {"fileVectorResult": json.dumps({"files": staged_files}, ensure_ascii=False)}
+                payload = {"fileVectorResult": json.dumps({"files": [report_reference(file) for file in staged_files]}, ensure_ascii=False)}
                 if chat_id:
                     payload["chatId"] = chat_id
                 yield json.dumps(payload, ensure_ascii=False) + "\n"
@@ -619,7 +630,7 @@ class PythonMethod_AsyncConnectionMaintainer_AgentcraftInterface():
                     print(msg)
                     await websocket.send_bytes(msg.model_dump_json())
             except Exception as e:
-                logger.exception(f"Error in wait_message_to_send: {e}")
+                logger.error("academic_request_failed")
                 raise e
 
         async def receive_forever(queue_realtime_from_client: asyncio.Queue, queue_blocking_from_client: asyncio.Queue, queue_back_to_client: asyncio.Queue, terminate_event: asyncio.Event):
@@ -655,12 +666,12 @@ class PythonMethod_AsyncConnectionMaintainer_AgentcraftInterface():
                         break
                     ################
                     msg_cnt += 1
-                    logger.info(f"Received message {msg_cnt}: {msg}")
+                    logger.info("academic_event")
                     queue_blocking_from_client.put_nowait(msg)
 
 
             except Exception as e:
-                logger.exception(f"Error in receive_forever: {e}")
+                logger.error("academic_request_failed")
                 raise e
 
         queue_back_to_client, queue_realtime_from_client, queue_blocking_from_client, terminate_event = self.make_queue()
@@ -692,7 +703,7 @@ class PythonMethod_AsyncConnectionMaintainer_AgentcraftInterface():
 
         t_x = asyncio.create_task(wait_message_to_send(queue_back_to_client, terminate_event))
         t_r = asyncio.create_task(receive_forever(queue_realtime_from_client, queue_blocking_from_client, queue_back_to_client, terminate_event))
-        task_thread = threading.Thread(target=task_wrapper(task_executor), args=(initial_msg, queue_blocking_from_client, queue_back_to_client), daemon=True)
+        task_thread = threading.Thread(target=bind_request_context(task_wrapper(task_executor)), args=(initial_msg, queue_blocking_from_client, queue_back_to_client), daemon=True)
         task_thread.start()
 
         await t_x
@@ -766,31 +777,24 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
             设置服务器参数并启动uvicorn服务器。
             """
             app = FastAPI()
+            app.add_middleware(LensPrivateBridgeMiddleware)
 
             async def _cleanup_loop():
                 while True:
                     await asyncio.sleep(3600)
                     try:
                         stats = cleanup_lens_runtime_artifacts()
-                        logger.info(
-                            f"Lens storage cleanup finished: temp={stats.get('removedTempDirs', 0)}, "
-                            f"extract={stats.get('removedExtractDirs', 0)}, "
-                            f"result={stats.get('removedResultDirs', 0)}"
-                        )
+                        logger.info("academic_event")
                     except Exception:
-                        logger.exception("Lens storage cleanup loop failed")
+                        logger.error("academic_request_failed")
 
             @app.on_event("startup")
             async def _startup_cleanup():
                 try:
                     stats = cleanup_lens_runtime_artifacts()
-                    logger.info(
-                        f"Lens storage startup cleanup: temp={stats.get('removedTempDirs', 0)}, "
-                        f"extract={stats.get('removedExtractDirs', 0)}, "
-                        f"result={stats.get('removedResultDirs', 0)}"
-                    )
+                    logger.info("academic_event")
                 except Exception:
-                    logger.exception("Lens storage startup cleanup failed")
+                    logger.error("academic_request_failed")
                 app.state.lens_cleanup_task = asyncio.create_task(_cleanup_loop())
 
             @app.on_event("shutdown")
@@ -1020,21 +1024,7 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
                     try:
                         from request_llms.bridge_all import predict
                         from crazy_functional import get_crazy_functions
-                        logger.info(
-                            json.dumps(
-                                {
-                                    "event": "academic_chat_process_payload",
-                                    "function": payload.function,
-                                    "chat_id": payload.chat_id,
-                                    "llm_model": str(payload.llm_kwargs.get("llm_model") or "").strip(),
-                                    "has_api_key": bool(str(payload.llm_kwargs.get("api_key") or "").strip()),
-                                    "api_key_passthrough": bool(payload.llm_kwargs.get("api_key_passthrough")),
-                                    "has_api_endpoint": bool(str(payload.llm_kwargs.get("api_endpoint") or "").strip()),
-                                    "has_max_token": payload.llm_kwargs.get("max_token") is not None,
-                                },
-                                ensure_ascii=False,
-                            )
-                        )
+                        logger.info("academic_event")
                         ctx = _build_stream_context(payload)
                         main_input = ctx["main_input"]
                         llm_kwargs = ctx["llm_kwargs"]
@@ -1105,101 +1095,46 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
 
             @app.post("/academic/upload")
             async def academic_upload(files: List[UploadFile] = File(...), user_name: str = Form(None)):
-                from toolbox import gen_time_str, get_upload_folder, del_outdated_uploads, default_user_name
-                from shared_utils.handle_upload import extract_archive
-                import glob
-
-                upload_user = user_name or default_user_name
-                time_tag = gen_time_str()
-                target_path_base = get_upload_folder(upload_user, tag=time_tag)
-                os.makedirs(target_path_base, exist_ok=True)
-                write_runtime_marker(target_path_base, "api-upload", upload_user)
-                del_outdated_uploads(get_temp_ttl_seconds(), get_upload_folder(upload_user))
-
-                upload_msg = ""
-                for file in files:
-                    file_origin_name = os.path.basename(file.filename)
-                    this_file_path = os.path.join(target_path_base, file_origin_name)
-                    processed_size = 0
-                    with open(this_file_path, "wb") as buffer:
-                        while True:
-                            chunk = await file.read(8192)
-                            if not chunk:
-                                break
-                            buffer.write(chunk)
-                            processed_size += len(chunk)
-                    upload_msg += extract_archive(
-                        file_path=this_file_path,
-                        dest_dir=this_file_path + ".extract",
-                    )
-
-                moved_files = glob.glob(f"{target_path_base}/**/*", recursive=True)
-                return JSONResponse(
-                    content={
-                        "upload_dir": target_path_base,
-                        "files": moved_files,
-                        "message": upload_msg,
-                    }
-                )
+                identity = current_identity()
+                if not identity:
+                    raise HTTPException(status_code=401, detail='Request rejected')
+                root = request_input_root()
+                root.mkdir(parents=True, exist_ok=True, mode=0o700)
+                try:
+                    for file in files:
+                        filename = str(file.filename or '')
+                        if not filename or len(filename) > 255 or filename != os.path.basename(filename) or '\\' in filename or filename.startswith('.'):
+                            raise ValueError('Filename rejected')
+                        data = await file.read()
+                        if len(data) > 20 * 1024 * 1024:
+                            raise ValueError('File size rejected')
+                        with open(root / filename, 'xb') as destination:
+                            destination.write(data)
+                        os.chmod(root / filename, 0o600)
+                    prepare_request_inputs()
+                except (ValueError, OSError):
+                    import shutil
+                    shutil.rmtree(root, ignore_errors=True)
+                    raise HTTPException(status_code=400, detail='Attachment preparation failed') from None
+                return JSONResponse({'upload_dir': str(root), 'files': [item.name for item in root.iterdir()]})
 
             @app.get("/academic/file")
             async def academic_file(path: str):
-                from fastapi import HTTPException
-                from fastapi.responses import FileResponse
-
-                abs_path = os.path.abspath(path)
-                allowed_roots = get_allowed_storage_roots()
-                if not any(path_is_within(abs_path, root) for root in allowed_roots):
-                    raise HTTPException(status_code=403, detail="path not allowed")
-                if not os.path.exists(abs_path):
-                    raise HTTPException(status_code=404, detail="file not found")
-                return FileResponse(abs_path)
+                try:
+                    descriptor, filename = open_report_reference(path)
+                except (ValueError, OSError):
+                    raise HTTPException(status_code=404, detail='Report not found') from None
+                from urllib.parse import quote
+                from mimetypes import guess_type
+                return StreamingResponse(
+                    iter_report_bytes(descriptor),
+                    media_type=guess_type(filename)[0] or 'application/octet-stream',
+                    headers={'X-Lens-Report-Name': quote(filename, safe=''), 'Content-Disposition': 'attachment', 'Cache-Control': 'private, no-store'},
+                )
 
             @app.post("/upload")
             async def upload_files(files: List[UploadFile] = File(...)):
-                """上传文件接口，支持多文件上传并显示进度"""
-                from toolbox import on_file_uploaded
-                results = []
-                upload_dir = "uploads"
-
-                # 确保上传目录存在
-                if not os.path.exists(upload_dir):
-                    os.makedirs(upload_dir)
-
-                for file in files:
-                    try:
-                        # 构建文件保存路径
-                        file_path = os.path.join(upload_dir, file.filename)
-                        total_size = 0
-                        processed_size = 0
-
-                        # 分块读取并保存文件，同时计算进度
-                        with open(file_path, "wb") as buffer:
-                            while chunk := await file.read(8192):  # 8KB chunks
-                                buffer.write(chunk)
-                                processed_size += len(chunk)
-                                if file.size:  # 如果文件大小可用
-                                    progress = (processed_size / file.size) * 100
-                                    logger.info(f"Uploading {file.filename}: {progress:.2f}%")
-
-                        results.append({
-                            "filename": file.filename,
-                            "size": processed_size,
-                            "status": "success",
-                            "path": file_path
-                        })
-                    except Exception as e:
-                        results.append({
-                            "filename": file.filename,
-                            "status": "error",
-                            "error": str(e)
-                        })
-                        logger.error(f"Error uploading {file.filename}: {str(e)}")
-
-                return JSONResponse(content={
-                    "message": "Files uploaded successfully",
-                    "files": results
-                })
+                raise HTTPException(status_code=410, detail='Upload route unavailable')
 
             @app.websocket("/main")
             async def main(websocket: WebSocket):
@@ -1213,17 +1148,17 @@ class MasterMindWebSocketServer(PythonMethod_AsyncConnectionMaintainer_Agentcraf
                 """
                 try:
                     await websocket.accept()
-                    logger.info(f"WebSocket connection established: {websocket.client.host}:{websocket.client.port}")
+                    logger.info("academic_event")
                     msg: UserInterfaceMsg = UserInterfaceMsg.model_validate_json(await websocket.receive_text())
-                    logger.info(msg)
+                    logger.info("academic_event")
                     await self.maintain_connection_forever(msg, websocket, "client_id")
                 except:
-                    logger.exception("Error in WebSocket connection handler")
+                    logger.error("academic_request_failed")
                     await websocket.close()
             import uvicorn
             config = uvicorn.Config(app, host=self.host, port=self.port, log_level="error", ws_ping_interval=300, ws_ping_timeout=600)
             server = uvicorn.Server(config)
-            logger.info(f"uvicorn begin, serving at ws://{self.host}:{self.port}/main")
+            logger.info("academic_event")
             await server.serve()
 
         await launch_websocket_server()

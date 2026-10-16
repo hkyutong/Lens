@@ -1,11 +1,28 @@
+import { randomUUID } from 'crypto';
+import { AcademicRequestIdentity, academicScopeUserName, parseAcademicScopeUserName, signAcademicRequest } from './academicInternalAuth';
+import { AttachmentService } from '../attachment/attachment.service';
+import { isPackageModelAllowed } from '../../common/utils/packageEntitlements';
+import {
+  AcademicPlanTier,
+  canUseAcademicModel,
+  isAcademicModelEnabled,
+  resolveAcademicPlanTier,
+} from '@/common/utils/academicModelAccess';
 import axios from 'axios';
-import * as FormData from 'form-data';
+
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as pdf from 'pdf-parse';
 import * as mammoth from 'mammoth';
 import { Readable } from 'stream';
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { formatUrl, getTokenCount, sanitizeClientErrorMessage } from '@/common/utils';
 import { ChatLogService } from '../chatLog/chatLog.service';
@@ -98,53 +115,22 @@ interface AcademicStreamState {
   finishReason: string;
 }
 
-type AcademicPlanTier = 'free' | 'plus' | 'pro' | 'max';
-
 // 未指定模型时，Lens 学术链路默认使用 DeepSeek V3.2；本地模型表的真实入口为
 // deepseek-v3.2。显式选择的其他已启用模型仍应沿用后台配置，不被默认值覆盖。
 // deepseek-chat 是同一模型的兼容别名，只用于兼容旧会话配置。
 const LENS_DEFAULT_ACADEMIC_MODEL = 'deepseek-v3.2';
 const isLensDeepSeekV32 = (value: unknown) => {
-  const normalized = String(value || '').trim().toLowerCase().replace(/[\s_-]/g, '');
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, '');
   return normalized === 'deepseekchat' || normalized === 'deepseekv3.2';
 };
 
 @Injectable()
 export class AcademicService {
   private readonly logger = new Logger(AcademicService.name);
-  private readonly academicDirectReadExtensions = new Set([
-    'pdf',
-    'doc',
-    'docx',
-    'ppt',
-    'pptx',
-    'xls',
-    'xlsx',
-    'csv',
-    'txt',
-    'md',
-    'tex',
-    'bib',
-    'json',
-    'yaml',
-    'yml',
-    'xml',
-    'html',
-    'css',
-    'js',
-    'ts',
-    'py',
-    'java',
-    'c',
-    'cpp',
-    'h',
-    'ipynb',
-    'png',
-    'jpg',
-    'jpeg',
-    'webp',
-  ]);
-  private readonly academicArchiveExtensions = new Set(['zip', 'rar', '7z', 'tar', 'gz']);
+
   private readonly academicTextContextExtensions = new Set([
     'txt',
     'md',
@@ -215,6 +201,7 @@ export class AcademicService {
     private readonly chatGroupService: ChatGroupService,
     private readonly globalConfigService: GlobalConfigService,
     private readonly modelsService: ModelsService,
+    private readonly attachmentService?: AttachmentService,
   ) {}
 
   private formatWorkflowTimestamp(date = new Date()) {
@@ -289,9 +276,7 @@ export class AcademicService {
   }
 
   private buildWorkflowStageProgressText(options: {
-    step: Required<
-      Pick<AcademicWorkflowStageMeta, 'index' | 'kind' | 'name' | 'displayName'>
-    > & {
+    step: Required<Pick<AcademicWorkflowStageMeta, 'index' | 'kind' | 'name' | 'displayName'>> & {
       args?: string;
     };
     totalStages: number;
@@ -309,13 +294,23 @@ export class AcademicService {
 
     if (step.kind === 'plugin') {
       const filePhases = isPdfPlugin
-        ? ['正在接收论文资料', '正在切分论文正文', '正在分析问题、方法和实验结果', '正在汇总论文速读结果']
+        ? [
+            '正在接收论文资料',
+            '正在切分论文正文',
+            '正在分析问题、方法和实验结果',
+            '正在汇总论文速读结果',
+          ]
         : isWordPlugin
         ? ['正在接收文档资料', '正在解析文档结构', '正在提取关键内容', '正在汇总文档结果']
         : isLatexPlugin
         ? ['正在接收 LaTeX 资料', '正在保留公式与命令结构', '正在生成译文', '正在整理排版结果']
         : ['正在接收研究资料', '正在解析资料内容', '正在调用学术工具处理', '正在整理本步结果'];
-      const plainPhases = ['正在准备工具输入', '正在调用学术工具', '正在等待上游模型返回', '正在整理本步结果'];
+      const plainPhases = [
+        '正在准备工具输入',
+        '正在调用学术工具',
+        '正在等待上游模型返回',
+        '正在整理本步结果',
+      ];
       const phases = hasUploadDir ? filePhases : plainPhases;
       return `${prefix}：${phases[Math.min(safeTick, phases.length - 1)]}`;
     }
@@ -359,23 +354,7 @@ export class AcademicService {
   }
 
   private resolveAcademicPlanTier(balance: any): AcademicPlanTier {
-    const packageId = Number(balance?.packageId || 0);
-    const expirationTime = String(balance?.expirationTime || '').trim();
-    const expiration = expirationTime ? new Date(`${expirationTime}T23:59:59`) : null;
-    const activeMember =
-      packageId > 0 && (!expirationTime || (expiration instanceof Date && expiration.getTime() > Date.now()));
-    if (!activeMember) return 'free';
-
-    const weight = Number(balance?.packageWeight || 0);
-    if (weight >= 30) return 'max';
-    if (weight >= 20) return 'pro';
-    if (weight >= 10) return 'plus';
-
-    const packageName = this.normalizePluginName(String(balance?.packageName || ''));
-    if (packageName.includes('max') || packageName.includes('至尊版')) return 'max';
-    if (packageName.includes('pro') || packageName.includes('教授版')) return 'pro';
-    if (packageName.includes('plus') || packageName.includes('学生版') || packageName.includes('學生版')) return 'plus';
-    return 'plus';
+    return resolveAcademicPlanTier(balance);
   }
 
   private getAcademicWorkflowStepLimit(balance: any) {
@@ -427,14 +406,9 @@ export class AcademicService {
     if (plusAllowed) return true;
     if (tier !== 'pro') return false;
 
-    return [
-      'pdf',
-      'word',
-      'latex',
-      'tex论文',
-      '本地latex',
-      '读tex论文',
-    ].some(item => normalized.includes(this.normalizePluginName(item)));
+    return ['pdf', 'word', 'latex', 'tex论文', '本地latex', '读tex论文'].some(item =>
+      normalized.includes(this.normalizePluginName(item)),
+    );
   }
 
   private async assertAcademicSingleAccess(
@@ -603,9 +577,7 @@ export class AcademicService {
   }
 
   private isModelEnabled(modelInfo: any) {
-    if (!modelInfo) return false;
-    if (modelInfo.status === undefined || modelInfo.status === null) return true;
-    return Number(modelInfo.status) !== 0;
+    return isAcademicModelEnabled(modelInfo);
   }
 
   private normalizeAcademicModelLookup(value: string) {
@@ -677,8 +649,8 @@ export class AcademicService {
             item => this.isModelEnabled(item) && isLensDeepSeekV32(item?.model),
           )
         : this.isModelEnabled(explicitModelInfo)
-          ? explicitModelInfo
-          : null
+        ? explicitModelInfo
+        : null
       : [preferredModelInfo, deepSeekModelInfo].find(
           item => this.isModelEnabled(item) && isLensDeepSeekV32(item?.model),
         );
@@ -739,7 +711,11 @@ export class AcademicService {
     return payload;
   }
 
-  private async resolveAcademicRuntimeFallbackModelInfo(currentModelInfo: any) {
+  private async resolveAcademicRuntimeFallbackModelInfo(
+    currentModelInfo: any,
+    planTier: AcademicPlanTier = 'free',
+    packageEntitlements?: unknown,
+  ) {
     const currentModel = String(currentModelInfo?.model || '').trim();
     if (isLensDeepSeekV32(currentModel)) {
       // Lens 固定使用 DeepSeek V3.2；不要在失败时静默切换到其他模型。
@@ -748,7 +724,13 @@ export class AcademicService {
     const currentDeduct = Number(currentModelInfo?.deduct || 0);
     const allModels = await this.modelsService.getAllKey();
     const enabledModels = (Array.isArray(allModels) ? allModels : [])
-      .filter(item => this.isModelEnabled(item))
+      .filter(
+        item =>
+          this.isModelEnabled(item) &&
+          canUseAcademicModel(planTier, item.deductType) &&
+          Number(item.deductType) <= Number(currentModelInfo?.deductType) &&
+          isPackageModelAllowed(packageEntitlements, item),
+      )
       .filter(item => String(item?.model || '').trim())
       .filter(item => String(item?.model || '').trim() !== currentModel)
       .filter(item => {
@@ -801,9 +783,15 @@ export class AcademicService {
       !this.isMeaningfulAcademicContent(currentContent);
     if (!shouldFallback) return null;
 
-    const fallbackModelInfo = await this.resolveAcademicRuntimeFallbackModelInfo(currentModelInfo);
+    const modelAccessBalance = await this.userBalanceService.queryUserBalance(userId);
+    const fallbackModelInfo = await this.resolveAcademicRuntimeFallbackModelInfo(
+      currentModelInfo,
+      this.resolveAcademicPlanTier(modelAccessBalance),
+      modelAccessBalance?.packageEntitlements,
+    );
     if (!fallbackModelInfo) return null;
 
+    await this.assertAcademicModelAccess(userId, fallbackModelInfo, modelAccessBalance);
     const fallbackPayload = this.cloneAcademicPayload(payload);
     this.applyAcademicRuntimeModel(fallbackPayload, fallbackModelInfo);
 
@@ -871,16 +859,20 @@ export class AcademicService {
   }
 
   private async postAcademic(pathname: string, data: any, config: Record<string, any> = {}) {
+    const requestBody = JSON.stringify(data ?? {});
+    const identity = parseAcademicScopeUserName(data?.user_name);
+
+
     let lastError: any = null;
     const { timeout: preferredTimeout, ...restConfig } = config || {};
     for (const baseUrl of this.getAcademicBaseUrls()) {
       try {
         const timeout = this.getAcademicTimeout(baseUrl, Number(preferredTimeout || 10000));
-        const response = await axios.post(`${baseUrl}${pathname}`, data, {
+        const response = await axios.post(`${baseUrl}${pathname}`, requestBody, {
           timeout,
           validateStatus: () => true,
           ...restConfig,
-          proxy: false,
+          proxy: false, headers: { ...config.headers, 'Content-Type': 'application/json', ...(identity ? signAcademicRequest('POST', pathname, requestBody, identity) : {}) }
         });
         if (response.status < 400) {
           return { response, baseUrl };
@@ -907,17 +899,22 @@ export class AcademicService {
     throw lastError || new Error('academic request failed');
   }
 
-  private async getAcademic(pathname: string, config: Record<string, any> = {}) {
+  private async getAcademic(pathname: string, config: Record<string, any> = {}, identity?: AcademicRequestIdentity) {
+    const query = config.params ? new URLSearchParams(Object.entries(config.params).map(([key, value]) => [key, String(value)])).toString() : '';
+    const resource = pathname + (query ? '?' + query : '');
+    const { params: _params, ...requestConfig } = config;
+
+
     let lastError: any = null;
-    const { timeout: preferredTimeout, ...restConfig } = config || {};
+    const { timeout: preferredTimeout, ...restConfig } = requestConfig;
     for (const baseUrl of this.getAcademicBaseUrls()) {
       try {
         const timeout = this.getAcademicTimeout(baseUrl, Number(preferredTimeout || 10000));
-        const response = await axios.get(`${baseUrl}${pathname}`, {
+        const response = await axios.get(`${baseUrl}${resource}`, {
           timeout,
           validateStatus: () => true,
           ...restConfig,
-          proxy: false,
+          proxy: false, headers: { ...config.headers, ...(identity ? signAcademicRequest('GET', resource, '', identity) : {}) }
         });
         if (response.status < 400) {
           return { response, baseUrl };
@@ -949,6 +946,11 @@ export class AcademicService {
     payload: Record<string, any>,
     signal: AbortSignal,
   ) {
+    const requestBody = JSON.stringify(payload);
+    const identity = parseAcademicScopeUserName(payload?.user_name);
+    if (!identity) throw new UnauthorizedException('Academic request identity required');
+
+
     let lastStatus = 0;
     let lastBody = '';
     let lastError: any = null;
@@ -962,8 +964,8 @@ export class AcademicService {
           try {
             return await fetch(`${baseUrl}${pathname}`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
+              headers: { 'Content-Type': 'application/json', ...signAcademicRequest('POST', pathname, requestBody, identity) },
+              body: requestBody,
               signal: scoped.signal,
             });
           } finally {
@@ -1007,11 +1009,13 @@ export class AcademicService {
     throw lastError || new Error('academic request failed');
   }
 
-  async health(preferredModel = '', preferredModelName = '') {
+  async health(preferredModel = '', preferredModelName = '', req?: Request) {
     const startedAt = Date.now();
     try {
-      const { response } = await this.getAcademic('/health', { timeout: 2500 });
-      const status = String(response?.data?.status || '').trim().toLowerCase();
+      const { response } = await this.getAcademic('/health', { timeout: 2500 }, this.getAcademicRequestIdentity(req));
+      const status = String(response?.data?.status || '')
+        .trim()
+        .toLowerCase();
       if (status !== 'ready') {
         return {
           status: 'degraded',
@@ -1196,9 +1200,7 @@ export class AcademicService {
   }
 
   private isLensFeaturedPlugin(normalizedPluginName: string) {
-    return String(normalizedPluginName || '').startsWith(
-      this.normalizePluginName('Lens｜'),
-    );
+    return String(normalizedPluginName || '').startsWith(this.normalizePluginName('Lens｜'));
   }
 
   private isFileRequiredPlugin(normalizedPluginName: string) {
@@ -1217,6 +1219,8 @@ export class AcademicService {
   }
 
   private isLongRunningAcademicPlugin(normalizedPluginName: string) {
+    if (this.isLensFeaturedPlugin(normalizedPluginName)) return true;
+
     if (!normalizedPluginName) return false;
     if (this.isArxivPlugin(normalizedPluginName)) return true;
     if (this.isFileRequiredPlugin(normalizedPluginName)) return true;
@@ -1955,6 +1959,7 @@ export class AcademicService {
     payload: Record<string, any>,
     signal: AbortSignal,
     onThinkingPreview?: (preview: string, state: AcademicStreamState) => void,
+    req?: Request,
   ): Promise<AcademicStreamState> {
     const state: AcademicStreamState = {
       fullContent: '',
@@ -2002,7 +2007,7 @@ export class AcademicService {
               ? segments
               : [line];
           for (const item of lines) {
-            const safeLine = this.sanitizeAcademicStreamLine(item);
+            const safeLine = this.sanitizeAcademicStreamLine(item, state, req);
             if (!safeLine) continue;
             this.consumeAcademicLine(safeLine, state, true);
             const thinkingPreview = this.buildAcademicThinkingPreview(safeLine, state);
@@ -2026,7 +2031,7 @@ export class AcademicService {
             ? segments
             : [tail];
         for (const item of lines) {
-          const safeTail = this.sanitizeAcademicStreamLine(item);
+          const safeTail = this.sanitizeAcademicStreamLine(item, state, req);
           if (!safeTail) continue;
           this.consumeAcademicLine(safeTail, state, false);
           const thinkingPreview = this.buildAcademicThinkingPreview(safeTail, state);
@@ -2035,6 +2040,7 @@ export class AcademicService {
       }
     }
 
+    if (req) await this.resolveAcademicReportFiles(state, req);
     return state;
   }
 
@@ -2388,72 +2394,223 @@ export class AcademicService {
     return /[\\/]/.test(source);
   }
 
-  async proxyFile(pathValue: string, res: Response) {
-    const resolvedPath = this.extractAcademicDownloadPath(pathValue);
-    if (!resolvedPath || !this.isLikelyAcademicDownloadPath(resolvedPath)) {
-      throw new HttpException('下载文件参数无效，请重新生成后再试', HttpStatus.BAD_REQUEST);
+  private academicRequestIdentities = new WeakMap<Request, AcademicRequestIdentity>();
+
+  private getAcademicRequestIdentity(req: Request): AcademicRequestIdentity {
+    const ownerId = this.getAcademicOwnerId(req);
+    if (!this.academicRequestIdentities) this.academicRequestIdentities = new WeakMap();
+    let identity = this.academicRequestIdentities.get(req);
+    if (!identity) { identity = { ownerId, requestId: randomUUID() }; this.academicRequestIdentities.set(req, identity); }
+    if (identity.ownerId !== ownerId) throw new UnauthorizedException('Academic request identity required');
+    return identity;
+  }
+
+  private getAcademicOwnerId(req: Request): number {
+    const ownerId = req?.user?.id;
+    if (typeof ownerId !== 'number' || !Number.isSafeInteger(ownerId) || ownerId <= 0) {
+      throw new UnauthorizedException('Authentication required');
     }
+    return ownerId;
+  }
+
+  private assertAcademicAttachmentReference(reference: string): void {
+    if (
+      !/^attachment:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        reference,
+      )
+    ) {
+      throw new NotFoundException('Attachment not found');
+    }
+  }
+
+  private async validateAcademicAttachments(fileUrl: any, req: Request): Promise<void> {
+    for (const item of this.parseFileUrls(fileUrl)) {
+      await this.readAcademicAttachment(item, req);
+    }
+  }
+
+  private academicReportRegistrations = new WeakMap<
+    object,
+    {
+      ownerId: number;
+      emitted: boolean;
+      registrations: Map<string, Promise<{ path: string; name: string } | null>>;
+    }
+  >();
+
+  private async registerAcademicReportPath(
+    reportPath: string,
+    ownerId: number, identity: AcademicRequestIdentity
+  ): Promise<{ path: string; name: string }> {
+    if (!Number.isSafeInteger(ownerId) || ownerId <= 0)
+      throw new UnauthorizedException('Authentication required');
+    if (/^attachment:/i.test(reportPath)) {
+      this.assertAcademicAttachmentReference(reportPath);
+      const existing = await this.attachmentService.readOwnedAttachment(reportPath, ownerId);
+      return { path: reportPath, name: existing.filename };
+    }
+    const match = /^academic-report:([0-9a-f-]+):([0-9a-f-]+)$/i.exec(reportPath);
+    if (!match || identity.ownerId !== ownerId || match[1] !== identity.requestId
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(match[2])) {
+      throw new NotFoundException('Report not found');
+    }
+
+
+    const { response } = await this.getAcademic('/academic/file', {
+      responseType: 'arraybuffer',
+      params: { path: reportPath },
+      maxRedirects: 0,
+      proxy: false,
+      maxContentLength: 20 * 1024 * 1024,
+    }, identity);
+    if (response.status < 200 || response.status >= 300)
+      throw new NotFoundException('Report not found');
+    const buffer = Buffer.from(response.data);
+    if (!buffer.length || buffer.length > 20 * 1024 * 1024)
+      throw new NotFoundException('Report not found');
+    const encodedFilename = response.headers?.['x-lens-report-name'];
+    let reportFilename = 'Report';
+    if (typeof encodedFilename === 'string' && encodedFilename.length <= 2048) {
+      try { reportFilename = decodeURIComponent(encodedFilename); } catch (_error) { throw new NotFoundException('Report not found'); }
+    }
+    reportFilename = this.sanitizeAcademicWorkspaceFileName(path.basename(reportFilename), 'Report');
+    const contentType = typeof response.headers?.['content-type'] === 'string' ? response.headers['content-type'].split(';')[0] : 'application/octet-stream';
+    const reference = await this.attachmentService.storePrivateAttachment(
+      buffer,
+      {
+        filename: reportFilename,
+        contentType: contentType,
+      },
+      ownerId,
+    );
+    return { path: reference, name: reportFilename };
+  }
+
+  private captureAcademicReportFiles(line: string, state: AcademicStreamState, req: Request): void {
+    if (!state || !req) return;
+    let ownerId: number;
     try {
-      const { response } = await this.getAcademic('/academic/file', {
-        responseType: 'stream',
-        params: { path: resolvedPath },
-      });
-      const contentType = response.headers['content-type'] || 'application/octet-stream';
-      const contentDisposition = response.headers['content-disposition'];
-      res.setHeader('Content-Type', contentType);
-      if (contentDisposition) {
-        res.setHeader('Content-Disposition', contentDisposition);
-      } else {
-        const fallbackName = this.getAcademicDownloadFileName(resolvedPath);
-        if (fallbackName) {
-          res.setHeader(
-            'Content-Disposition',
-            `attachment; filename*=UTF-8''${encodeURIComponent(fallbackName)}`,
-          );
-        }
-      }
-      response.data.on('error', () => {
-        if (!res.headersSent) {
-          res.status(HttpStatus.BAD_GATEWAY).end('下载流中断，请稍后重试');
-        } else {
-          res.end();
-        }
-      });
-      response.data.pipe(res);
-    } catch (error) {
-      const message = String((error as Error)?.message || '');
-      if (/academic status 403/i.test(message)) {
-        throw new HttpException('下载文件已失效或无权限访问', HttpStatus.FORBIDDEN);
-      }
-      if (/academic status 404/i.test(message)) {
-        throw new HttpException('下载文件不存在或已过期，请重新生成', HttpStatus.NOT_FOUND);
-      }
-      if (/academic status 400/i.test(message)) {
-        throw new HttpException('下载文件参数无效，请重新生成后再试', HttpStatus.BAD_REQUEST);
-      }
-      this.logger.warn(
-        JSON.stringify({
-          event: 'academic_file_proxy_failed',
-          errorCategory: /academic status 4\d\d/i.test(message) ? 'upstream_client' : 'runtime',
-        }),
-      );
-      throw new HttpException('下载服务异常，请稍后重试', HttpStatus.BAD_GATEWAY);
+      ownerId = this.getAcademicOwnerId(req);
+    } catch (_error) {
+      return;
     }
+    let payload: any;
+    try {
+      payload = JSON.parse(this.normalizeAcademicStreamLine(String(line || '').trim()));
+    } catch (_error) {
+      return;
+    }
+    const source = payload?.fileVectorResult ?? payload?.files;
+    if (!source) return;
+    let files: any = source;
+    if (typeof files === 'string') {
+      try {
+        files = JSON.parse(files);
+      } catch (_error) {
+        files = [files];
+      }
+    }
+    if (!Array.isArray(files))
+      files = files?.files && Array.isArray(files.files) ? files.files : [files];
+    if (!this.academicReportRegistrations) this.academicReportRegistrations = new WeakMap();
+    let record = this.academicReportRegistrations.get(state);
+    if (!record) {
+      record = { ownerId, emitted: false, registrations: new Map() };
+      this.academicReportRegistrations.set(state, record);
+    }
+    if (record.ownerId !== ownerId) return;
+    for (const entry of files.slice(0, 20)) {
+      const candidate =
+        typeof entry === 'string'
+          ? entry
+          : entry?.path ??
+            entry?.file_path ??
+            entry?.filePath ??
+            entry?.download_path ??
+            entry?.downloadPath ??
+            entry?.file ??
+            entry?.url;
+      if (
+        typeof candidate !== 'string' ||
+        record.registrations.has(candidate) ||
+        record.registrations.size >= 20
+      )
+        continue;
+      const registration = this.registerAcademicReportPath(candidate, ownerId, this.getAcademicRequestIdentity(req)).catch(() => null);
+      record.registrations.set(candidate, registration);
+    }
+  }
+
+  private async resolveAcademicReportFiles(
+    state: AcademicStreamState,
+    req: Request,
+  ): Promise<string | null> {
+    const ownerId = this.getAcademicOwnerId(req);
+    const record = this.academicReportRegistrations?.get(state);
+    if (!record || record.ownerId !== ownerId) {
+      state.fileVectorResult = null;
+      return null;
+    }
+    const files = (await Promise.all(record.registrations.values())).filter(Boolean);
+    const result = files.length ? JSON.stringify(files) : null;
+    state.fileVectorResult = result;
+    return result;
+  }
+
+  private async publishAcademicReportFiles(
+    state: AcademicStreamState,
+    req: Request,
+    res: Response,
+  ): Promise<void> {
+    const result = await this.resolveAcademicReportFiles(state, req);
+    const record = this.academicReportRegistrations?.get(state);
+    if (!result || record?.emitted || res.writableEnded || res.destroyed) return;
+    record.emitted = true;
+    res.write(JSON.stringify({ fileVectorResult: result }) + '\n');
+  }
+
+  async proxyFile(reference: string, req: Request, res: Response): Promise<void> {
+    const attachment = await this.readAcademicAttachment({ url: reference }, req);
+    const safeName = attachment.fileName.replace(/[\r\n]/g, '').replace(/[^\x20-\x7e]/g, '_');
+    res.setHeader('Content-Type', attachment.contentType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeName.replace(
+        /["\\]/g,
+        '_',
+      )}"; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.end(attachment.buffer);
+  }
+
+  private async assertAcademicModelAccess(userId: number, modelInfo: any, balance?: any) {
+    const currentBalance = balance ?? (await this.userBalanceService.queryUserBalance(userId));
+    if (
+      !isAcademicModelEnabled(modelInfo) ||
+      !canUseAcademicModel(this.resolveAcademicPlanTier(currentBalance), modelInfo?.deductType) ||
+      !isPackageModelAllowed(currentBalance?.packageEntitlements, modelInfo)
+    ) {
+      throw new HttpException(
+        '当前套餐不支持此模型，请选择其他模型或升级套餐。',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
+    return currentBalance;
   }
 
   async academicChatProcess(body: AcademicChatBody, req: Request, res: Response) {
     const requestId = (req as any).requestId;
-    const userId = req.user?.id;
+    const userId = this.getAcademicOwnerId(req);
+    await this.validateAcademicAttachments(body.fileUrl, req);
 
     await this.userBalanceService.checkUserCertification(userId);
     await this.userService.checkUserStatus(req.user);
 
     const requestedModel = String(body.model || '').trim();
     const requestedModelName = String(body.modelName || '').trim();
-    const resolvedModel = await this.resolveAcademicModelInfo(
-      requestedModel,
-      requestedModelName,
-    );
+    const resolvedModel = await this.resolveAcademicModelInfo(requestedModel, requestedModelName);
     if (!resolvedModel) {
       throw new HttpException('系统未配置可用模型，请联系管理员', HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -2483,6 +2640,7 @@ export class AcademicService {
     }
     const modelInfo = resolvedModel.modelInfo;
 
+    await this.assertAcademicModelAccess(userId, modelInfo);
     const {
       deduct,
       deductType,
@@ -2832,7 +2990,7 @@ export class AcademicService {
       system_prompt: body.system_prompt || '',
       core_function: resolvedCoreFunction || body.core_function,
       plugin_name: resolvedPluginName || body.plugin_name,
-      user_name: String(req.user.id),
+      user_name: academicScopeUserName(this.getAcademicRequestIdentity(req)),
       chat_id: String(assistantLogId),
     };
 
@@ -2887,7 +3045,10 @@ export class AcademicService {
 
     // 默认对话和基础能力没有插件的目录读取约定，需要把已上传资料的正文
     // 作为受边界控制的上下文传入；插件仍保留原有目录路由，避免改变插件契约。
-    if (uploadDir && (academicPayload.function === 'chat' || academicPayload.function === 'basic')) {
+    if (
+      uploadDir &&
+      (academicPayload.function === 'chat' || academicPayload.function === 'basic')
+    ) {
       const attachmentContext = await this.buildAcademicAttachmentContext(body.fileUrl, req);
       if (attachmentContext) {
         const userPrompt = String(prompt || '').trim();
@@ -3162,7 +3323,7 @@ export class AcademicService {
                 ? segments
                 : [line];
             for (const item of lines) {
-              const safeLine = this.sanitizeAcademicStreamLine(item);
+              const safeLine = this.sanitizeAcademicStreamLine(item, state, req);
               if (!safeLine) continue;
               this.consumeAcademicLine(safeLine, state, true);
               emitThinkingPreview(this.buildAcademicThinkingPreview(safeLine, state));
@@ -3204,7 +3365,7 @@ export class AcademicService {
                   ? segments
                   : [tail];
               for (const item of lines) {
-                const safeTail = this.sanitizeAcademicStreamLine(item);
+                const safeTail = this.sanitizeAcademicStreamLine(item, state, req);
                 if (!safeTail) continue;
                 this.consumeAcademicLine(safeTail, state, false);
                 emitThinkingPreview(this.buildAcademicThinkingPreview(safeTail, state));
@@ -3258,6 +3419,7 @@ export class AcademicService {
                 academicPayload,
                 controller.signal,
                 preview => emitThinkingPreview(preview),
+                req,
               );
               const retryOutput = this.pickBestAcademicOutput(retryState);
               let retryContent = await buildDisplayContent(retryOutput, !retryState.streamError);
@@ -3447,6 +3609,7 @@ export class AcademicService {
               finalContent,
               contentForOutput,
             );
+            await this.publishAcademicReportFiles(state, req, res);
             await this.chatLogService.updateChatLog(assistantLogId, {
               content: persistedErrorContent,
               reasoning_content: state.fullReasoning || null,
@@ -3487,6 +3650,7 @@ export class AcademicService {
             totalTokens: promptTokens + completionTokens,
           });
 
+          await this.publishAcademicReportFiles(state, req, res);
           await this.chatLogService.updateChatLog(assistantLogId, {
             content: persistedFinalContent,
             reasoning_content: state.fullReasoning,
@@ -3559,6 +3723,7 @@ export class AcademicService {
             state,
             fallbackContent,
           );
+          await this.publishAcademicReportFiles(state, req, res);
           await this.chatLogService.updateChatLog(assistantLogId, {
             content: persistedFallbackContent,
             reasoning_content: state.fullReasoning || null,
@@ -3598,15 +3763,13 @@ export class AcademicService {
           (this.isPdfPlugin(normalizedPluginName) ||
             this.isPaperQuickReadPlugin(normalizedPluginName)) &&
           body.fileUrl &&
-          (
-            idleTimedOut ||
+          (idleTimedOut ||
             maxDurationTimedOut ||
             abortedByUpstream ||
             this.isAcademicPlaceholderContent(partialContent) ||
             /插件调用出错|Traceback|学术服务处理超时|无法读取论文内容|文件内容为空或无法提取/i.test(
               partialContent || '',
-            )
-          )
+            ))
         ) {
           const fallbackSummary = await this.buildPdfFallbackSummary(body.fileUrl, req);
           if (fallbackSummary) {
@@ -3680,6 +3843,7 @@ export class AcademicService {
             completionTokens,
             totalTokens: promptTokens + completionTokens,
           });
+          await this.publishAcademicReportFiles(state, req, res);
           await this.chatLogService.updateChatLog(assistantLogId, {
             content: persistedGracefulContent,
             reasoning_content: state.fullReasoning || null,
@@ -3735,6 +3899,7 @@ export class AcademicService {
           state,
           fallbackContent,
         );
+        await this.publishAcademicReportFiles(state, req, res);
         await this.chatLogService.updateChatLog(assistantLogId, {
           content: persistedFallbackContent,
           reasoning_content: state.fullReasoning || null,
@@ -3758,9 +3923,9 @@ export class AcademicService {
       clearForceCloseTimer();
       const err = error as Error;
       this.logger.error(
-      JSON.stringify({
-        event: 'academic_request_failed',
-        errorCategory: err instanceof HttpException ? 'http' : 'runtime',
+        JSON.stringify({
+          event: 'academic_request_failed',
+          errorCategory: err instanceof HttpException ? 'http' : 'runtime',
         }),
       );
       let fallbackContent = await buildDisplayContent(this.pickBestAcademicOutput(state), false);
@@ -3776,6 +3941,7 @@ export class AcademicService {
           this.getSafeAcademicErrorMessage(err?.message) || '学术服务处理失败，请重试';
       }
       const persistedFallbackContent = this.resolvePersistedAcademicContent(state, fallbackContent);
+      await this.publishAcademicReportFiles(state, req, res);
       await this.chatLogService.updateChatLog(assistantLogId, {
         content: persistedFallbackContent,
         reasoning_content: state.fullReasoning || null,
@@ -3799,7 +3965,8 @@ export class AcademicService {
 
   async academicWorkflowProcess(body: AcademicWorkflowBody, req: Request, res: Response) {
     const requestId = (req as any).requestId;
-    const userId = req.user?.id;
+    const userId = this.getAcademicOwnerId(req);
+    await this.validateAcademicAttachments(body.fileUrl, req);
 
     await this.userBalanceService.checkUserCertification(userId);
     await this.userService.checkUserStatus(req.user);
@@ -3807,15 +3974,13 @@ export class AcademicService {
 
     const requestedModel = String(body.model || '').trim();
     const requestedModelName = String(body.modelName || '').trim();
-    const resolvedModel = await this.resolveAcademicModelInfo(
-      requestedModel,
-      requestedModelName,
-    );
+    const resolvedModel = await this.resolveAcademicModelInfo(requestedModel, requestedModelName);
     if (!resolvedModel || !resolvedModel.modelInfo) {
       throw new HttpException('系统未配置可用模型，请联系管理员', HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     const modelInfo = resolvedModel.modelInfo;
+    await this.assertAcademicModelAccess(userId, modelInfo);
     const {
       deduct,
       deductType,
@@ -4007,12 +4172,9 @@ export class AcademicService {
         {
           status: 'running',
           startedAt: this.formatWorkflowTimestamp(),
-          progressText: `第 ${firstWorkflowStep.index}/${Math.max(
-            taskData.totalStages,
-            1,
-          )} 步 ${firstWorkflowStep.displayName}：${
-            body.fileUrl ? '正在接收上传资料' : '正在准备编排任务'
-          }`,
+          progressText: `第 ${firstWorkflowStep.index}/${Math.max(taskData.totalStages, 1)} 步 ${
+            firstWorkflowStep.displayName
+          }：${body.fileUrl ? '正在接收上传资料' : '正在准备编排任务'}`,
         },
         {
           status: 'running',
@@ -4254,6 +4416,7 @@ export class AcademicService {
           assistantLogId,
         );
 
+        await this.assertAcademicModelAccess(userId, modelInfo);
         await this.userBalanceService.validateBalance(
           req,
           deductType,
@@ -4271,7 +4434,7 @@ export class AcademicService {
           system_prompt: body.system_prompt || '',
           core_function: rawCoreFunction || undefined,
           plugin_name: rawPluginName || undefined,
-          user_name: String(req.user.id),
+          user_name: academicScopeUserName(this.getAcademicRequestIdentity(req)),
           chat_id: String(assistantLogId),
         };
 
@@ -4366,17 +4529,21 @@ export class AcademicService {
         let lastStageThinkingPreviewAt = 0;
         const emitWorkflowThinkingPreview = (preview: string) => {
           const safePreview = String(preview || '').trim();
-          if (!safePreview || controller.signal.aborted || res.writableEnded || res.writableFinished)
+          if (
+            !safePreview ||
+            controller.signal.aborted ||
+            res.writableEnded ||
+            res.writableFinished
+          )
             return;
           const now = Date.now();
           if (safePreview === lastStageThinkingPreview) return;
           if (now - lastStageThinkingPreviewAt < 1200 && !/[。！？.!?]$/.test(safePreview)) return;
           lastStageThinkingPreview = safePreview;
           lastStageThinkingPreviewAt = now;
-          const progressText = `第 ${step.index}/${Math.max(
-            taskData.totalStages,
-            1,
-          )} 步 ${step.displayName}：${safePreview}`;
+          const progressText = `第 ${step.index}/${Math.max(taskData.totalStages, 1)} 步 ${
+            step.displayName
+          }：${safePreview}`;
           taskData = this.patchAcademicWorkflowTaskData(
             taskData,
             step.index,
@@ -4416,6 +4583,7 @@ export class AcademicService {
             academicPayload,
             controller.signal,
             emitWorkflowThinkingPreview,
+            req,
           );
         } finally {
           stopWorkflowHeartbeat();
@@ -4445,6 +4613,7 @@ export class AcademicService {
                   academicPayload,
                   controller.signal,
                   emitWorkflowThinkingPreview,
+                  req,
                 );
               } finally {
                 stopWorkflowHeartbeat();
@@ -5134,29 +5303,24 @@ export class AcademicService {
 
   private async readAcademicAttachment(
     item: { url: string; name?: string },
-    req?: Request,
-  ): Promise<AcademicAttachmentContextSource | null> {
-    const localPath = this.resolveLocalUploadedFilePath(item.url);
-    const fileName = String(item.name || path.basename(localPath || item.url.split('?')[0]) || 'file');
-    const extension = this.getAcademicFileExtension('', fileName);
-    if (localPath) {
-      try {
-        return { buffer: await fs.readFile(localPath), fileName, extension };
-      } catch (_error) {}
-    }
-
-    const resolvedUrl = await this.resolveFileUrl(item.url, req);
-    if (!resolvedUrl) return null;
-    const response = await axios.get(resolvedUrl, {
-      responseType: 'arraybuffer',
-      timeout: 30000,
-      validateStatus: () => true,
-    });
-    if (response.status >= 400) return null;
-    return { buffer: Buffer.from(response.data), fileName, extension };
+    req: Request,
+  ): Promise<{ buffer: Buffer; fileName: string; extension: string; contentType: string }> {
+    const ownerId = this.getAcademicOwnerId(req);
+    const reference = String(item?.url || '').trim();
+    this.assertAcademicAttachmentReference(reference);
+    if (!this.attachmentService) throw new NotFoundException('Attachment not found');
+    const attachment = await this.attachmentService.readOwnedAttachment(reference, ownerId);
+    const fileName = attachment.filename;
+    return {
+      buffer: attachment.buffer,
+      fileName,
+      extension: this.getAcademicFileExtension('', fileName),
+      contentType: attachment.contentType,
+    };
   }
 
   private async buildAcademicAttachmentContext(fileUrl: string, req?: Request) {
+    await this.validateAcademicAttachments(fileUrl, req);
     const files = this.parseFileUrls(fileUrl);
     if (!files.length) return '';
 
@@ -5166,7 +5330,8 @@ export class AcademicService {
       async (source: AcademicAttachmentContextSource) => {
         const extension = this.getAcademicFileExtension('', source.fileName);
         // PDF.js expects standard Uint8Array slicing; Node Buffer slices are views.
-        if (extension === 'pdf') return String((await pdf(new Uint8Array(source.buffer)))?.text || '');
+        if (extension === 'pdf')
+          return String((await pdf(new Uint8Array(source.buffer)))?.text || '');
         if (extension === 'docx') {
           return String((await mammoth.extractRawText({ buffer: source.buffer }))?.value || '');
         }
@@ -5188,29 +5353,7 @@ export class AcademicService {
 
     for (const item of files.slice(0, 3)) {
       try {
-        let fileBuffer: Buffer | null = null;
-        let sourceRef = String(item.url || '');
-        const localPath = this.resolveLocalUploadedFilePath(item.url);
-        if (localPath) {
-          try {
-            fileBuffer = await fs.readFile(localPath);
-            sourceRef = localPath;
-          } catch (_error) {}
-        }
-        if (!fileBuffer) {
-          const resolvedUrl = await this.resolveFileUrl(item.url, req);
-          if (!resolvedUrl) continue;
-          sourceRef = resolvedUrl;
-          const response = await axios.get(resolvedUrl, {
-            responseType: 'arraybuffer',
-            timeout: 30000,
-            validateStatus: () => true,
-          });
-          if (response.status >= 400) continue;
-          fileBuffer = Buffer.from(response.data);
-        }
-
-        const fileName = String(item.name || path.basename(sourceRef.split('?')[0]) || '文档.pdf');
+        const { buffer: fileBuffer, fileName } = await this.readAcademicAttachment(item, req);
         const ext = path.extname(fileName).toLowerCase();
         if (ext && ext !== '.pdf') continue;
 
@@ -5241,29 +5384,7 @@ export class AcademicService {
 
     for (const item of files.slice(0, 3)) {
       try {
-        let fileBuffer: Buffer | null = null;
-        let sourceRef = String(item.url || '');
-        const localPath = this.resolveLocalUploadedFilePath(item.url);
-        if (localPath) {
-          try {
-            fileBuffer = await fs.readFile(localPath);
-            sourceRef = localPath;
-          } catch (_error) {}
-        }
-        if (!fileBuffer) {
-          const resolvedUrl = await this.resolveFileUrl(item.url, req);
-          if (!resolvedUrl) continue;
-          sourceRef = resolvedUrl;
-          const response = await axios.get(resolvedUrl, {
-            responseType: 'arraybuffer',
-            timeout: 30000,
-            validateStatus: () => true,
-          });
-          if (response.status >= 400) continue;
-          fileBuffer = Buffer.from(response.data);
-        }
-
-        const fileName = String(item.name || path.basename(sourceRef.split('?')[0]) || '文档.docx');
+        const { buffer: fileBuffer, fileName } = await this.readAcademicAttachment(item, req);
         const ext = path.extname(fileName).toLowerCase();
         if (ext && ext !== '.docx') continue;
 
@@ -5286,12 +5407,35 @@ export class AcademicService {
   private extractLatexPlainText(raw: string) {
     const source = String(raw || '');
     if (!source.trim()) return '';
+    const textCommands = new Set([
+      'title',
+      'author',
+      'date',
+      'section',
+      'subsection',
+      'subsubsection',
+      'paragraph',
+      'subparagraph',
+      'textbf',
+      'textit',
+      'texttt',
+      'textrm',
+      'textsc',
+      'emph',
+      'underline',
+      'caption',
+      'footnote',
+    ]);
     return source
-      .replace(/%.*$/gm, '')
-      .replace(/\\begin\{[^}]+\}/g, ' ')
-      .replace(/\\end\{[^}]+\}/g, ' ')
-      .replace(/\\[a-zA-Z@]+(?:\[[^\]]*\])?(?:\{[^{}]*\})?/g, ' ')
-      .replace(/[{}]/g, ' ')
+      .replace(/(^|[^\\])(?:\\\\)*%.*$/gm, '$1')
+      .replace(/\\begin\{[^}]+\}/g, '')
+      .replace(/\\end\{[^}]+\}/g, '')
+      .replace(
+        /\\([a-zA-Z@]+)\*?(?:\[[^\]]*\])?(?:\{([^{}]*)\})?/g,
+        (_match, command: string, text?: string) => (textCommands.has(command) ? text || '' : ''),
+      )
+      .replace(/\\([%&_#$])/g, '$1')
+      .replace(/[{}]/g, '')
       .replace(/\r\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .replace(/[ \t]{2,}/g, ' ')
@@ -5304,29 +5448,7 @@ export class AcademicService {
     const blocks: string[] = [];
     for (const item of files.slice(0, 3)) {
       try {
-        let fileBuffer: Buffer | null = null;
-        let sourceRef = String(item.url || '');
-        const localPath = this.resolveLocalUploadedFilePath(item.url);
-        if (localPath) {
-          try {
-            fileBuffer = await fs.readFile(localPath);
-            sourceRef = localPath;
-          } catch (_error) {}
-        }
-        if (!fileBuffer) {
-          const resolvedUrl = await this.resolveFileUrl(item.url, req);
-          if (!resolvedUrl) continue;
-          sourceRef = resolvedUrl;
-          const response = await axios.get(resolvedUrl, {
-            responseType: 'arraybuffer',
-            timeout: 30000,
-            validateStatus: () => true,
-          });
-          if (response.status >= 400) continue;
-          fileBuffer = Buffer.from(response.data);
-        }
-
-        const fileName = String(item.name || path.basename(sourceRef.split('?')[0]) || '文档.tex');
+        const { buffer: fileBuffer, fileName } = await this.readAcademicAttachment(item, req);
         const ext = path.extname(fileName).toLowerCase();
         if (ext && ext !== '.tex' && ext !== '.latex') continue;
         const rawText = fileBuffer.toString('utf8');
@@ -5491,6 +5613,13 @@ export class AcademicService {
           const left = cleanupCell(leftRaw);
           const right = cleanupCell(rightRaw);
           if (!left || !right) return match;
+          // Only join genuinely split cells; complete table rows must remain independent.
+          if (
+            this.splitAcademicMarkdownTableCells(`| ${left} |`).length !== 1 ||
+            this.splitAcademicMarkdownTableCells(`| ${right} |`).length !== 1
+          ) {
+            return match;
+          }
           if (
             this.isAcademicMarkdownTableSeparator(`| ${left} |`) ||
             this.isAcademicMarkdownTableSeparator(`| ${right} |`)
@@ -6048,47 +6177,15 @@ export class AcademicService {
     return this.sanitizeAcademicChunk(String(text));
   }
 
-  private normalizeFileVectorResultEntry(value: any): any {
-    if (value === undefined || value === null) return value;
-    if (typeof value === 'string') return value.trim();
-    if (Array.isArray(value)) {
-      return value
-        .map(item => this.normalizeFileVectorResultEntry(item))
-        .filter(item => item !== undefined && item !== null && String(item).trim() !== '');
-    }
-    if (typeof value !== 'object') return value;
-    const out: Record<string, any> = { ...(value as Record<string, any>) };
-    const pathKeys = [
-      'path',
-      'file_path',
-      'filePath',
-      'file',
-      'url',
-      'download_path',
-      'downloadPath',
-    ];
-    let detectedPath = '';
-    pathKeys.forEach(key => {
-      const current = out[key];
-      if (typeof current === 'string') {
-        const trimmed = current.trim();
-        out[key] = trimmed;
-        if (!detectedPath && trimmed) detectedPath = trimmed;
-      }
-    });
-    const normalizedName = this.getAcademicDownloadFileName(
-      String(out.name || out.file_name || out.fileName || ''),
-    );
-    if (normalizedName) {
-      if (out.name !== undefined) out.name = normalizedName;
-      else if (out.file_name !== undefined) out.file_name = normalizedName;
-      else if (out.fileName !== undefined) out.fileName = normalizedName;
-      else out.name = normalizedName;
-    } else if (detectedPath) {
-      const fallbackName = this.getAcademicDownloadFileName(detectedPath);
-      if (fallbackName) out.name = fallbackName;
-    }
-    return out;
+  private normalizeFileVectorResultEntry(entry: any): any {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+    const keys = ['path', 'file_path', 'filePath', 'file', 'url', 'download_path', 'downloadPath'];
+    const reference = keys
+      .map(key => entry[key])
+      .find(value => typeof value === 'string' && /^attachment:[0-9a-f-]+$/i.test(value));
+    const name = String(entry.name || entry.file_name || entry.fileName || '').trim();
+    if (!reference) return name ? { name } : null;
+    return { path: reference, name: name || 'Report' };
   }
 
   private normalizeFileVectorResultPayload(value: any): any {
@@ -6322,6 +6419,7 @@ export class AcademicService {
 
   private isAcademicHeartbeatText(text: string) {
     const normalized = String(text || '').trim();
+    if (normalized === '正在生成结构化结果...') return true;
     if (!normalized) return true;
     if (/^[.。…·\s]+$/.test(normalized)) return true;
     if (/`执行中`/i.test(normalized) && normalized.length < 180) return true;
@@ -6507,10 +6605,7 @@ export class AcademicService {
       .find(line => /[\p{L}\p{N}]/u.test(line));
     if (!latestMeaningful || latestMeaningful.length < 4) return '';
 
-    return this.truncateAcademicWorkflowPreview(
-      latestMeaningful.replace(/\s+/g, ' ').trim(),
-      96,
-    );
+    return this.truncateAcademicWorkflowPreview(latestMeaningful.replace(/\s+/g, ' ').trim(), 96);
   }
 
   private collectAcademicOutboundChunk(value: any, opts: { keepHeartbeat?: boolean } = {}) {
@@ -6785,11 +6880,14 @@ export class AcademicService {
       ]);
       incrementalContent = Boolean(
         (primaryContent && primaryContent === deltaContent) ||
-        (primaryContent && primaryContent === nativeContent && Array.isArray(payload?.content)) ||
-        (primaryContent && primaryContent === choiceContent && Array.isArray(payload.choices) &&
-          payload.choices.some((choice: any) =>
-            extractDeltaContent(choice?.delta?.content) || extractDeltaContent(choice?.content),
-          )),
+          (primaryContent && primaryContent === nativeContent && Array.isArray(payload?.content)) ||
+          (primaryContent &&
+            primaryContent === choiceContent &&
+            Array.isArray(payload.choices) &&
+            payload.choices.some(
+              (choice: any) =>
+                extractDeltaContent(choice?.delta?.content) || extractDeltaContent(choice?.content),
+            )),
       );
       appendSanitizedContent(primaryContent);
       if (payload.reasoning_content) {
@@ -6909,7 +7007,8 @@ export class AcademicService {
     }
   }
 
-  private sanitizeAcademicStreamLine(line: string) {
+  private sanitizeAcademicStreamLine(line: string, state?: AcademicStreamState, req?: Request) {
+    if (state && req) this.captureAcademicReportFiles(line, state, req);
     const normalizedLine = this.normalizeAcademicStreamLine(line);
     if (!normalizedLine) return '';
     try {
@@ -7255,52 +7354,6 @@ export class AcademicService {
     return [{ url: raw }];
   }
 
-  private readStreamToString(
-    stream: NodeJS.ReadableStream,
-    maxBytes = 1024 * 1024,
-  ): Promise<string> {
-    return new Promise(resolve => {
-      let size = 0;
-      let chunks = '';
-      stream.on('data', (chunk: Buffer | string) => {
-        const text = typeof chunk === 'string' ? chunk : chunk.toString('utf-8');
-        size += Buffer.byteLength(text);
-        if (size <= maxBytes) {
-          chunks += text;
-        }
-      });
-      stream.on('end', () => resolve(chunks));
-      stream.on('error', () => resolve(chunks));
-    });
-  }
-
-  private async resolveFileUrl(rawUrl: string, req?: Request) {
-    const trimmed = String(rawUrl || '').trim();
-    if (!trimmed) return '';
-    if (/^https?:\/\//i.test(trimmed)) return trimmed;
-    if (trimmed.startsWith('//')) {
-      const protocol = req?.protocol || 'http';
-      return `${protocol}:${trimmed}`;
-    }
-    const siteUrlConfig = await this.globalConfigService.getConfigs(['siteUrl']);
-    const siteUrl = typeof siteUrlConfig === 'string' ? siteUrlConfig : siteUrlConfig?.siteUrl;
-    const preferRequestHost = process.env.ISDEV === 'true';
-    const baseUrl = preferRequestHost
-      ? req
-        ? `${req.protocol}://${req.get('host')}`
-        : siteUrl
-        ? formatUrl(siteUrl)
-        : ''
-      : siteUrl
-      ? formatUrl(siteUrl)
-      : req
-      ? `${req.protocol}://${req.get('host')}`
-      : '';
-    if (!baseUrl) return trimmed;
-    if (trimmed.startsWith('/')) return `${baseUrl}${trimmed}`;
-    return `${baseUrl}/${trimmed}`;
-  }
-
   private getAcademicSharedUploadRoot() {
     const configured = String(process.env.ACADEMIC_SHARED_UPLOAD_ROOT || '').trim();
     if (configured) {
@@ -7311,14 +7364,26 @@ export class AcademicService {
     return path.resolve(process.cwd(), 'public', 'file');
   }
 
-  private getAcademicTempRoot() {
-    const configured = String(process.env.ACADEMIC_TEMP_ROOT || '').trim();
-    if (configured) {
-      return path.isAbsolute(configured)
-        ? path.resolve(configured)
-        : path.resolve(process.cwd(), configured);
+  private getAcademicTempRoot(): string {
+    const configured = String((process.env.LENS_ACADEMIC_WORKSPACE_ROOT || process.env.ACADEMIC_TEMP_ROOT) || '').trim();
+    const root = configured
+      ? path.resolve(process.cwd(), configured)
+      : path.resolve(process.cwd(), 'private', 'academic-workspaces');
+    const publicRoots = [
+      this.getAcademicSharedUploadRoot(),
+      path.resolve(process.cwd(), 'public'),
+      path.resolve(process.cwd(), 'dist', 'public'),
+    ];
+    for (const publicRoot of publicRoots) {
+      const relative = path.relative(publicRoot, root);
+      if (
+        relative === '' ||
+        (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))
+      ) {
+        throw new Error('Invalid academic private workspace root');
+      }
     }
-    return path.resolve(process.cwd(), '..', 'academic-4.0', 'private_upload');
+    return root;
   }
 
   private getAcademicFileExtension(filePath = '', fileName = '') {
@@ -7331,28 +7396,6 @@ export class AcademicService {
       .toLowerCase();
   }
 
-  private canReuseAcademicSharedFile(filePath = '', fileName = '') {
-    const extension = this.getAcademicFileExtension(filePath, fileName);
-    if (!extension) return false;
-    if (this.academicArchiveExtensions.has(extension)) return false;
-    return this.academicDirectReadExtensions.has(extension);
-  }
-
-  private formatAcademicWorkspaceTag() {
-    const now = new Date();
-    const pad = (value: number) => String(value).padStart(2, '0');
-    const date = [
-      now.getFullYear(),
-      pad(now.getMonth() + 1),
-      pad(now.getDate()),
-      pad(now.getHours()),
-      pad(now.getMinutes()),
-      pad(now.getSeconds()),
-    ].join('-');
-    const suffix = Math.random().toString(36).slice(2, 8);
-    return `${date}-lens-${suffix}`;
-  }
-
   private sanitizeAcademicWorkspaceFileName(value: string, fallback: string) {
     const normalized = String(value || '')
       .replace(/[\\/:*?"<>|]/g, '_')
@@ -7362,205 +7405,104 @@ export class AcademicService {
   }
 
   private async createAcademicLinkedWorkspace(
-    files: Array<{ localPath: string; fileName: string }>,
-    userName: string,
-  ) {
-    const tempRoot = this.getAcademicTempRoot();
-    const workspaceDir = path.join(
-      tempRoot,
-      String(userName || 'default_user'),
-      this.formatAcademicWorkspaceTag(),
-    );
-    const relativeWorkspacePath = path.relative(tempRoot, workspaceDir);
-    if (
-      !relativeWorkspacePath ||
-      relativeWorkspacePath.startsWith('..') ||
-      path.isAbsolute(relativeWorkspacePath)
-    ) {
-      throw new Error('academic temp workspace path is invalid');
+    files: Array<{ buffer: Buffer; fileName: string }>,
+    ownerId: number, requestId: string
+  ): Promise<string> {
+    if (!Number.isSafeInteger(ownerId) || ownerId <= 0)
+      throw new UnauthorizedException('Authentication required');
+    const configuredRoot = this.getAcademicTempRoot();
+    await fs.mkdir(configuredRoot, { recursive: true, mode: 0o700 });
+    const tempRoot = await fs.realpath(configuredRoot);
+    const publicRoots = [
+      this.getAcademicSharedUploadRoot(),
+      path.resolve(process.cwd(), 'public'),
+      path.resolve(process.cwd(), 'dist', 'public'),
+    ];
+    for (const configuredPublicRoot of publicRoots) {
+      const publicRoot = await fs
+        .realpath(configuredPublicRoot)
+        .catch(() => path.resolve(configuredPublicRoot));
+      const relative = path.relative(publicRoot, tempRoot);
+      if (
+        relative === '' ||
+        (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))
+      ) {
+        throw new Error('Invalid academic private workspace root');
+      }
     }
-
-    await fs.mkdir(workspaceDir, { recursive: true });
-    await fs.writeFile(
-      path.join(workspaceDir, '.lens-runtime.json'),
-      JSON.stringify({
-        kind: 'linked-workspace',
-        user: String(userName || 'default_user'),
-        createdAt: Math.floor(Date.now() / 1000),
-      }),
-      'utf8',
-    );
-    const usedNames = new Set<string>();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) throw new UnauthorizedException('Academic request identity required');
+    const ownerDirectory = path.join(tempRoot, String(ownerId));
+    await fs.mkdir(ownerDirectory, { recursive: true, mode: 0o700 });
+    if (await fs.realpath(ownerDirectory) !== ownerDirectory) throw new Error('Invalid academic request workspace');
+    const requestDirectory = path.join(ownerDirectory, requestId);
+    await fs.mkdir(requestDirectory, { mode: 0o700 });
+    const workspaceDir = path.join(requestDirectory, 'input');
+    await fs.mkdir(workspaceDir, { mode: 0o700 });
     try {
+      await fs.chmod(workspaceDir, 0o700);
+      const usedNames = new Set<string>();
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
         const baseName = this.sanitizeAcademicWorkspaceFileName(
-          file.fileName || path.basename(file.localPath),
-          `file-${index + 1}`,
+          path.basename(file.fileName),
+          `attachment-${index + 1}.txt`,
         );
-        const ext = path.extname(baseName);
-        const stem = ext ? baseName.slice(0, -ext.length) : baseName;
+        const extension = path.extname(baseName);
+        const stem = extension ? baseName.slice(0, -extension.length) : baseName;
         let candidate = baseName;
         let serial = 1;
-        while (usedNames.has(candidate)) {
-          candidate = `${stem}-${serial}${ext}`;
-          serial += 1;
-        }
+        while (usedNames.has(candidate)) candidate = `${stem}-${serial++}${extension}`;
         usedNames.add(candidate);
-        const targetPath = path.join(workspaceDir, candidate);
-        try {
-          await fs.symlink(file.localPath, targetPath);
-        } catch (_symlinkError) {
-          try {
-            await fs.link(file.localPath, targetPath);
-          } catch (hardLinkError) {
-            throw hardLinkError;
-          }
-        }
+        await fs.writeFile(path.join(workspaceDir, candidate), file.buffer, {
+          mode: 0o600,
+          flag: 'wx',
+        });
       }
       return workspaceDir;
-    } catch (error) {
-      await fs.rm(workspaceDir, { recursive: true, force: true }).catch(() => undefined);
-      throw error;
-    }
-  }
-
-  private resolveLocalUploadedFilePath(rawUrl: string) {
-    const raw = String(rawUrl || '')
-      .trim()
-      .replace(/[?#].*$/, '')
-      .replace(/\\/g, '/');
-    if (!raw) return '';
-    let relativePath = '';
-    if (raw.startsWith('file/')) {
-      relativePath = raw.slice('file/'.length);
-    } else {
-      const idx = raw.indexOf('/file/');
-      if (idx >= 0) {
-        relativePath = raw.slice(idx + '/file/'.length);
-      }
-    }
-    relativePath = String(relativePath || '')
-      .replace(/^\/+/, '')
-      .trim();
-    if (!relativePath) return '';
-
-    let decoded = relativePath;
-    try {
-      decoded = decodeURIComponent(relativePath);
-    } catch (_error) {}
-
-    const baseDir = this.getAcademicSharedUploadRoot();
-    const fullPath = path.resolve(baseDir, decoded);
-    const resolvedRelativePath = path.relative(baseDir, fullPath);
-    if (
-      !resolvedRelativePath ||
-      resolvedRelativePath.startsWith('..') ||
-      path.isAbsolute(resolvedRelativePath)
-    ) {
-      return '';
-    }
-    return fullPath;
-  }
-
-  private async pullFilesToAcademic(fileUrl: string, userName: string, req?: Request) {
-    const urls = this.parseFileUrls(fileUrl);
-    if (!urls.length) return '';
-
-    const localReusableFiles: Array<{ localPath: string; fileName: string }> = [];
-    let requiresAcademicUpload = false;
-    for (const item of urls) {
-      const localPath = this.resolveLocalUploadedFilePath(item.url);
-      const fileName = item.name || path.basename(localPath || item.url.split('?')[0]) || 'file';
-      if (localPath && this.canReuseAcademicSharedFile(localPath, fileName)) {
-        localReusableFiles.push({ localPath, fileName });
-        continue;
-      }
-      requiresAcademicUpload = true;
-      break;
-    }
-
-    if (!requiresAcademicUpload && localReusableFiles.length > 0) {
-      try {
-        return await this.createAcademicLinkedWorkspace(localReusableFiles, userName);
-      } catch (_error) {
-        this.logger.warn(
-          JSON.stringify({
-            event: 'academic_workspace_link_fallback',
-            errorCategory: 'runtime',
-          }),
-        );
-      }
-    }
-
-    const preparedFiles: Array<{ buffer: Buffer; fileName: string }> = [];
-    for (const item of urls) {
-      let buffer: Buffer | null = null;
-      const localPath = this.resolveLocalUploadedFilePath(item.url);
-      if (localPath) {
-        try {
-          buffer = await fs.readFile(localPath);
-        } catch (_error) {}
-      }
-      if (!buffer) {
-        const resolvedUrl = await this.resolveFileUrl(item.url, req);
-        if (!resolvedUrl) continue;
-        const response = await axios.get(resolvedUrl, {
-          responseType: 'arraybuffer',
-          timeout: 30000,
-          validateStatus: () => true,
-        });
-        if (response.status >= 400) {
-          throw new HttpException(`文件下载失败(${response.status})`, HttpStatus.BAD_GATEWAY);
-        }
-        buffer = Buffer.from(response.data);
-      }
-      if (!buffer) continue;
-      const fileName = item.name || path.basename(localPath || item.url.split('?')[0]) || 'file';
-      preparedFiles.push({ buffer, fileName });
-    }
-    if (!preparedFiles.length) return '';
-
-    let lastError: any = null;
-    for (const baseUrl of this.getAcademicBaseUrls()) {
-      const form = new FormData();
-      preparedFiles.forEach(file => {
-        form.append('files', file.buffer, { filename: file.fileName });
+    } catch (_error) {
+      await this.removeAcademicWorkspace(workspaceDir).catch(() => {
+        this.logger.warn(JSON.stringify({ event: 'academic_workspace_cleanup_failed' }));
       });
-      form.append('user_name', userName);
-
-      try {
-        const timeout = this.getAcademicTimeout(baseUrl, 120000);
-        const response = await axios.post(`${baseUrl}/academic/upload`, form, {
-          headers: form.getHeaders(),
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity,
-          timeout,
-          validateStatus: () => true,
-        });
-        if (response.status < 400) {
-          return response.data?.upload_dir || '';
-        }
-        lastError = new Error(`academic upload status ${response.status}`);
-        this.logger.warn(
-          JSON.stringify({
-            event: 'academic_upload_failed',
-            path: '/academic/upload',
-            status: response.status,
-          }),
-        );
-      } catch (error) {
-        lastError = error;
-        this.logger.warn(
-          JSON.stringify({
-            event: 'academic_upload_error',
-            path: '/academic/upload',
-            errorCategory: error instanceof HttpException ? 'http' : 'runtime',
-          }),
-        );
-      }
+      throw new Error('Academic attachment preparation failed');
     }
+  }
 
-    throw lastError || new Error('academic upload failed');
+  private async removeAcademicWorkspace(workspace: string): Promise<void> {
+    if (path.basename(workspace) !== 'input' || !/^[0-9a-f-]{36}$/i.test(path.basename(path.dirname(workspace)))) throw new Error('Invalid academic workspace cleanup');
+    const requestDirectory = path.dirname(workspace);
+    await fs.rm(requestDirectory, { recursive: true, force: true });
+    await fs.rmdir(path.dirname(requestDirectory)).catch(() => undefined);
+  }
+
+  private async pullFilesToAcademic(
+    fileUrl: string,
+    userName: string,
+    req: Request,
+  ): Promise<string> {
+    const ownerId = this.getAcademicOwnerId(req);
+    if (String(ownerId) !== userName) throw new UnauthorizedException('Authentication required');
+    const items = this.parseFileUrls(fileUrl);
+    if (!items.length) return '';
+    const files: Array<{ buffer: Buffer; fileName: string }> = [];
+    for (const item of items) {
+      const attachment = await this.readAcademicAttachment(item, req);
+      files.push({ buffer: attachment.buffer, fileName: attachment.fileName });
+    }
+    const workspace = await this.createAcademicLinkedWorkspace(files, ownerId, this.getAcademicRequestIdentity(req).requestId);
+    let cleaned = false;
+    const cleanup = async () => {
+      if (cleaned) return;
+      cleaned = true;
+      await this.removeAcademicWorkspace(workspace).catch(() => {
+        this.logger.warn(JSON.stringify({ event: 'academic_workspace_cleanup_failed' }));
+      });
+    };
+    req.res?.once('finish', cleanup);
+    req.res?.once('close', cleanup);
+    if (req.res?.writableEnded || req.res?.destroyed) {
+      await cleanup();
+      throw new Error('Academic request already closed');
+    }
+    return workspace;
   }
 }

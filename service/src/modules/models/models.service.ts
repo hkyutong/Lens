@@ -1,3 +1,4 @@
+import { isCanonicalPackageModel } from '../../common/utils/packageEntitlements';
 import { ModelsMapCn } from '@/common/constants/status.constant';
 import { hideString } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -453,5 +454,17 @@ export class ModelsService {
       Logger.error(`获取模型详情失败: ${error.message}`, 'ModelsService');
       throw new HttpException('获取模型详情失败', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  async queryPackageModelOptions() {
+    const rows = await this.modelsEntity.find({ select: ['model', 'modelName', 'status', 'deductType'], order: { model: 'ASC' } });
+    const options = new Map<string, { model: string; modelName: string; status: boolean; deductType: number }>();
+    for (const row of rows) {
+      if (!isCanonicalPackageModel(row.model)) continue;
+      const option = { model: row.model, modelName: String(row.modelName || row.model), status: row.status === true || Number(row.status) === 1, deductType: Number(row.deductType) };
+      const existing = options.get(row.model);
+      if (!existing || (!existing.status && option.status)) options.set(row.model, option);
+    }
+    return [...options.values()];
   }
 }

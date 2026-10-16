@@ -50,3 +50,7 @@ STATUS.md
 sop.md
 sop/
 output/
+
+# User-owned private attachments
+/service/private/
+**/.lens-academic-private.json

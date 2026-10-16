@@ -1,6 +1,6 @@
 import path from 'node:path'
 import process from 'node:process'
-import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
+import { createSvgIconsPlugin } from './svg-sprite'
 
 export default function createSvgIcon(isBuild) {
   return createSvgIconsPlugin({

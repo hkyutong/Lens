@@ -1,17 +1,20 @@
 <script setup lang="ts">
+import { getPackageUploadFeatures } from '@/utils/packageUploadFeatures';
 import { fetchGetPackageAPI, fetchUseCramiAPI } from '@/api/crami'
 import { fetchOrderBuyAPI } from '@/api/order'
 import { fetchSignInAPI, fetchSignLogAPI } from '@/api/signin'
 import { fetchGetJsapiTicketAPI } from '@/api/user'
 import { t } from '@/locales'
 import type { ResData } from '@/api/types'
-import { useAuthStore, useGlobalStoreWithOut } from '@/store'
+import { useAuthStore, useGlobalStoreWithOut , useAppStore } from '@/store'
 import { message } from '@/utils/message'
-import { formatCurrency, hydrateBillingOptions } from '@/utils/memberPricing'
+import { formatCurrency, hydrateBillingOptions , getMemberDisplayBilling } from '@/utils/memberPricing'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { BillingCycle, BillingOption } from '@/types/billing'
 import MemberPayment from './MemberPayment.vue'
+
+const appStore = useAppStore();
 
 const props = defineProps<Props>()
 
@@ -25,14 +28,9 @@ const packageList = ref<Pkg[]>([])
 const packageLoadFailed = ref(false)
 const ms = message()
 const dialogLoading = ref(false)
-const model3Name = computed(() => authStore.globalConfig.model3Name || t('goods.basicModelQuota'))
-const model4Name = computed(
-  () => authStore.globalConfig.model4Name || t('goods.advancedModelQuota')
-)
-const drawMjName = computed(() => {
-  const configuredName = authStore.globalConfig.drawMjName
-  return configuredName === '顶级模型额度' ? '顶级积分' : configuredName || t('goods.drawingQuota')
-})
+const model3Name = computed(() => t('goods.basicModelQuota'))
+const model4Name = computed(() => t('goods.advancedModelQuota'))
+const drawMjName = computed(() => t('goods.drawingQuota'))
 const isHideModel3Point = computed(() => Number(authStore.globalConfig.isHideModel3Point) === 1)
 const isHideModel4Point = computed(() => Number(authStore.globalConfig.isHideModel4Point) === 1)
 const isHideDrawMjPoint = computed(() => Number(authStore.globalConfig.isHideDrawMjPoint) === 1)
@@ -98,18 +96,7 @@ const OFFICIAL_PLAN_ALIASES: Record<PlanPreset['planKey'], string[]> = {
 }
 
 type PlanFeatureKey =
-  | 'basicModels'
-  | 'advancedModelsLite'
-  | 'advancedModels'
-  | 'allModels'
-  | 'paperSummary'
-  | 'englishPolish'
-  | 'pdfDeepRead'
-  | 'latexTranslation'
-  | 'bibtex'
-  | 'fullResearchTools'
-  | 'complexReasoning'
-  | 'specialModels'
+  'basicModels' | 'advancedModels' | 'allModels' | 'paperSummary' | 'englishPolish' | 'pdfDeepRead' | 'latexTranslation' | 'bibtex' | 'fullResearchTools' | 'complexReasoning'
 
 interface Pkg {
   id: number
@@ -170,10 +157,6 @@ function getMaxPreset(): PlanPreset {
   }
 }
 
-function roundDisplayPrice(value: number) {
-  return Math.round(value * 100) / 100
-}
-
 const sortedPackages = computed(() =>
   [...packageList.value]
     .sort((a, b) => {
@@ -231,7 +214,7 @@ function buildOrderInfo(pkg: Pkg) {
 }
 
 function formatQuota(value: number) {
-  return value > 99999 ? t('lens.member.unlimitedQuota') : value
+  return value
 }
 
 function getDisplayPlanName(pkg: Pkg) {
@@ -249,14 +232,14 @@ function getPlanFeatureKeys(pkg: Pkg): PlanFeatureKey[] {
   if (!preset) return []
 
   if (preset.planKey === 'plus') {
-    return ['basicModels', 'advancedModelsLite', 'specialModels', 'paperSummary', 'englishPolish']
+    return ["basicModels", "paperSummary", "englishPolish"]
   }
 
   if (preset.planKey === 'pro') {
-    return ['basicModels', 'advancedModels', 'specialModels', 'pdfDeepRead', 'latexTranslation', 'bibtex']
+    return ["basicModels", "advancedModels", "pdfDeepRead", "latexTranslation", "bibtex"]
   }
 
-  return ['allModels', 'specialModels', 'fullResearchTools', 'complexReasoning']
+  return ["allModels", "fullResearchTools", "complexReasoning"]
 }
 
 function getPlanFeatureLabels(pkg: Pkg) {
@@ -264,27 +247,11 @@ function getPlanFeatureLabels(pkg: Pkg) {
 }
 
 function getDisplayPriceValue(pkg: Pkg) {
-  const billing = getDisplayBilling(pkg)
-  if (getPlanPreset(pkg)) {
-    const displayPrice = Number(billing.displayPrice || 0)
-    return formatCurrency(roundDisplayPrice(displayPrice))
-  }
-
-  return formatCurrency(roundDisplayPrice(billing.price))
+  return formatCurrency(getMemberDisplayBilling(getDisplayBilling(pkg), appStore.language).price);
 }
 
 function getDisplayPriceMeta(pkg: Pkg) {
-  if (getPlanPreset(pkg)) {
-    return {
-      symbol: '$',
-      currency: 'USD',
-    }
-  }
-
-  return {
-    symbol: '¥',
-    currency: 'CNY',
-  }
+  return getMemberDisplayBilling(getDisplayBilling(pkg), appStore.language);
 }
 
 function getDisplayPricePrefix(pkg: Pkg) {
@@ -305,7 +272,7 @@ function getDisplayPricePeriodLabel() {
 onMounted(() => {
   if (props.visible) {
     // 组件挂载时检查登录状态
-    if (isLogin.value || props.mode !== 'pricing') {
+    if (isLogin.value || props.mode === 'pricing') {
       openDrawerAfter()
       if (isWxEnv.value) jsapiInitConfig()
     }
@@ -461,22 +428,19 @@ async function handleBuyGoods(pkg: Pkg) {
 }
 
 async function openDrawerAfter() {
-  if (props.mode === 'pricing' && !isLogin.value) {
-    loading.value = false
-    return
-  }
+
   // 首先检查登录状态
-  if (!checkLoginStatus()) {
-    return
-  }
+
 
   loading.value = true
   packageLoadFailed.value = false
+  if (isLogin.value && props.mode !== 'pricing')
+    void refreshMemberAccount();
   try {
     // 清空当前套餐列表，避免显示旧数据
     packageList.value = []
     // 获取用户最新余额信息
-    await authStore.getUserInfo()
+
     // 获取套餐列表
     const res: ResData = await fetchGetPackageAPI({ status: 1, type: 1, size: 30 })
     packageList.value = (res.data.rows || []).map((item: Pkg) => hydrateBillingOptions(item))
@@ -484,7 +448,7 @@ async function openDrawerAfter() {
       selectName.value = displayPackages.value[0].name
     }
     // 获取签到记录
-    if (props.mode !== 'pricing') await getSigninLog()
+
     loading.value = false
   } catch (error) {
     loading.value = false
@@ -499,6 +463,9 @@ const handleSelect = (item: { name: string }) => {
 }
 
 function handleSuccess(pkg: Pkg) {
+  if (!checkLoginStatus())
+    return;
+
   // 检查支付渠道是否启用
   if (!payChannel.value.length) {
     ms.warning(t('goods.paymentNotEnabled'))
@@ -665,6 +632,21 @@ watch(
     }
   }
 )
+
+async function refreshMemberAccount() {
+  try {
+    await authStore.getUserInfo();
+  }
+  catch {
+    return;
+  }
+  try {
+    if (props.mode !== 'pricing') await getSigninLog()
+  }
+  catch {
+    // Account details are optional when browsing public plans.
+  }
+}
 </script>
 
 <template>
@@ -727,7 +709,7 @@ watch(
         </div>
 
         <div
-          v-if="props.mode === 'pricing' && !isLogin"
+          v-if="!isLogin && props.mode !== 'pricing'"
           class="member-plan-state"
           :aria-label="t('lens.member.loggedOut')"
         >
@@ -736,7 +718,7 @@ watch(
             {{ t('lens.sidebar.login') }}
           </button>
         </div>
-        <div v-else-if="loading && !displayPackages.length" class="research-member__plans" :aria-label="t('lens.member.loadingPlans')" aria-busy="true">
+        <div v-if="loading && !displayPackages.length" class="research-member__plans" :aria-label="t('lens.member.loadingPlans')" aria-busy="true">
           <div v-for="index in 3" :key="index" class="research-member__plan research-member__skeleton" aria-hidden="true">
             <span></span><span></span><span></span><span></span>
           </div>
@@ -801,7 +783,7 @@ watch(
             </div>
 
             <ul class="research-member__features">
-              <li v-for="feature in getPlanFeatureLabels(item)" :key="feature">
+              <li v-for="feature in [...getPlanFeatureLabels(item), ...getPackageUploadFeatures(packageList.find(packageItem => packageItem.id === item.id), t)]" :key="feature">
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path d="m4 10 4 4 8-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
@@ -938,9 +920,7 @@ watch(
               <div class="min-w-0 text-[var(--text-sub)]">{{ model3Name }}</div>
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
-                  userBalance.sumModel3Count > 999999
-                    ? t('lens.member.unlimitedQuota')
-                    : (userBalance.sumModel3Count ?? 0)
+                  (userBalance.sumModel3Count ?? 0)
                 }}
                 <span
                   v-if="userBalance.sumModel3Count <= 999999"
@@ -958,9 +938,7 @@ watch(
               <div class="min-w-0 text-[var(--text-sub)]">{{ model4Name }}</div>
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
-                  userBalance.sumModel4Count > 99999
-                    ? t('lens.member.unlimitedQuota')
-                    : (userBalance.sumModel4Count ?? 0)
+                  (userBalance.sumModel4Count ?? 0)
                 }}
                 <span
                   v-if="userBalance.sumModel4Count <= 99999"
@@ -978,9 +956,7 @@ watch(
               <div class="min-w-0 text-[var(--text-sub)]">{{ drawMjName }}</div>
               <div class="flex items-baseline whitespace-nowrap text-lg font-bold text-[var(--text-main)]">
                 {{
-                  userBalance.sumDrawMjCount > 99999
-                    ? t('lens.member.unlimitedQuota')
-                    : (userBalance.sumDrawMjCount ?? 0)
+                  (userBalance.sumDrawMjCount ?? 0)
                 }}
                 <span
                   v-if="userBalance.sumDrawMjCount <= 99999"

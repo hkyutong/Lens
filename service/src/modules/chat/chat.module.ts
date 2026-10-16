@@ -23,7 +23,7 @@ import { ModelsEntity } from '../models/models.entity';
 import { ModelsService } from '../models/models.service';
 import { PluginEntity } from '../plugin/plugin.entity';
 import { RedisCacheService } from '../redisCache/redisCache.service';
-import { UploadService } from '../upload/upload.service';
+import { AttachmentModule } from '../attachment/attachment.module';
 import { UserEntity } from '../user/user.entity';
 import { UserService } from '../user/user.service';
 import { AccountLogEntity } from '../userBalance/accountLog.entity';
@@ -39,6 +39,7 @@ import { ChatService } from './chat.service';
 @Global()
 @Module({
   imports: [
+    AttachmentModule,
     TypeOrmModule.forFeature([
       BalanceEntity,
       UserEntity,
@@ -71,7 +72,6 @@ import { ChatService } from './chat.service';
     RedisCacheService,
     MailerService,
     GlobalConfigService,
-    UploadService,
     AutoReplyService,
     BadWordsService,
     ChatGroupService,

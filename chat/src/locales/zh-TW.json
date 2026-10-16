@@ -25,7 +25,9 @@
     "success": "操作成功",
     "failed": "操作失敗",
     "verify": "驗證",
-    "unauthorizedTips": "未經授權，請先進行驗證。"
+    "unauthorizedTips": "未經授權，請先進行驗證。",
+    "cancel": "取消",
+    "update": "修改"
   },
   "chat": {
     "newChatButton": "新建對話",
@@ -51,7 +53,15 @@
     "showRawText": "顯示原文",
     "loading": "加載中...",
     "readAloud": "朗讀",
-    "vipCenter": "會員中心"
+    "vipCenter": "會員中心",
+    "delete": "刪除",
+    "regenerate": "重新產生",
+    "networkMode": "連網模式",
+    "rename": "重新命名",
+    "more": "更多",
+    "unfavorite": "取消收藏",
+    "favoriteConversations": "收藏對話",
+    "deleteConversation": "刪除對話"
   },
   "setting": {
     "setting": "設定",
@@ -98,7 +108,8 @@
     "enterCardDetails": "請粘貼或填寫您的卡密資訊！",
     "pleaseEnterCardDetails": "請輸入卡密資訊",
     "exchange": "兌換",
-    "buyCardSecret": "購買卡密"
+    "buyCardSecret": "購買卡密",
+    "points": "積分"
   },
   "lens": {
     "search": {
@@ -143,12 +154,17 @@
       "readOnlyNotice": "此頁面僅供閱讀，不提供編輯、刪除或重新生成操作。"
     },
     "modelSelector": {
+      "notIncluded": "目前方案未包含此模型",
       "defaultModel": "預設模型",
       "switchModel": "切換模型",
       "noModels": "找不到可切換的模型",
       "switchTo": "切換至 {name}",
       "modelIcon": "{name} 模型圖示",
-      "switchFailed": "模型切換失敗，請稍後再試"
+      "switchFailed": "模型切換失敗，請稍後再試",
+      "upgradeRequired": "升級至 {plan} 即可使用",
+      "unavailable": "目前無法使用",
+      "restrictedModel": "{model}（需要 {plan}）",
+      "unavailableModel": "{model}（目前無法使用）"
     },
     "language": {
       "zh-CN": "简体中文",
@@ -189,25 +205,25 @@
       "title": "使用必讀",
       "eyebrow": "方案規則",
       "heroTitle": "先確認你的方案能做什麼",
-      "heroDesc": "Lens 按學生版、教授版、至尊版三檔開放學術能力。會員有效期內可使用對應能力，每次任務仍會按所選模型和任務類型消耗積分。",
+      "heroDesc": "Lens 按Plus、Pro、Max三檔開放學術能力。會員有效期內可使用對應能力，每次任務仍會按所選模型和任務類型消耗積分。",
       "plusSummary": "輕量學術閱讀與寫作",
       "plusWorkflow": "不支援能力編排",
       "plusAvailable1": "總結論文、Arxiv 摘要、Arxiv 英文摘要",
       "plusAvailable2": "中文潤色、英文潤色、中英互譯",
       "plusAvailable3": "繪製腦圖、程式碼解釋、參考文獻轉 BibTeX",
-      "plusNote": "不含 PDF 深讀、PDF 批次總結、Word 批次總結和 LaTeX 進階工具。",
+      "plusNote": "可使用 YutoGPT 5.5、GPT-6 luna，具體模型以目前可用清單為準。 不含 PDF 深讀、PDF 批次總結、Word 批次總結和 LaTeX 進階工具。",
       "proSummary": "高頻論文閱讀與文稿處理",
       "proWorkflow": "最多 2 步編排",
-      "proAvailable1": "包含學生版全部能力",
+      "proAvailable1": "包含Plus全部能力",
       "proAvailable2": "PDF 深讀、PDF 批次總結、Word 批次總結",
       "proAvailable3": "LaTeX 摘要、精準翻譯、英文潤色、中文潤色、高亮糾錯",
-      "proNote": "適合「PDF 深讀 → 英文潤色」這類常規研究流程。",
+      "proNote": "在 Plus 模型基礎上增加 GPT-6.1 Sol，具體模型以目前可用清單為準。 適合「PDF 深讀 → 英文潤色」這類常規研究流程。",
       "maxSummary": "重度科研與完整研究鏈路",
       "maxWorkflow": "最多 3 步編排",
-      "maxAvailable1": "包含教授版全部能力",
+      "maxAvailable1": "包含Pro全部能力",
       "maxAvailable2": "可使用 Lens 目前開放的全部學術能力",
       "maxAvailable3": "支援「論文速讀 → 中文潤色 → 繪製腦圖」等完整鏈路",
-      "maxNote": "適合長論文、多文件和複雜研究任務。",
+      "maxNote": "在 Pro 模型基礎上增加 Claude Opus 5.5，具體模型以目前可用清單為準。 適合長論文、多文件和複雜研究任務。",
       "billingTitle": "計費與有效期",
       "billingRule1": "月付方案和月卡密按 30 天有效期發放對應額度。",
       "billingRule2": "年付方案和年卡密按 365 天有效期發放 12 個月額度。",
@@ -217,7 +233,8 @@
       "taskRule1": "能力編排是串行執行，前一步完成後才會進入下一步。",
       "taskRule2": "PDF、Word、LaTeX、長論文和上游模型較慢時，整體耗時會更長。",
       "taskRule3": "請不要上傳密鑰、證件、合約、客戶資料、帳號密碼或其他敏感內容。",
-      "taskRule4": "AI 輸出可能存在錯誤，重要結論、引用和實驗資訊請自行核驗。"
+      "taskRule4": "AI 輸出可能存在錯誤，重要結論、引用和實驗資訊請自行核驗。",
+      "comparisonLabel": "方案功能比較"
     },
     "member": {
       "signInReward": "簽到獎勵",
@@ -249,30 +266,28 @@
       "annual": "年付",
       "annualBetter": "年付更省",
       "openNow": "立即開通",
-      "max": "至尊版",
-      "pro": "教授版",
-      "plus": "學生版",
-      "plusSummary": "適合輕量研究、日常問答與基礎寫作，涵蓋論文速讀與英文潤色。",
-      "proSummary": "適合高頻科研寫作與深度閱讀，支援 PDF 深讀、LaTeX 翻譯與正式交付。",
-      "maxSummary": "適合重度研究與複雜工作流，開放完整模型層級與研究工具鏈。",
+      "max": "Max",
+      "pro": "Pro",
+      "plus": "Plus",
+      "plusSummary": "適合日常學習與論文基礎讀寫，可使用 YutoGPT 5.5、GPT-6 luna；具體模型以目前可用清單為準。",
+      "proSummary": "適合高頻研究寫作與深度閱讀，增加 GPT-6.1 Sol；具體模型以目前可用清單為準。",
+      "maxSummary": "適合複雜研究與完整工作流程，增加 Claude Opus 5.5；具體模型以目前可用清單為準。",
       "annualSave": "年度訂閱省 {value}%",
       "pricePerMonth": "/月付",
       "pricePerYear": "/年付",
       "monthlyEquivalent": "折合 ￥{value}/月",
       "usdPerMonth": "{value} USD/月",
       "features": {
-        "basicModels": "基礎模型",
-        "advancedModelsLite": "少量高級模型",
-        "advancedModels": "高級模型",
-        "allModels": "全部模型",
+        "basicModels": "YutoGPT 5.5 · GPT-6 luna",
+        "advancedModels": "GPT-6.1 Sol",
+        "allModels": "YutoGPT 5.5 · GPT-6 luna · GPT-6.1 Sol · Claude Opus 5.5",
         "paperSummary": "論文速讀",
         "englishPolish": "英文潤色",
         "pdfDeepRead": "PDF 深度理解",
         "latexTranslation": "LaTeX 翻譯",
         "bibtex": "參考文獻轉 Bib",
         "fullResearchTools": "全研究工具",
-        "complexReasoning": "複雜推理",
-        "specialModels": "頂級模型"
+        "complexReasoning": "複雜推理"
       },
       "loadingPlans": "正在載入方案…",
       "loadPlansFailed": "暫時無法載入方案，請重試",
@@ -390,7 +405,8 @@
       "featureSearchStrategy": "文獻檢索策略",
       "featureSearchStrategyDesc": "規劃檢索詞、資料庫與篩選標準",
       "featureSearchStrategyPrompt": "依研究主題規劃可重現的檢索策略：概念、中英文關鍵詞、布林檢索式、資料庫、納入排除標準和檢索紀錄範本。必要時釐清範圍，不假稱已檢索，不編造文獻或數量。\n\n研究主題：",
-      "featureUnavailable": "此特色能力尚未連線，請稍後再試"
+      "featureUnavailable": "此特色能力尚未連線，請稍後再試",
+      "scrollToBottom": "捲動至底部"
     },
     "footer": {
       "placeholderLoggedOut": "登入後可上傳資料與保存專案",
@@ -583,7 +599,8 @@
       "shareLoading": "正在建立分享連結...",
       "shareSuccess": "分享連結已複製",
       "shareLinkCopyFailed": "分享連結已建立，但自動複製失敗，請檢查瀏覽器權限",
-      "shareFailed": "分享失敗，請稍後再試"
+      "shareFailed": "分享失敗，請稍後再試",
+      "imageAlt": "圖片"
     },
     "academicEntities": {
       "core": {
@@ -744,7 +761,8 @@
       "monthlyTotal": "按月購買總價",
       "savings": "節省",
       "remaining": "{seconds} 秒",
-      "qrCode": "付款二維碼"
+      "qrCode": "付款二維碼",
+      "actualPayment": "實際付款：{amount} CNY"
     },
     "captcha": {
       "title": "安全驗證",
@@ -753,5 +771,54 @@
       "failed": "驗證失敗，請重試",
       "instruction": "拖動滑塊完成拼圖"
     }
+  },
+  "login": {
+    "loginSuccess": "登入成功",
+    "enterUsername": "請輸入使用者名稱",
+    "password": "密碼",
+    "enterYourPassword": "請輸入帳戶密碼",
+    "loginAccount": "登入帳戶",
+    "email": "電子郵件",
+    "enterEmail": "請輸入電子郵件地址",
+    "enterCode": "請輸入驗證碼",
+    "sendVerificationCode": "傳送驗證碼"
+  },
+  "pay": {
+    "wechat": "微信",
+    "alipay": "支付寶",
+    "paymentTimeExpired": "付款已逾時，請重新發起付款。",
+    "wechatPay": "微信支付",
+    "alipayPay": "支付寶",
+    "paymentSuccess": "付款成功",
+    "productPayment": "商品付款",
+    "amountDue": "應付金額：",
+    "siteAdminEnabledRedirect": "安全付款已準備就緒，點擊即可完成開通",
+    "clickToPay": "前往付款",
+    "open": "開啟",
+    "scanToPay": "掃碼付款",
+    "completePaymentWithin": "請於",
+    "timeToCompletePayment": "內完成付款！"
+  },
+  "goods": {
+    "basicModelQuota": "普通積分",
+    "advancedModelQuota": "高級積分",
+    "drawingQuota": "頂級積分",
+    "purchaseSuccess": "購買成功",
+    "paymentNotSuccessful": "付款尚未完成",
+    "paymentNotEnabled": "目前無法付款",
+    "paymentSuccess": "付款成功"
+  },
+  "uploadErrors": {
+    "notIncluded": "目前方案暫不支援檔案上傳。",
+    "limitReached": "已達到檔案上傳次數限制，請稍後再試。",
+    "fileTooLarge": "檔案過大，請選擇較小的檔案。",
+    "sizeLimit": "檔案大小不能超過 {size} MB。",
+    "temporarilyUnavailable": "檔案上傳暫時無法使用，請稍後再試。"
+  },
+  "packageUploadFeatures": {
+    "dailyLimit": "成功上傳：每日 {count} 次",
+    "unlimited": "成功上傳：無每日次數限制",
+    "disabled": "此套餐不含檔案上傳",
+    "fileAllowance": "套餐單檔上限：{size} MiB，仍須符合通用上傳規則"
   }
 }

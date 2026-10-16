@@ -1,3 +1,4 @@
+import { packageCnyToUsd, resolvePackageUsdPrice , resolvePackageAnnualDiscountRate } from '../../../service/src/common/constants/packageCurrency';
 import type { BillingCycle, BillingOption } from '@/types/billing'
 
 type PackageLike = {
@@ -14,19 +15,7 @@ type PackageLike = {
   annualDiscountRate?: number
 }
 
-const DEFAULT_ANNUAL_DISCOUNT_RATE = 20
-const ANNUAL_DISCOUNT_OVERRIDES_BY_NAME: Record<string, number> = {
-  plus: 17,
-  pro: 38,
-  max: 17,
-  team: 17,
-}
-const ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT: Record<number, number> = {
-  10: 17,
-  20: 38,
-  30: 17,
-  40: 17,
-}
+const DEFAULT_ANNUAL_DISCOUNT_RATE = resolvePackageAnnualDiscountRate({})
 
 function toNumber(value: unknown) {
   const num = Number(value || 0)
@@ -48,17 +37,7 @@ function resolveAnnualDays(days: number) {
 }
 
 function resolveAnnualDiscountRate(pkg: PackageLike) {
-  const nameKey = String(pkg.name || '')
-    .trim()
-    .toLowerCase()
-  if (ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey] !== undefined) {
-    return ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey]
-  }
-  const weight = toNumber(pkg.weight)
-  if (ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight] !== undefined) {
-    return ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight]
-  }
-  return DEFAULT_ANNUAL_DISCOUNT_RATE
+  return resolvePackageAnnualDiscountRate(pkg);
 }
 
 export function createBillingOption(
@@ -69,10 +48,10 @@ export function createBillingOption(
   const billingMonths = billingCycle === 'annual' ? 12 : 1
   const basePrice = roundPrice(toNumber(pkg.price))
   const originalTotal = roundPrice(basePrice * billingMonths)
-  const baseDisplayPrice = roundPrice(toNumber(pkg.usdPrice))
+  const baseDisplayPrice = roundPrice(resolvePackageUsdPrice(pkg))
   const displayOriginalTotal = roundPrice(baseDisplayPrice * billingMonths)
   const annualDiscountRate =
-    toNumber(pkg.annualDiscountRate) || resolveAnnualDiscountRate(pkg) || defaultAnnualDiscountRate
+    resolveAnnualDiscountRate({ ...pkg, annualDiscountRate: pkg.annualDiscountRate ?? defaultAnnualDiscountRate })
   const price =
     billingCycle === 'annual'
       ? roundPrice(originalTotal * (1 - annualDiscountRate / 100))
@@ -110,11 +89,11 @@ export function createBillingOption(
 }
 
 export function hydrateBillingOptions<T extends PackageLike>(pkg: T) {
-  const annualDiscountRate = toNumber(pkg.annualDiscountRate) || DEFAULT_ANNUAL_DISCOUNT_RATE
+  const annualDiscountRate = resolveAnnualDiscountRate(pkg)
   const monthly =
-    pkg.billingOptions?.monthly || createBillingOption(pkg, 'monthly', annualDiscountRate)
+    repairLegacyDisplayBilling(pkg, pkg.billingOptions?.monthly || createBillingOption(pkg, 'monthly', annualDiscountRate))
   const annual =
-    pkg.billingOptions?.annual || createBillingOption(pkg, 'annual', annualDiscountRate)
+    repairLegacyDisplayBilling(pkg, pkg.billingOptions?.annual || createBillingOption(pkg, 'annual', annualDiscountRate))
 
   return {
     ...pkg,
@@ -131,4 +110,30 @@ export function formatCurrency(value: number | string) {
   const num = toNumber(value)
   if (Number.isInteger(num)) return num.toString()
   return num.toFixed(2)
+}
+
+function repairLegacyDisplayBilling(pkg: PackageLike, option: BillingOption): BillingOption {
+  const usdPrice = Number(pkg.usdPrice);
+  if (pkg.usdPrice !== undefined && pkg.usdPrice !== null && pkg.usdPrice !== '' && Number.isFinite(usdPrice) && usdPrice > 0)
+    return option;
+  return {
+    ...option,
+    displayPrice: packageCnyToUsd(option.price),
+    displayOriginalPrice: packageCnyToUsd(option.originalPrice),
+    displayOriginalTotal: packageCnyToUsd(option.originalTotal),
+    displaySaveAmount: packageCnyToUsd(option.saveAmount),
+    displayMonthlyEquivalentPrice: packageCnyToUsd(option.monthlyEquivalentPrice),
+  };
+}
+
+export function getMemberDisplayBilling(option: BillingOption | null | undefined, language: string) {
+  const usesCny = language === 'zh-CN';
+  return {
+    currency: usesCny ? 'CNY' : 'USD',
+    symbol: usesCny ? '¥' : '$',
+    price: toNumber(usesCny ? option?.price : option?.displayPrice),
+    originalTotal: toNumber(usesCny ? option?.originalTotal : option?.displayOriginalTotal),
+    saveAmount: toNumber(usesCny ? option?.saveAmount : option?.displaySaveAmount),
+    monthlyEquivalentPrice: toNumber(usesCny ? option?.monthlyEquivalentPrice : option?.displayMonthlyEquivalentPrice),
+  };
 }

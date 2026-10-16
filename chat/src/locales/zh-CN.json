@@ -320,7 +320,8 @@
     "completePaymentWithin": "请在",
     "timeToCompletePayment": "时间内完成支付！",
     "open": "打开",
-    "scanToPay": "扫码支付"
+    "scanToPay": "扫码支付",
+    "paymentTimeExpired": "支付已超时，请重新发起支付。"
   },
   "mindmap": {
     "title": "思维导图",
@@ -561,7 +562,8 @@
     "basicModelQuota": "普通积分",
     "advancedModelQuota": "高级积分",
     "drawingQuota": "顶级积分",
-    "buyPackage": "购买套餐"
+    "buyPackage": "购买套餐",
+    "paymentSuccess": "支付成功"
   },
   "rechargeTypes": {
     "1": "注册赠送",
@@ -625,12 +627,17 @@
       "readOnlyNotice": "此页面仅供阅读，不提供编辑、删除或重新生成操作。"
     },
     "modelSelector": {
+      "notIncluded": "此模型不包含在当前套餐中",
       "defaultModel": "默认模型",
       "switchModel": "切换模型",
       "noModels": "未找到可切换模型",
       "switchTo": "切换到 {name}",
       "modelIcon": "{name} 模型图标",
-      "switchFailed": "模型切换失败，请稍后重试"
+      "switchFailed": "模型切换失败，请稍后重试",
+      "upgradeRequired": "升级至 {plan} 可用",
+      "unavailable": "当前不可用",
+      "restrictedModel": "{model}（需要 {plan}）",
+      "unavailableModel": "{model}（当前不可用）"
     },
     "language": {
       "zh-CN": "简体中文",
@@ -671,25 +678,25 @@
       "title": "用户必读",
       "eyebrow": "套餐规则",
       "heroTitle": "先确认你的套餐能做什么",
-      "heroDesc": "Lens 按学生版、教授版、至尊版三档开放学术能力。会员有效期内可使用对应能力，每次任务仍会按所选模型和任务类型消耗积分。",
+      "heroDesc": "Lens 按Plus、Pro、Max三档开放学术能力。会员有效期内可使用对应能力，每次任务仍会按所选模型和任务类型消耗积分。",
       "plusSummary": "轻量学术读写",
       "plusWorkflow": "不支持能力编排",
       "plusAvailable1": "总结论文、Arxiv 摘要、Arxiv 英文摘要",
       "plusAvailable2": "中文润色、英文润色、中英互译",
       "plusAvailable3": "绘制脑图、代码解释、参考文献转 BibTeX",
-      "plusNote": "不含 PDF 深读、PDF 批量总结、Word 批量总结和 LaTeX 进阶工具。",
+      "plusNote": "可使用 YutoGPT 5.5、GPT-6 luna，具体模型以当前可用列表为准。 不含 PDF 深读、PDF 批量总结、Word 批量总结和 LaTeX 进阶工具。",
       "proSummary": "高频论文阅读与文稿处理",
       "proWorkflow": "最多 2 步编排",
-      "proAvailable1": "包含学生版全部能力",
+      "proAvailable1": "包含Plus全部能力",
       "proAvailable2": "PDF 深读、PDF 批量总结、Word 批量总结",
       "proAvailable3": "LaTeX 摘要、精准翻译、英文润色、中文润色、高亮纠错",
-      "proNote": "适合“PDF 深读 → 英文润色”这类常规研究流程。",
+      "proNote": "在 Plus 模型基础上增加 GPT-6.1 Sol，具体模型以当前可用列表为准。 适合“PDF 深读 → 英文润色”这类常规研究流程。",
       "maxSummary": "重度科研与完整研究链路",
       "maxWorkflow": "最多 3 步编排",
-      "maxAvailable1": "包含教授版全部能力",
+      "maxAvailable1": "包含Pro全部能力",
       "maxAvailable2": "可使用 Lens 当前开放的全部学术能力",
       "maxAvailable3": "支持“论文速读 → 中文润色 → 绘制脑图”等完整链路",
-      "maxNote": "适合长论文、多文件和复杂研究任务。",
+      "maxNote": "在 Pro 模型基础上增加 Claude Opus 5.5，具体模型以当前可用列表为准。 适合长论文、多文件和复杂研究任务。",
       "billingTitle": "计费与有效期",
       "billingRule1": "月付套餐和月卡密按 30 天有效期发放对应额度。",
       "billingRule2": "年付套餐和年卡密按 365 天有效期发放 12 个月额度。",
@@ -699,7 +706,8 @@
       "taskRule1": "多能力编排是串行执行，前一步完成后才会进入下一步。",
       "taskRule2": "PDF、Word、LaTeX、长论文和上游模型较慢时，整体耗时会更长。",
       "taskRule3": "请不要上传密钥、证件、合同、客户资料、账号密码或其他敏感内容。",
-      "taskRule4": "AI 输出可能存在错误，重要结论、引用和实验信息请自行核验。"
+      "taskRule4": "AI 输出可能存在错误，重要结论、引用和实验信息请自行核验。",
+      "comparisonLabel": "套餐能力对比"
     },
     "member": {
       "signInReward": "签到奖励",
@@ -731,30 +739,28 @@
       "annual": "年付",
       "annualBetter": "年付更省",
       "openNow": "立即开通",
-      "max": "至尊版",
-      "pro": "教授版",
-      "plus": "学生版",
-      "plusSummary": "适合轻量研究、日常问答与基础写作，覆盖论文速读、英文润色和基础资料整理。",
-      "proSummary": "适合高频科研写作与深度阅读，支持 PDF 深读、LaTeX 翻译、参考文献整理与正式交付。",
-      "maxSummary": "适合重度研究与复杂工作流，开放全部模型层级与完整研究工具链。",
+      "max": "Max",
+      "pro": "Pro",
+      "plus": "Plus",
+      "plusSummary": "适合日常学习与论文基础读写，可使用 YutoGPT 5.5、GPT-6 luna；具体模型以当前可用列表为准。",
+      "proSummary": "适合高频科研写作与深度阅读，增加 GPT-6.1 Sol；具体模型以当前可用列表为准。",
+      "maxSummary": "适合复杂研究与完整工作流，增加 Claude Opus 5.5；具体模型以当前可用列表为准。",
       "annualSave": "年度订阅省 {value}%",
       "pricePerMonth": "/月付",
       "pricePerYear": "/年付",
       "monthlyEquivalent": "折合 ￥{value}/月",
       "usdPerMonth": "{value} USD/月",
       "features": {
-        "basicModels": "基础模型",
-        "advancedModelsLite": "少量高级模型",
-        "advancedModels": "高级模型",
-        "allModels": "全部模型",
+        "basicModels": "YutoGPT 5.5 · GPT-6 luna",
+        "advancedModels": "GPT-6.1 Sol",
+        "allModels": "YutoGPT 5.5 · GPT-6 luna · GPT-6.1 Sol · Claude Opus 5.5",
         "paperSummary": "论文速读",
         "englishPolish": "英文润色",
         "pdfDeepRead": "PDF 深度理解",
         "latexTranslation": "LaTeX 翻译",
         "bibtex": "参考文献转 Bib",
         "fullResearchTools": "全研究工具",
-        "complexReasoning": "复杂推理",
-        "specialModels": "顶级模型"
+        "complexReasoning": "复杂推理"
       },
       "loadingPlans": "正在加载套餐…",
       "loadPlansFailed": "暂时无法加载套餐，请重试",
@@ -872,7 +878,8 @@
       "featureSearchStrategy": "文献检索策略",
       "featureSearchStrategyDesc": "规划检索词、数据库与筛选标准",
       "featureSearchStrategyPrompt": "根据研究主题规划可复现的检索策略：概念、中英文关键词、布尔检索式、数据库、纳入排除标准和检索记录模板。必要时澄清范围，不伪称已检索数据库，不编造文献或数量。\n\n研究主题：",
-      "featureUnavailable": "该特色能力暂未连接，请稍后重试"
+      "featureUnavailable": "该特色能力暂未连接，请稍后重试",
+      "scrollToBottom": "滚动到底部"
     },
     "footer": {
       "placeholderLoggedOut": "登录后可上传资料与保存项目",
@@ -1065,7 +1072,8 @@
       "shareLoading": "正在创建分享链接...",
       "shareSuccess": "分享链接已复制",
       "shareLinkCopyFailed": "分享链接已创建，但自动复制失败，请检查浏览器权限",
-      "shareFailed": "分享失败，请稍后重试"
+      "shareFailed": "分享失败，请稍后重试",
+      "imageAlt": "图片"
     },
     "academicEntities": {
       "core": {
@@ -1226,7 +1234,8 @@
       "monthlyTotal": "按月购买总价",
       "savings": "节省",
       "remaining": "{seconds} 秒",
-      "qrCode": "付款二维码"
+      "qrCode": "付款二维码",
+      "actualPayment": "实际支付：{amount} CNY"
     },
     "captcha": {
       "title": "安全验证",
@@ -1235,5 +1244,18 @@
       "failed": "验证失败，请重试",
       "instruction": "拖动滑块完成拼图"
     }
+  },
+  "uploadErrors": {
+    "notIncluded": "当前套餐暂不支持文件上传。",
+    "limitReached": "已达到文件上传次数限制，请稍后再试。",
+    "fileTooLarge": "文件过大，请选择较小的文件。",
+    "sizeLimit": "文件大小不能超过 {size} MB。",
+    "temporarilyUnavailable": "文件上传暂时不可用，请稍后再试。"
+  },
+  "packageUploadFeatures": {
+    "dailyLimit": "成功上传：每日 {count} 次",
+    "unlimited": "成功上传：无每日次数限制",
+    "disabled": "此套餐不含文件上传",
+    "fileAllowance": "套餐单文件上限：{size} MiB，仍须符合通用上传规则"
   }
 }

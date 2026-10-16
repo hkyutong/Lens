@@ -1,14 +1,26 @@
-import api from '../index';
+import api from '../index'
+
+const PUBLIC_ASSET_PURPOSES = [
+  'logo',
+  'favicon',
+  'robot-avatar',
+  'default-avatar',
+  'model-avatar',
+  'app-cover',
+  'app-background',
+  'package-cover',
+  'notice-image',
+  'agreement-image',
+  'classification-image',
+] as const
+
+export type PublicAssetPurpose = typeof PUBLIC_ASSET_PURPOSES[number]
 
 export default {
-  /**
-   * 上传文件
-   * @param data FormData对象，必须包含file字段
-   * @param dir 可选的目录参数
-   * @returns
-   */
-  uploadFile: (data: FormData, dir?: string) => {
-    const url = dir ? `upload/file?dir=${encodeURIComponent(dir)}` : 'upload/file';
-    return api.post(url, data);
+  uploadFile: (data: FormData, purpose: PublicAssetPurpose) => {
+    if (!PUBLIC_ASSET_PURPOSES.includes(purpose)) {
+      throw new Error('Invalid public asset purpose')
+    }
+    return api.post(`/upload/public-asset?purpose=${encodeURIComponent(purpose)}`, data)
   },
-};
+}

@@ -198,4 +198,35 @@ describe('academic structured output integrity', () => {
     expect(result.includes('Protocol draft')).toBe(true);
     expect(result.includes('Recording sheet')).toBe(true);
   });
+
+  it('keeps complete table rows independent while deduplicating truncation warnings', () => {
+    const service = Object.create(AcademicService.prototype) as any;
+    const table = [
+      '| Step | Task | Result |',
+      '| --- | --- | --- |',
+      '| 1 | Define question | Protocol |',
+      '',
+      '| 2 | Collect evidence | Recording sheet |',
+      '',
+      '| 3 | Review findings | Report |',
+    ].join('\n');
+    const warning = '警告，文本过长将进行截断，Token溢出数：1，现继续运行。';
+    const input = [warning, table, warning].join('\n');
+
+    const result = service.dedupeAcademicTruncationWarnings(input);
+    expect(result.split('\n').filter((line: string) => /^\s*\|\s*\d+\s*\|/.test(line)).length).toBe(3);
+    expect(result.split(warning).length - 1).toBe(1);
+    const stepRows = (value: string) =>
+      value.split('\n').filter((line: string) => /^\s*\|\s*\d+\s*\|/.test(line));
+    expect(stepRows(service.sanitizeAcademicDelta(table))).toEqual(stepRows(table));
+  });
+
+  it('keeps legacy split-cell table repair compatible', () => {
+    const service = Object.create(AcademicService.prototype) as any;
+    const input = '| Synthetic artifact\n\n| Reviewable result |';
+
+    expect(service.dedupeAcademicTruncationWarnings(input)).toBe(
+      '| Synthetic artifact | Reviewable result |',
+    );
+  });
 });

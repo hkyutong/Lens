@@ -727,6 +727,17 @@ def file_already_in_downloadzone(file:str, user_path:str):
 
 def promote_file_to_downloadzone(file:str, rename_file:str=None, chatbot:ChatBotWithCookies=None):
     # 将文件复制一份到下载区
+    from shared_utils.lens_request_security import current_identity, stage_request_report
+    if current_identity():
+        filename = sanitize_download_filename(rename_file or os.path.basename(file))
+        transform = None
+        if os.path.splitext(filename)[1].lower() in {".md", ".markdown", ".txt", ".log"}:
+            transform = lambda data: sanitize_report_text(data.decode("utf-8", errors="ignore")).encode("utf-8")
+        new_path = str(stage_request_report(file, filename, transform))
+        if chatbot is not None:
+            current = chatbot._cookies.get("files_to_promote", [])
+            chatbot._cookies.update({"files_to_promote": current + [new_path]})
+        return new_path
     import shutil
 
     if chatbot is not None:
@@ -1120,6 +1131,9 @@ def gen_time_str():
 
 
 def get_log_folder(user=default_user_name, plugin_name="shared"):
+    from shared_utils.lens_request_security import current_identity, request_log_directory
+    if current_identity():
+        return str(request_log_directory(plugin_name))
     if user is None:
         user = default_user_name
     PATH_LOGGING = get_conf("PATH_LOGGING")
@@ -1133,6 +1147,9 @@ def get_log_folder(user=default_user_name, plugin_name="shared"):
 
 
 def get_upload_folder(user=default_user_name, tag=None):
+    from shared_utils.lens_request_security import current_identity, request_upload_directory
+    if current_identity():
+        return str(request_upload_directory(tag))
     PATH_PRIVATE_UPLOAD = get_private_upload_root()
     if user is None:
         user = default_user_name
@@ -1159,6 +1176,10 @@ def is_the_upload_folder(string):
 
 
 def get_user(chatbotwithcookies:ChatBotWithCookies):
+    from shared_utils.lens_request_security import current_user_name, current_identity, open_request_file
+    scoped_user = current_user_name()
+    if scoped_user:
+        return scoped_user
     return chatbotwithcookies._cookies.get("user_name", default_user_name)
 
 

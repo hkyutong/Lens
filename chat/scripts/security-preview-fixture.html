@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Synthetic Markdown security contract</title></head>
+  <body>
+    <pre id="contract-result">{"completed":false}</pre>
+    <div id="synthetic-previews"></div>
+    <script type="module">
+      import { createApp, h, nextTick } from 'vue'
+      import { MdPreview } from 'md-editor-v3'
+      import katex from 'katex'
+      import { sanitizeMarkdownPreviewHtml } from '../src/utils/markdownPreviewHtml'
+
+      const result = document.querySelector('#contract-result')
+      const host = document.querySelector('#synthetic-previews')
+      const apps = []
+      const forbidden = '[onerror],[onload],[onmouseover],script,iframe,object,embed,[srcdoc]'
+      const dangerousUrl = (value) => /^\s*(?:javascript|vbscript|data:text\/html)\s*:/i.test(value)
+      let checked = 0
+      let unsafe = 0
+      let positiveFailures = 0
+
+      function verifyTree(root) {
+        if (root.querySelector(forbidden)) return false
+        return [...root.querySelectorAll('*')].every((element) =>
+          [...element.attributes].every((attribute) =>
+            !/^on/i.test(attribute.name) &&
+            (!['href', 'src', 'xlink:href', 'action', 'formaction'].includes(attribute.name) ||
+              !dangerousUrl(attribute.value)),
+          ),
+        )
+      }
+
+      async function main() {
+        const languages = [
+          '"><img/src=x/onerror=alert(1)>',
+          '<img/src=x/onerror=alert(1)>',
+          'js"><svg/onload=alert(1)>',
+          'javascript"onmouseover="alert(1)',
+          '"><script>alert(1)<\/script>',
+        ]
+        for (const language of languages) {
+          const root = document.createElement('section')
+          host.appendChild(root)
+          const app = createApp({
+            render: () => h(MdPreview, {
+              editorId: `synthetic-preview-${checked}`,
+              modelValue: `\`\`\`${language}\nconst synthetic = true;\n\`\`\``,
+              sanitize: sanitizeMarkdownPreviewHtml,
+              noHighlight: true,
+              noKatex: true,
+              noMermaid: true,
+            }),
+          })
+          app.config.warnHandler = () => {}
+          app.mount(root)
+          apps.push(app)
+          await nextTick()
+          if (!verifyTree(root)) unsafe += 1
+          if (!root.textContent.includes('synthetic')) positiveFailures += 1
+          checked += 1
+        }
+
+        const hostileHtml = [
+          '<a href="javascript:alert(1)">Synthetic</a>',
+          '<a href="data:text/html,<script>alert(1)<\/script>">Synthetic</a>',
+          '<svg><a xlink:href="javascript:alert(1)"><text>Synthetic</text></a></svg>',
+          '<iframe srcdoc="<script>alert(1)<\/script>"></iframe>',
+          '<math><mtext><img src=x onerror=alert(1)></mtext></math>',
+        ]
+        for (const html of hostileHtml) {
+          const root = document.createElement('section')
+          root.innerHTML = sanitizeMarkdownPreviewHtml(html)
+          if (!verifyTree(root)) unsafe += 1
+          checked += 1
+        }
+
+        const academic = document.createElement('section')
+        academic.innerHTML = sanitizeMarkdownPreviewHtml(
+          '<pre><code>const synthetic = true;</code></pre>' +
+          '<table><thead><tr><th>Synthetic</th></tr></thead><tbody><tr><td>Result</td></tr></tbody></table>' +
+          '<blockquote><p>Synthetic citation</p></blockquote>' +
+          '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>' +
+          katex.renderToString('E = mc^2', { throwOnError: false }),
+        )
+        if (!academic.querySelector('pre code') || !academic.querySelector('table td') ||
+            !academic.querySelector('blockquote') || !academic.querySelector('svg path') ||
+            !academic.querySelector('.katex') || !verifyTree(academic)) positiveFailures += 1
+        checked += 1
+        result.textContent = JSON.stringify({
+          completed: true,
+          checked_case_count: checked,
+          unsafe_render_count: unsafe,
+          positive_failure_count: positiveFailures,
+          passed: unsafe === 0 && positiveFailures === 0,
+        })
+      }
+
+      main().catch(() => {
+        result.textContent = JSON.stringify({ completed: true, passed: false, error_class: 'contract_execution_failed' })
+      }).finally(() => {
+        for (const app of apps) app.unmount()
+      })
+    </script>
+  </body>
+</html>

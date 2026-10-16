@@ -43,12 +43,17 @@
       "readOnlyNotice": "이 페이지는 읽기 전용이며 편집, 삭제 또는 재생성 작업을 제공하지 않습니다."
     },
     "modelSelector": {
+      "notIncluded": "현재 요금제에 포함되지 않은 모델입니다",
       "defaultModel": "기본 모델",
       "switchModel": "모델 전환",
       "noModels": "전환 가능한 모델이 없습니다",
       "switchTo": "{name}(으)로 전환",
       "modelIcon": "{name} 모델 아이콘",
-      "switchFailed": "모델 전환에 실패했습니다. 잠시 후 다시 시도하세요."
+      "switchFailed": "모델 전환에 실패했습니다. 잠시 후 다시 시도하세요.",
+      "upgradeRequired": "{plan} 업그레이드 필요",
+      "unavailable": "현재 이용할 수 없음",
+      "restrictedModel": "{model} ({plan} 필요)",
+      "unavailableModel": "{model} (현재 이용 불가)"
     },
     "language": {
       "zh-CN": "简体中文",
@@ -95,19 +100,19 @@
       "plusAvailable1": "논문 요약, Arxiv 요약, Arxiv 영어 요약",
       "plusAvailable2": "중국어 다듬기, 영어 다듬기, 중영 번역",
       "plusAvailable3": "마인드맵, 코드 설명, 참고문헌 BibTeX 변환",
-      "plusNote": "PDF 심층 이해, PDF 일괄 요약, Word 일괄 요약, LaTeX 고급 도구는 포함되지 않습니다.",
+      "plusNote": "YutoGPT 5.5, GPT-6 luna를 사용할 수 있으며 모델은 현재 이용 가능한 목록을 따릅니다. PDF 심층 이해, PDF 일괄 요약, Word 일괄 요약, LaTeX 고급 도구는 포함되지 않습니다.",
       "proSummary": "고빈도 논문 읽기와 원고 처리",
       "proWorkflow": "최대 2단계 파이프라인",
       "proAvailable1": "Plus의 모든 기능 포함",
       "proAvailable2": "PDF 심층 이해, PDF 일괄 요약, Word 일괄 요약",
       "proAvailable3": "LaTeX 요약, 정밀 번역, 영어 다듬기, 중국어 다듬기, 하이라이트 교정",
-      "proNote": "“PDF 심층 이해 → 영어 다듬기” 같은 일반 연구 흐름에 적합합니다.",
+      "proNote": "Plus 모델에 GPT-6.1 Sol이 추가되며 모델은 현재 이용 가능한 목록을 따릅니다. “PDF 심층 이해 → 영어 다듬기” 같은 일반 연구 흐름에 적합합니다.",
       "maxSummary": "집중 연구와 전체 연구 흐름",
       "maxWorkflow": "최대 3단계 파이프라인",
       "maxAvailable1": "Pro의 모든 기능 포함",
       "maxAvailable2": "현재 Lens에서 제공하는 모든 학술 기능 사용 가능",
       "maxAvailable3": "“논문 빠른 읽기 → 중국어 다듬기 → 마인드맵” 같은 전체 흐름 지원",
-      "maxNote": "긴 논문, 여러 파일, 복잡한 연구 작업에 적합합니다.",
+      "maxNote": "Pro 모델에 Claude Opus 5.5가 추가되며 모델은 현재 이용 가능한 목록을 따릅니다. 긴 논문, 여러 파일, 복잡한 연구 작업에 적합합니다.",
       "billingTitle": "결제와 유효기간",
       "billingRule1": "월간 요금제와 월간 카드 코드는 30일 유효기간의 해당 할당량을 제공합니다.",
       "billingRule2": "연간 요금제와 연간 카드 코드는 365일 유효기간과 12개월 할당량을 제공합니다.",
@@ -117,7 +122,8 @@
       "taskRule1": "기능 파이프라인은 순차 실행되며, 이전 단계가 끝나야 다음 단계가 시작됩니다.",
       "taskRule2": "PDF, Word, LaTeX, 긴 논문, 느린 상위 모델은 전체 대기 시간을 늘릴 수 있습니다.",
       "taskRule3": "키, 신분증, 계약서, 고객 자료, 계정 비밀번호 등 민감한 내용을 업로드하지 마세요.",
-      "taskRule4": "AI 출력에는 오류가 있을 수 있으므로 중요한 결론, 인용, 실험 정보는 직접 확인하세요."
+      "taskRule4": "AI 출력에는 오류가 있을 수 있으므로 중요한 결론, 인용, 실험 정보는 직접 확인하세요.",
+      "comparisonLabel": "요금제 기능 비교"
     },
     "member": {
       "signInReward": "출석 보상",
@@ -152,27 +158,25 @@
       "max": "Max",
       "pro": "Pro",
       "plus": "Plus",
-      "plusSummary": "가벼운 연구, 일상 질문, 기본 글쓰기에 적합합니다.",
-      "proSummary": "고빈도 학술 글쓰기, 깊이 있는 읽기, 정식 결과물 제작에 적합합니다.",
-      "maxSummary": "집중 연구, 전체 모델 등급 활용, 고강도 워크플로에 맞춰 설계되었습니다.",
+      "plusSummary": "일상 학습과 기본 학술 글쓰기에 적합하며 YutoGPT 5.5, GPT-6 luna를 사용할 수 있습니다. 모델은 현재 이용 가능한 목록을 따릅니다.",
+      "proSummary": "잦은 연구 글쓰기와 심층 읽기에 적합하며 GPT-6.1 Sol이 추가됩니다. 모델은 현재 이용 가능한 목록을 따릅니다.",
+      "maxSummary": "복잡한 연구와 전체 워크플로에 적합하며 Claude Opus 5.5가 추가됩니다. 모델은 현재 이용 가능한 목록을 따릅니다.",
       "annualSave": "연간 구독 시 {value}% 절약",
       "pricePerMonth": "/월",
       "pricePerYear": "/년",
       "monthlyEquivalent": "월 환산 ￥{value}",
       "usdPerMonth": "{value} USD/월",
       "features": {
-        "basicModels": "기본 모델",
-        "advancedModelsLite": "소량의 고급 모델",
-        "advancedModels": "고급 모델",
-        "allModels": "전체 모델 등급",
+        "basicModels": "YutoGPT 5.5 · GPT-6 luna",
+        "advancedModels": "GPT-6.1 Sol",
+        "allModels": "YutoGPT 5.5 · GPT-6 luna · GPT-6.1 Sol · Claude Opus 5.5",
         "paperSummary": "논문 요약",
         "englishPolish": "영문 윤문",
         "pdfDeepRead": "PDF 심층 이해",
         "latexTranslation": "LaTeX 번역",
         "bibtex": "참고문헌 Bib 변환",
         "fullResearchTools": "전체 연구 도구",
-        "complexReasoning": "복잡한 추론",
-        "specialModels": "최상위 모델"
+        "complexReasoning": "복잡한 추론"
       },
       "loadingPlans": "요금제를 불러오는 중…",
       "loadPlansFailed": "요금제를 불러오지 못했습니다. 다시 시도하세요",
@@ -290,7 +294,8 @@
       "featureSearchStrategy": "문헌 검색 전략",
       "featureSearchStrategyDesc": "검색어·데이터베이스·기준 설계",
       "featureSearchStrategyPrompt": "개념, 키워드, 불리언 검색식, 데이터베이스, 포함·제외 기준과 검색 기록 양식을 제안하세요. 필요시 범위를 질문하고 실제 검색을 했다고 주장하거나 문헌과 건수를 지어내지 마세요.\n\n연구 주제:",
-      "featureUnavailable": "이 특색 기능은 아직 연결되지 않았습니다. 잠시 후 다시 시도하세요."
+      "featureUnavailable": "이 특색 기능은 아직 연결되지 않았습니다. 잠시 후 다시 시도하세요.",
+      "scrollToBottom": "맨 아래로 스크롤"
     },
     "footer": {
       "placeholderLoggedOut": "로그인하면 자료 업로드와 저장이 가능합니다",
@@ -483,7 +488,8 @@
       "shareLoading": "공유 링크를 만드는 중...",
       "shareSuccess": "공유 링크를 복사했습니다",
       "shareLinkCopyFailed": "공유 링크는 생성되었지만 자동 복사에 실패했습니다. 브라우저 권한을 확인하세요.",
-      "shareFailed": "공유에 실패했습니다. 나중에 다시 시도하세요."
+      "shareFailed": "공유에 실패했습니다. 나중에 다시 시도하세요.",
+      "imageAlt": "이미지"
     },
     "academicEntities": {
       "core": {
@@ -644,7 +650,8 @@
       "monthlyTotal": "월간 결제 총액",
       "savings": "절약 금액",
       "remaining": "{seconds}초",
-      "qrCode": "결제 QR 코드"
+      "qrCode": "결제 QR 코드",
+      "actualPayment": "실제 결제 금액: {amount} CNY"
     },
     "captcha": {
       "title": "보안 인증",
@@ -653,5 +660,78 @@
       "failed": "인증 실패. 다시 시도하세요",
       "instruction": "슬라이더를 움직여 퍼즐을 완성하세요"
     }
+  },
+  "login": {
+    "loginSuccess": "로그인되었습니다",
+    "enterUsername": "사용자 이름을 입력하세요",
+    "password": "비밀번호",
+    "enterYourPassword": "비밀번호를 입력하세요",
+    "loginAccount": "로그인",
+    "email": "이메일",
+    "enterEmail": "이메일 주소를 입력하세요",
+    "enterCode": "인증 코드를 입력하세요",
+    "sendVerificationCode": "인증 코드 보내기"
+  },
+  "pay": {
+    "wechat": "WeChat",
+    "alipay": "Alipay",
+    "paymentTimeExpired": "결제 시간이 만료되었습니다. 다시 결제를 진행하세요.",
+    "wechatPay": "WeChat Pay",
+    "alipayPay": "Alipay",
+    "paymentSuccess": "결제가 완료되었습니다",
+    "productPayment": "상품 결제",
+    "amountDue": "결제 금액:",
+    "siteAdminEnabledRedirect": "안전한 결제가 준비되었습니다. 계속 진행하여 업그레이드를 완료하세요.",
+    "clickToPay": "결제하기",
+    "open": "열기",
+    "scanToPay": "QR 코드로 결제",
+    "completePaymentWithin": "결제는",
+    "timeToCompletePayment": "이내에 완료해 주세요."
+  },
+  "goods": {
+    "basicModelQuota": "기본 포인트",
+    "advancedModelQuota": "고급 포인트",
+    "drawingQuota": "최상위 포인트",
+    "purchaseSuccess": "구매가 완료되었습니다",
+    "paymentNotSuccessful": "결제가 아직 완료되지 않았습니다",
+    "paymentNotEnabled": "현재 결제를 이용할 수 없습니다",
+    "paymentSuccess": "결제가 완료되었습니다"
+  },
+  "usercenter": {
+    "pleaseEnterCardDetails": "교환 코드를 입력하세요",
+    "cardRedeemSuccess": "교환이 완료되었습니다",
+    "points": "포인트",
+    "enterCardDetails": "교환 코드를 붙여 넣거나 입력하세요"
+  },
+  "chat": {
+    "copyCode": "코드 복사",
+    "copy": "복사",
+    "delete": "삭제",
+    "regenerate": "다시 생성",
+    "readAloud": "소리 내어 읽기",
+    "networkMode": "웹 검색",
+    "rename": "이름 변경",
+    "more": "더 보기",
+    "unfavorite": "즐겨찾기 해제",
+    "favoriteConversations": "즐겨찾기에 추가",
+    "deleteConversation": "대화 삭제"
+  },
+  "common": {
+    "edit": "편집",
+    "cancel": "취소",
+    "update": "수정"
+  },
+  "uploadErrors": {
+    "notIncluded": "현재 요금제에는 파일 업로드가 포함되어 있지 않습니다.",
+    "limitReached": "파일 업로드 횟수 제한에 도달했습니다. 잠시 후 다시 시도해 주세요.",
+    "fileTooLarge": "파일이 너무 큽니다. 더 작은 파일을 선택해 주세요.",
+    "sizeLimit": "파일 크기는 {size} MB 이하여야 합니다.",
+    "temporarilyUnavailable": "현재 파일을 업로드할 수 없습니다. 잠시 후 다시 시도해 주세요."
+  },
+  "packageUploadFeatures": {
+    "dailyLimit": "성공한 업로드: 하루 {count}회",
+    "unlimited": "성공한 업로드: 일일 횟수 제한 없음",
+    "disabled": "이 요금제에는 파일 업로드가 포함되지 않습니다",
+    "fileAllowance": "요금제의 파일당 한도: {size} MiB; 일반 업로드 규칙도 적용됩니다"
   }
 }

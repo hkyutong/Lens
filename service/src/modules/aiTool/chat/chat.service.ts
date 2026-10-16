@@ -1,3 +1,8 @@
+import { isPackageModelAllowed } from '../../../common/utils/packageEntitlements';
+import { ModelsService } from '@/modules/models/models.service';
+import { AcademicPlanTier, canUseAcademicModel, isAcademicModelEnabled } from '@/common/utils/academicModelAccess';
+import { HttpStatus } from '@nestjs/common';
+import { HttpException } from '@nestjs/common';
 import { handleError } from '@/common/utils';
 import { correctApiBaseUrl } from '@/common/utils/correctApiBaseUrl';
 import { Injectable, Logger } from '@nestjs/common';
@@ -11,6 +16,7 @@ export class OpenAIChatService {
   constructor(
     private readonly globalConfigService: GlobalConfigService,
     private readonly netSearchService: NetSearchService,
+    private readonly modelsService: ModelsService,
   ) {}
 
   /**
@@ -607,7 +613,7 @@ export class OpenAIChatService {
     }
   }
 
-  async chatFree(prompt: string, systemMessage?: string, messagesHistory?: any[], imageUrl?: any) {
+  async chatFree(prompt: string, systemMessage?: string, messagesHistory?: any[], imageUrl?: any, planTier: AcademicPlanTier = 'free', packageEntitlements?: unknown) {
     const {
       openaiBaseUrl = '',
       openaiBaseKey = '',
@@ -617,6 +623,11 @@ export class OpenAIChatService {
       'openaiBaseUrl',
       'openaiBaseModel',
     ]);
+    const modelInfo = await this.modelsService.getCurrentModelKeyInfo(openaiBaseModel);
+    if ((!isAcademicModelEnabled(modelInfo) || !canUseAcademicModel(planTier, modelInfo?.deductType)) || !isPackageModelAllowed(packageEntitlements, modelInfo)) {
+      throw new HttpException('当前套餐不支持此模型，请选择其他模型或升级套餐。', HttpStatus.PAYMENT_REQUIRED);
+    }
+
 
     const key = openaiBaseKey;
     const proxyUrl = openaiBaseUrl;

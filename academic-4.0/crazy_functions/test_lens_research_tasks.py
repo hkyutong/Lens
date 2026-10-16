@@ -33,12 +33,14 @@ class LensResearchTaskJsonTests(unittest.TestCase):
         self.assertIn('"dimension": "question"', prompt)
         self.assertLess(len(prompt), 1800)
 
-    def test_all_retry_examples_satisfy_the_task_contract(self):
+    def test_all_table_retry_examples_satisfy_the_task_contract(self):
         material = (
             "Paper: Synthetic A\nRainfall is associated with plant height.\n\n"
             "Paper: Synthetic B\nSoil moisture may confound this association."
         )
         for key, spec in TASKS.items():
+            if spec.name == 'Lens｜研究方案设计':
+                continue  # Full proposal retry is covered by the complete-report contract suite.
             with self.subTest(task=key):
                 value = material
                 if key == "Lens｜审稿意见应答":

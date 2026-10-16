@@ -1,3 +1,4 @@
+import { resolvePackageAnnualDiscountRate, resolvePackageUsdPrice } from '../../common/constants/packageCurrency';
 export type BillingCycle = 'monthly' | 'annual';
 
 export interface PackageBillingOffer {
@@ -57,17 +58,7 @@ function resolveAnnualDays(days: number) {
 }
 
 function resolveAnnualDiscountRate(pkg: any) {
-  const nameKey = String(pkg?.name || '')
-    .trim()
-    .toLowerCase();
-  if (ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey] !== undefined) {
-    return ANNUAL_DISCOUNT_OVERRIDES_BY_NAME[nameKey];
-  }
-  const weight = toNumber(pkg?.weight);
-  if (ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight] !== undefined) {
-    return ANNUAL_DISCOUNT_OVERRIDES_BY_WEIGHT[weight];
-  }
-  return ANNUAL_DISCOUNT_RATE;
+  return resolvePackageAnnualDiscountRate(pkg);
 }
 
 export function normalizeBillingCycle(value?: string): BillingCycle {
@@ -79,7 +70,7 @@ export function getPackageBillingOffer(pkg: any, billingCycle?: string): Package
   const billingMonths = cycle === 'annual' ? ANNUAL_MONTHS : 1;
   const basePrice = roundPrice(toNumber(pkg?.price));
   const originalTotal = roundPrice(basePrice * billingMonths);
-  const baseDisplayPrice = roundPrice(toNumber(pkg?.usdPrice));
+  const baseDisplayPrice = resolvePackageUsdPrice(pkg);
   const displayOriginalTotal = roundPrice(baseDisplayPrice * billingMonths);
   const annualDiscountRate = resolveAnnualDiscountRate(pkg);
   const price =

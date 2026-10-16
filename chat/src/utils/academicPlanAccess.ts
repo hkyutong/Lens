@@ -18,7 +18,7 @@ export const normalizeAcademicAccessName = (value: unknown) =>
 const extractAcademicLabel = (item: AcademicEntity | string | null | undefined) => {
   if (!item) return ''
   if (typeof item === 'string') return item.trim()
-  return String(item.displayName || item.name || item.label || '').trim()
+  return String(item.name || item.displayName || item.label || '').trim()
 }
 
 export const resolveAcademicPlanTier = (

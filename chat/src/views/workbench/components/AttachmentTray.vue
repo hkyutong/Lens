@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePrivateMediaSources } from '@/utils/privateMedia'
 import { Close } from '@icon-park/vue-next'
 import { t } from '@/locales'
 import { ref, watch } from 'vue'
@@ -22,6 +23,8 @@ const props = withDefaults(defineProps<Props>(), {
   savedFiles: () => [],
   showSavedFiles: true,
 })
+const { resolveSource: resolveSavedMediaSource } = usePrivateMediaSources(() => props.savedFiles.map(file => file.url))
+
 const emit = defineEmits<{
   (e: 'clearData', index: number, isSavedFile: boolean): void
 }>()
@@ -62,7 +65,7 @@ watch(
             :key="'saved-img-' + index"
           >
             <img
-              :src="file.url"
+              :src="resolveSavedMediaSource(file.url)"
               class="max-h-16 border border-gray-100 shadow-sm dark:border-gray-700 rounded-md"
               :alt="t('lens.footer.imagePreview')"
             />

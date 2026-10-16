@@ -81,4 +81,8 @@ export class CreatePackageDto {
   @ApiProperty({ example: '1,2,3', description: '套餐包含的应用分类' })
   @IsOptional()
   appCats?: string;
+
+  @ApiProperty({ description: '套餐权益配置', required: false })
+  @IsOptional()
+  entitlements?: unknown;
 }

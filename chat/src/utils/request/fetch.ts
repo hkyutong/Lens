@@ -1,3 +1,5 @@
+import { t } from '@/locales'
+import { localizeUploadErrorMessage } from './uploadErrorMessage'
 import { useAuthStore, useGlobalStore } from '@/store'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from './sanitizeErrorMessage'
@@ -96,7 +98,7 @@ const fetchClient = async (url: string, options: RequestInit = {}) => {
           '请先登录后再进行使用！'
         )
         if (Date.now() - last401ErrorTimestamp > 3000) {
-          ms.error(loginMessage)
+          ms.error(localizeUploadErrorMessage(loginMessage, t))
         }
         last401ErrorTimestamp = Date.now()
       }

@@ -26,7 +26,7 @@
         name: string;
       }[]
   >({
-    default: [],
+    default: () => [],
   });
 
   interface pcasItem {

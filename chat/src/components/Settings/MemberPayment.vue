@@ -2,9 +2,9 @@
 import { fetchOrderBuyAPI, fetchOrderQueryAPI } from '@/api/order'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { t } from '@/locales'
-import { useAuthStore, useGlobalStore } from '@/store'
+import { useAuthStore, useGlobalStore , useAppStore } from '@/store'
 import { message } from '@/utils/message'
-import { formatCurrency } from '@/utils/memberPricing'
+import { formatCurrency , getMemberDisplayBilling } from '@/utils/memberPricing'
 import { ArrowLeft } from '@icon-park/vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -12,6 +12,8 @@ import type { ResData } from '@/api/types'
 import alipay from '@/assets/alipay.png'
 import wxpay from '@/assets/wxpay.png'
 import QRCode from '@/components/common/QRCode/index.vue'
+
+const appStore = useAppStore();
 
 interface Props {
   visible: boolean
@@ -189,10 +191,12 @@ const queryOrderStatus = async () => {
 
 const orderInfo = computed(() => useGlobal?.orderInfo)
 const billingInfo = computed(() => orderInfo.value?.billing)
-const displayAmount = computed(() => billingInfo.value?.displayPrice ?? 0)
-const displayMonthlyEquivalent = computed(() => billingInfo.value?.displayMonthlyEquivalentPrice ?? 0)
-const displayOriginalTotal = computed(() => billingInfo.value?.displayOriginalTotal ?? 0)
-const displaySaveAmount = computed(() => billingInfo.value?.displaySaveAmount ?? 0)
+const actualPaymentAmount = ref<number | null>(null);
+const displayPriceMeta = computed(() => getMemberDisplayBilling(billingInfo.value, appStore.language));
+const displayAmount = computed(() => displayPriceMeta.value.price)
+const displayMonthlyEquivalent = computed(() => displayPriceMeta.value.monthlyEquivalentPrice)
+const displayOriginalTotal = computed(() => displayPriceMeta.value.originalTotal)
+const displaySaveAmount = computed(() => displayPriceMeta.value.saveAmount)
 const url_qrcode = ref('')
 const qrCodeloading = ref(true)
 const redirectloading = ref(true)
@@ -206,6 +210,7 @@ function backToMainView() {
 
 /* 请求二维码 */
 async function getQrCode() {
+  actualPaymentAmount.value = null;
   !isRedirectPay.value && (qrCodeloading.value = true)
   isRedirectPay.value && (redirectloading.value = true)
   let qsPayType = null
@@ -219,6 +224,8 @@ async function getQrCode() {
       billingCycle: orderInfo.value.billingCycle,
     })
     const { data, success } = res
+    const paymentTotal = Number(data?.total);
+    actualPaymentAmount.value = success && data?.total !== undefined && data?.total !== null && Number.isFinite(paymentTotal) ? paymentTotal : null;
     if (!success) {
       return
     }
@@ -334,10 +341,10 @@ onBeforeUnmount(() => {
               </div>
               <div class="mt-1 flex items-baseline gap-2">
                 <span class="text-3xl font-semibold tracking-tight text-[var(--text-main)]">
-                  ${{ formatCurrency(displayAmount) }}
+                  {{ displayPriceMeta.symbol }} {{ formatCurrency(displayAmount) }}
                 </span>
                 <span class="text-sm text-[var(--text-sub)]">
-                  USD {{ orderInfo.billingCycle === 'annual' ? t('lens.payment.perYear') : t('lens.payment.perMonth') }}
+                  {{ displayPriceMeta.currency }} {{ orderInfo.billingCycle === 'annual' ? t('lens.payment.perYear') : t('lens.payment.perMonth') }}
                 </span>
               </div>
             </div>
@@ -347,6 +354,9 @@ onBeforeUnmount(() => {
               {{ orderInfo.billingCycle === 'annual' ? t('lens.payment.annual') : t('lens.payment.monthly') }}
             </div>
           </div>
+            <p v-if="actualPaymentAmount !== null" class="mt-3 text-sm text-[var(--text-secondary)]">
+              {{ t('lens.payment.actualPayment', { amount: formatCurrency(actualPaymentAmount) }) }}
+            </p>
 
           <div class="mt-4 grid gap-2 text-sm text-[var(--text-sub)]">
             <div class="flex justify-between gap-4">
@@ -368,19 +378,19 @@ onBeforeUnmount(() => {
             <div class="flex justify-between gap-4">
               <span class="font-medium">{{ t('lens.payment.equivalent') }}</span>
               <span class="text-[var(--text-main)]"
-                >${{ formatCurrency(displayMonthlyEquivalent) }} USD{{ t('lens.payment.perMonth') }}</span
+                >{{ displayPriceMeta.symbol }} {{ formatCurrency(displayMonthlyEquivalent) }} {{ displayPriceMeta.currency }}{{ t('lens.payment.perMonth') }}</span
               >
             </div>
             <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
               <span class="font-medium">{{ t('lens.payment.monthlyTotal') }}</span>
               <span class="line-through text-[var(--ink-faint)]">
-                ${{ formatCurrency(displayOriginalTotal) }} USD{{ t('lens.payment.perYear') }}
+                {{ displayPriceMeta.symbol }} {{ formatCurrency(displayOriginalTotal) }} {{ displayPriceMeta.currency }}{{ t('lens.payment.perYear') }}
               </span>
             </div>
             <div v-if="orderInfo.billingCycle === 'annual'" class="flex justify-between gap-4">
               <span class="font-medium">{{ t('lens.payment.savings') }}</span>
               <span class="font-semibold text-emerald-600 dark:text-emerald-300">
-                ${{ formatCurrency(displaySaveAmount) }} USD
+                {{ displayPriceMeta.symbol }} {{ formatCurrency(displaySaveAmount) }} {{ displayPriceMeta.currency }}
               </span>
             </div>
           </div>

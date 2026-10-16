@@ -1,22 +1,37 @@
+import { AttachmentService } from '../attachment/attachment.service';
+import { PublicAssetService, PublicAssetPurpose, PUBLIC_ASSET_PURPOSES } from '../attachment/publicAsset.service';
+import { NotFoundException, ForbiddenException, BadRequestException, HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { UserBalanceService } from '../userBalance/userBalance.service';
+import {
+  PackageUploadEntitlement,
+  resolvePackageUploadEntitlement,
+} from '../../common/utils/packageEntitlements';
+import { reserveUploadQuota, UploadQuotaReservation, UploadQuotaWindow } from './uploadQuota';
+
 import { formatUrl, removeSpecialCharacters } from '@/common/utils';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
 import * as ALIOSS from 'ali-oss';
 import axios from 'axios';
 import * as TENCENTCOS from 'cos-nodejs-sdk-v5';
 import type { Response } from 'express';
 import * as FormData from 'form-data';
-// import * as fs from 'fs';
-import { createReadStream } from 'fs';
 import { promises as fs } from 'fs';
 import * as mime from 'mime-types';
 import * as path from 'path';
-import * as streamToBuffer from 'stream-to-buffer';
 import { Repository } from 'typeorm';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { RedisCacheService } from '../redisCache/redisCache.service';
 import { UserBalanceEntity } from '../userBalance/userBalance.entity';
+
+
+interface ResolvedUploadPolicy {
+  id?: number;
+  exempt: boolean;
+  legacyMember: boolean;
+  upload: PackageUploadEntitlement | null;
+}
 const blacklist = ['exe', 'sh', 'bat', 'js', 'php', 'py']; // 黑名单
 
 @Injectable()
@@ -26,6 +41,10 @@ export class UploadService implements OnModuleInit {
     private readonly redisCacheService: RedisCacheService,
     @InjectRepository(UserBalanceEntity)
     private readonly userBalanceEntity: Repository<UserBalanceEntity>,
+    private readonly uploadUserBalanceService: UserBalanceService,
+    private readonly attachmentService: AttachmentService,
+    private readonly publicAssetService: PublicAssetService,
+
   ) {}
   private tencentCos: any;
 
@@ -33,14 +52,6 @@ export class UploadService implements OnModuleInit {
 
   private formatDateSegment(value: number) {
     return String(value).padStart(2, '0');
-  }
-
-  private async incrementCounter(key: string, ttlSeconds: number) {
-    const raw = await this.redisCacheService.get({ key });
-    const count = raw ? Number(raw) : 0;
-    const next = count + 1;
-    await this.redisCacheService.set({ key, val: String(next) }, ttlSeconds);
-    return next;
   }
 
   private async isAdvancedUser(userId: number): Promise<boolean> {
@@ -84,57 +95,6 @@ export class UploadService implements OnModuleInit {
     return normalized || fallback;
   }
 
-  private getSourceFileName(source: string) {
-    const raw = this.decodeURIComponentSafe(String(source || '').trim())
-      .replace(/[?#].*$/, '')
-      .split(/[\\/]/)
-      .pop();
-    return raw || '';
-  }
-
-  private resolveLocalUploadRelativePath(sourceValue: string) {
-    let source = this.decodeURIComponentSafe(String(sourceValue || '').trim());
-    if (!source) return '';
-    if (/^https?:\/\//i.test(source)) {
-      try {
-        const parsed = new URL(source);
-        source = parsed.pathname || '';
-      } catch (_error) {
-        return '';
-      }
-    }
-    source = source.split('#')[0].split('?')[0].replace(/\\/g, '/').trim();
-
-    if (source.startsWith('/file/')) {
-      source = source.slice('/file/'.length);
-    } else if (source.startsWith('file/')) {
-      source = source.slice('file/'.length);
-    } else if (source.startsWith('/public/file/')) {
-      source = source.slice('/public/file/'.length);
-    } else if (source.startsWith('public/file/')) {
-      source = source.slice('public/file/'.length);
-    } else {
-      return '';
-    }
-
-    source = source.replace(/^\/+/, '');
-    if (!source || source.includes('\0')) return '';
-
-    const normalized = path.posix.normalize(source);
-    if (!normalized || normalized.startsWith('..')) return '';
-    return normalized;
-  }
-
-  private resolveLocalUploadAbsolutePath(relativePath: string) {
-    const baseDir = path.resolve(process.cwd(), 'public', 'file');
-    const absolutePath = path.resolve(baseDir, relativePath);
-    const basePrefix = baseDir.endsWith(path.sep) ? baseDir : `${baseDir}${path.sep}`;
-    if (absolutePath !== baseDir && !absolutePath.startsWith(basePrefix)) {
-      throw new HttpException('下载文件参数无效', HttpStatus.BAD_REQUEST);
-    }
-    return absolutePath;
-  }
-
   private applyDownloadHeaders(
     res: Response,
     fileName: string,
@@ -151,185 +111,77 @@ export class UploadService implements OnModuleInit {
     );
   }
 
-  private async streamLocalUploadedFile(resolvedPath: string, targetName: string, res: Response) {
-    let stat;
-    try {
-      stat = await fs.stat(resolvedPath);
-    } catch (_error) {
-      throw new HttpException('下载文件不存在或已过期', HttpStatus.NOT_FOUND);
-    }
-    if (!stat.isFile()) {
-      throw new HttpException('下载文件参数无效', HttpStatus.BAD_REQUEST);
-    }
-
-    const contentType = String(mime.lookup(resolvedPath) || 'application/octet-stream');
-    this.applyDownloadHeaders(res, targetName, contentType, Number(stat.size || 0));
-
-    await new Promise<void>((resolve, reject) => {
-      const stream = createReadStream(resolvedPath);
-      const cleanup = () => {
-        stream.removeAllListeners();
-        res.removeListener('close', onFinish);
-        res.removeListener('finish', onFinish);
-      };
-      const onFinish = () => {
-        cleanup();
-        resolve();
-      };
-      stream.on('error', error => {
-        cleanup();
-        reject(error);
-      });
-      res.once('close', onFinish);
-      res.once('finish', onFinish);
-      stream.pipe(res);
-    });
-  }
-
-  private async streamRemoteUploadedFile(sourceUrl: string, targetName: string, res: Response) {
-    const timeoutMs = Math.max(Number(process.env.UPLOAD_FILE_PROXY_TIMEOUT_MS || 45000), 3000);
-    const maxBytes = Math.max(
-      Number(process.env.UPLOAD_FILE_PROXY_MAX_BYTES || 50 * 1024 * 1024),
-      1024 * 1024,
-    );
-    const response = await axios.get(sourceUrl, {
-      responseType: 'stream',
-      timeout: timeoutMs,
-      maxRedirects: 3,
-      maxContentLength: maxBytes,
-      maxBodyLength: maxBytes,
-      validateStatus: () => true,
-      proxy: false,
-    });
-    if (response.status >= 400) {
-      if (response.status === 404) {
-        throw new HttpException('下载文件不存在或已过期', HttpStatus.NOT_FOUND);
-      }
-      if (response.status === 403 || response.status === 401) {
-        throw new HttpException('下载文件已失效或无权限访问', HttpStatus.FORBIDDEN);
-      }
-      throw new HttpException('下载服务异常，请稍后重试', HttpStatus.BAD_GATEWAY);
-    }
-
-    const contentType = String(response.headers['content-type'] || 'application/octet-stream');
-    const contentLength = Number(response.headers['content-length'] || 0);
-    this.applyDownloadHeaders(res, targetName, contentType, contentLength);
-
-    await new Promise<void>((resolve, reject) => {
-      const stream = response.data;
-      const cleanup = () => {
-        stream.removeAllListeners('error');
-        res.removeListener('close', onFinish);
-        res.removeListener('finish', onFinish);
-      };
-      const onFinish = () => {
-        cleanup();
-        resolve();
-      };
-      stream.on('error', error => {
-        cleanup();
-        reject(error);
-      });
-      res.once('close', onFinish);
-      res.once('finish', onFinish);
-      stream.pipe(res);
-    });
-  }
-
-  async proxyUploadedFile(sourceValue: string, name: string, res: Response) {
-    const source = String(sourceValue || '').trim();
-    if (!source) {
-      throw new HttpException('下载文件参数无效', HttpStatus.BAD_REQUEST);
-    }
-    const fallbackName = this.getSourceFileName(source) || 'download_file';
-    const targetName = this.sanitizeAttachmentName(name, fallbackName);
-    const localRelativePath = this.resolveLocalUploadRelativePath(source);
-
-    try {
-      if (localRelativePath) {
-        const absolutePath = this.resolveLocalUploadAbsolutePath(localRelativePath);
-        await this.streamLocalUploadedFile(absolutePath, targetName, res);
-        return;
-      }
-
-      if (!/^https?:\/\//i.test(source)) {
-        throw new HttpException('下载文件参数无效', HttpStatus.BAD_REQUEST);
-      }
-
-      await this.streamRemoteUploadedFile(source, targetName, res);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      Logger.warn(
-        JSON.stringify({
-          event: 'upload_file_proxy_failed',
-          message: String((error as Error)?.message || error),
-        }),
-      );
-      throw new HttpException('下载服务异常，请稍后重试', HttpStatus.BAD_GATEWAY);
-    }
+  async proxyUploadedFile(sourceValue: string, name: string, res: Response, ownerId: number) {
+    const attachment = await this.attachmentService.readOwnedAttachment(sourceValue, ownerId);
+    this.applyDownloadHeaders(res, name || attachment.filename, attachment.contentType, attachment.buffer.length);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.end(attachment.buffer);
   }
 
   // 检查用户上传频率
-  private async checkUploadFrequency(userId: number, isAdvanced: boolean): Promise<void> {
+  private async checkUploadFrequency(
+    userId: number,
+    isAdvanced: boolean,
+    upload: PackageUploadEntitlement | null = null,
+  ): Promise<UploadQuotaReservation> {
     const now = new Date();
     const dateKey = `${now.getFullYear()}${this.formatDateSegment(
       now.getMonth() + 1,
     )}${this.formatDateSegment(now.getDate())}`;
     const hourKey = `${dateKey}${this.formatDateSegment(now.getHours())}`;
     const minuteKey = `${hourKey}${this.formatDateSegment(now.getMinutes())}`;
-
-    if (isAdvanced) {
-      const minuteCount = await this.incrementCounter(
-        `upload:frequency:minute:${userId}:${minuteKey}`,
-        70,
-      );
-      if (minuteCount > 20) {
-        throw new HttpException('上传频率过高（每分钟最多20次）', HttpStatus.TOO_MANY_REQUESTS);
-      }
-
-      const hourCount = await this.incrementCounter(
-        `upload:frequency:hour:${userId}:${hourKey}`,
-        3700,
-      );
-      if (hourCount > 100) {
-        throw new HttpException('上传频率过高（每小时最多100次）', HttpStatus.TOO_MANY_REQUESTS);
-      }
-      Logger.log(`用户${userId}上传频率: ${minuteCount}/min, ${hourCount}/hour`, 'UploadService');
-      return;
+    const windows: UploadQuotaWindow[] =
+      isAdvanced || upload
+        ? [
+            {
+              key: `upload:frequency:minute:${userId}:${minuteKey}`,
+              limit: 20,
+              ttlSeconds: 70,
+              releaseOnFailure: false,
+            },
+            {
+              key: `upload:frequency:hour:${userId}:${hourKey}`,
+              limit: 100,
+              ttlSeconds: 3700,
+              releaseOnFailure: false,
+            },
+          ]
+        : [{ key: `upload:frequency:day:${userId}:${dateKey}`, limit: 3, ttlSeconds: 86400 }];
+    if (upload?.mode === 'limited')
+      windows.push({
+        key: `upload:frequency:day:${userId}:${dateKey}`,
+        limit: upload.dailyLimit!,
+        ttlSeconds: 86400,
+      });
+    const client = this.redisCacheService;
+    let reservation: UploadQuotaReservation | null;
+    try {
+      reservation = await reserveUploadQuota(client, windows);
+    } catch {
+      throw new HttpException('文件上传暂时无法完成，请稍后再试', 503);
     }
-
-    const dayCount = await this.incrementCounter(
-      `upload:frequency:day:${userId}:${dateKey}`,
-      86400,
-    );
-    Logger.log(`用户${userId}当日上传次数: ${dayCount}`, 'UploadService');
-    if (dayCount > 3) {
-      throw new HttpException(
-        '普通用户每日最多上传3个文件，请升级会员或获取特殊积分',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    if (!reservation) throw new HttpException('已达到文件上传次数上限，请稍后再试', 429);
+    return reservation;
   }
 
   async uploadFile(file, dir = 'others', user = null) {
-    const isAdvanced = user?.id ? await this.isAdvancedUser(user.id) : false;
-    // 如果存在用户信息，则进行频率检查
-    if (user && user.id) {
-      await this.checkUploadFrequency(user.id, isAdvanced);
-    }
+    const uploadPolicy = await this.resolveUploadUserPolicy(user);
+    const ownerId = this.assertUploadOwner(user);
+    const isAdvanced = uploadPolicy.legacyMember;
+    const packageSizeLimit = uploadPolicy.upload?.maxFileSizeMb;
+    const physicalSizeLimit = Math.min(
+      30 * 1024 * 1024,
+      packageSizeLimit !== undefined ? packageSizeLimit * 1024 * 1024 : Number.POSITIVE_INFINITY,
+    );
+    if (file.size > physicalSizeLimit) throw new HttpException('文件超过允许的上传大小', 400);
     dir = dir || 'others';
-
     const { buffer, mimetype } = file || {};
     const originalName = file?.originalname || file?.name || '';
     const mimeExtension = mime.extension(mimetype || '') || '';
     const nameExtension = (path.extname(originalName) || '').replace('.', '');
-    // Prefer filename extension over mime sniffing to avoid saving known files
-    // (e.g. .tex/.docx) as .bin when browser reports generic octet-stream.
     const resolvedExtension = (nameExtension || mimeExtension || '').toLowerCase();
     const effectiveExtension = resolvedExtension || 'bin';
-
     const fileSize = typeof file?.size === 'number' ? file.size : buffer?.length || 0;
     const isImage =
       String(mimetype || '').startsWith('image/') ||
@@ -341,111 +193,49 @@ export class UploadService implements OnModuleInit {
       const limitLabel = isImage ? (isAdvanced ? '10MB' : '5MB') : isAdvanced ? '30MB' : '5MB';
       throw new HttpException(`文件大小超过限制(${limitLabel})`, HttpStatus.BAD_REQUEST);
     }
-
     if (process.env.ISDEV === 'true') {
       dir = `dev/${dir}`;
     }
     if (!resolvedExtension) {
-      Logger.warn('无法识别文件类型，使用默认扩展名', 'UploadService');
+      Logger.warn('UPLOAD_OPERATION_FAILED');
     }
-
-    // 检查文件扩展名是否在黑名单中
     if (blacklist.includes(effectiveExtension.toLowerCase())) {
-      Logger.error('不允许上传此类型的文件', 'UploadService');
+      Logger.error('UPLOAD_OPERATION_FAILED');
       throw new Error('不允许上传此类型的文件');
     }
-
-    const now = new Date();
-    const timestamp = now.getTime(); // 获取当前时间的时间戳
-    const randomString = Math.random().toString(36).substring(2, 6); // 生成4位随机字符串
-    const filename = `${timestamp}_${randomString}.${effectiveExtension}`; // 生成新的文件名，并添加文件后缀
-
-    const {
-      tencentCosStatus = 0,
-      aliOssStatus = 0,
-      cheveretoStatus = 0,
-      localStorageStatus = 0,
-      s3Status = 0,
-    } = await this.globalConfigService.getConfigs([
-      'tencentCosStatus',
-      'aliOssStatus',
-      'cheveretoStatus',
-      'localStorageStatus',
-      's3Status',
-    ]);
-
-    Logger.log(
-      `上传配置状态 - 本地存储: ${localStorageStatus}, S3: ${s3Status}, 腾讯云: ${tencentCosStatus}, 阿里云: ${aliOssStatus}, Chevereto: ${cheveretoStatus}`,
-      'UploadService',
-    );
-
-    const localEnabled = Number(localStorageStatus);
-    const s3Enabled = Number(s3Status);
-    const tencentEnabled = Number(tencentCosStatus);
-    const aliEnabled = Number(aliOssStatus);
-    const cheveretoEnabled = Number(cheveretoStatus);
-    const hasAnyUpload =
-      localEnabled || s3Enabled || tencentEnabled || aliEnabled || cheveretoEnabled;
-    const hasNonImageUpload = localEnabled || s3Enabled || tencentEnabled || aliEnabled;
-
-    if (!hasAnyUpload) {
-      Logger.warn('未配置任何上传方式，自动启用本地存储', 'UploadService');
-      // fallback to local storage to avoid blocking uploads
-      return this.uploadFileToLocal({ filename, buffer, dir });
-    }
-
-    if (!isImage && !hasNonImageUpload) {
-      Logger.warn('非图片文件不支持图床上传，自动启用本地存储', 'UploadService');
-      return this.uploadFileToLocal({ filename, buffer, dir });
-    }
-
-    try {
-      if (localEnabled) {
-        Logger.log('使用本地存储上传文件', 'UploadService');
-        const result = await this.uploadFileToLocal({ filename, buffer, dir });
-        Logger.log(`文件已上传到本地存储。访问 URL: ${result}`, 'UploadService');
-        return result;
-      }
-      if (s3Enabled) {
-        Logger.log('使用 S3 上传文件', 'UploadService');
-        const result = await this.uploadFileByS3({ filename, buffer, dir });
-        Logger.log(`文件已上传到 S3。访问 URL: ${result}`, 'UploadService');
-        return result;
-      }
-      if (tencentEnabled) {
-        Logger.log('使用腾讯云 COS 上传文件', 'UploadService');
-        const result = await this.uploadFileByTencentCos({
-          filename,
-          buffer,
-          dir,
-        });
-        Logger.log(`文件已上传到腾讯云 COS。访问 URL: ${result}`, 'UploadService');
-        return result;
-      }
-      if (aliEnabled) {
-        Logger.log('使用阿里云 OSS 上传文件', 'UploadService');
-        const result = await this.uploadFileByAliOss({
-          filename,
-          buffer,
-          dir,
-        });
-        Logger.log(`文件已上传到阿里云 OSS。访问 URL: ${result}`, 'UploadService');
-        return result;
-      }
-      if (isImage && cheveretoEnabled) {
-        Logger.log('使用 Chevereto 上传文件', 'UploadService');
-        const result = await this.uploadFileByChevereto({
-          filename,
-          buffer: buffer.toString('base64'),
-        });
-        Logger.log(`文件已上传到 Chevereto。访问 URL: ${result}`, 'UploadService');
-        return result;
-      }
-    } catch (error) {
-      Logger.error(`上传失败: ${error.message}`, 'UploadService');
-      throw error; // 重新抛出异常，以便调用方可以处理
-    }
+    return this.runUploadWithQuota(uploadPolicy, async () => {
+      return this.attachmentService.storePrivateAttachment(file.buffer, {
+        filename: file.originalname || file.filename || 'attachment',
+        contentType: file.mimetype,
+      }, ownerId);
+    });
   }
+  async uploadPublicAsset(file: any, purpose: PublicAssetPurpose, user: { id?: unknown; role?: unknown }): Promise<string> {
+    if (user?.role !== 'admin' && user?.role !== 'super') throw new ForbiddenException();
+    if (!PUBLIC_ASSET_PURPOSES.includes(purpose)) throw new BadRequestException('Unsupported image upload');
+    return this.storePublicRaster(file, purpose, user);
+  }
+
+  async uploadAvatar(file: any, user: { id?: unknown; role?: unknown }): Promise<string> {
+    return this.storePublicRaster(file, 'avatar', user);
+  }
+
+  private assertUploadOwner(user: { id?: unknown } | null | undefined): number {
+    const ownerId = Number(user?.id);
+    if (!Number.isSafeInteger(ownerId) || ownerId <= 0) throw new NotFoundException();
+    return ownerId;
+  }
+
+  private async storePublicRaster(file: any, purpose: PublicAssetPurpose | 'avatar', user: { id?: unknown; role?: unknown }): Promise<string> {
+    this.assertUploadOwner(user);
+    if (!Buffer.isBuffer(file?.buffer)) throw new BadRequestException('Invalid image');
+    const policy = await this.resolveUploadUserPolicy(user);
+    const packageSize = policy.upload?.maxFileSizeMb;
+    const maxBytes = Math.min(10, packageSize && packageSize > 0 ? packageSize : 10) * 1024 * 1024;
+    if (file.buffer.length > maxBytes) throw new BadRequestException('Image exceeds upload limit');
+    return this.runUploadWithQuota(policy, () => this.publicAssetService.storePublicAsset(file.buffer, purpose));
+  }
+
 
   async getUploadType() {
     const {
@@ -474,13 +264,7 @@ export class UploadService implements OnModuleInit {
   }
 
   async uploadFileFromUrl({ url, dir = 'others' }) {
-    if (process.env.ISDEV === 'true') {
-      dir = `dev/${dir}`;
-    }
-
-    const { buffer, mimeType } = await this.getBufferFromUrl(url);
-
-    return await this.uploadFile({ buffer, mimetype: mimeType }, dir);
+    throw new NotFoundException();
   }
 
   /* 通过腾讯云上传图片 */
@@ -503,7 +287,7 @@ export class UploadService implements OnModuleInit {
           },
           async (err, data) => {
             if (err) {
-              Logger.error(`腾讯云COS上传失败: ${err.message}`, 'UploadService');
+              Logger.error('UPLOAD_OPERATION_FAILED');
               return reject(err);
             }
             let locationUrl = data.Location.replace(
@@ -516,14 +300,14 @@ export class UploadService implements OnModuleInit {
                 /^(https:\/\/[^/]+)(\/.*)$/,
                 `https://${acceleratedDomain}$2`,
               );
-              Logger.log(`腾讯云COS已开启全球加速: ${locationUrl}`, 'UploadService');
+              Logger.log('UPLOAD_OPERATION');
             }
             return resolve(locationUrl);
           },
         );
       });
     } catch (error) {
-      Logger.error(`腾讯云COS上传异常: ${error.message}`, 'UploadService');
+      Logger.error('UPLOAD_OPERATION_FAILED');
       throw new HttpException('上传图片失败[ten]', HttpStatus.BAD_REQUEST);
     }
   }
@@ -540,7 +324,7 @@ export class UploadService implements OnModuleInit {
       secure: true,
     });
     try {
-      Logger.log('阿里云OSS开始上传', 'UploadService');
+      Logger.log('UPLOAD_OPERATION');
       return new Promise((resolve, reject) => {
         client
           .put(`${dir}/${filename}`, buffer)
@@ -551,7 +335,7 @@ export class UploadService implements OnModuleInit {
                 /^(https:\/\/[^/]+)(\/.*)$/,
                 `https://${acceleratedDomain}$2`,
               );
-              Logger.log(`阿里云OSS已开启全球加速: ${result.url}`, 'UploadService');
+              Logger.log('UPLOAD_OPERATION');
             }
             resolve(result.url);
           })
@@ -594,10 +378,7 @@ export class UploadService implements OnModuleInit {
     const s3Client = new S3Client(s3Config);
 
     try {
-      Logger.log(
-        `S3 开始上传 - 区域: ${s3Config.region}, 存储桶: ${bucket}, 端点: ${endpoint || '默认'}`,
-        'UploadService',
-      );
+      Logger.log('UPLOAD_OPERATION');
 
       const command = new PutObjectCommand({
         Bucket: removeSpecialCharacters(bucket),
@@ -625,16 +406,11 @@ export class UploadService implements OnModuleInit {
         fileUrl = `https://${bucket}.s3.amazonaws.com/${dir}/${filename}`;
       }
 
-      Logger.log(`S3上传成功: ${fileUrl}`, 'UploadService');
+      Logger.log('UPLOAD_OPERATION');
       return fileUrl;
     } catch (error) {
-      Logger.error(`S3上传失败: ${error.message}`, 'UploadService');
-      Logger.error(
-        `S3配置详情 - 区域: ${s3Config.region}, 存储桶: ${bucket}, 端点: ${
-          endpoint || '默认'
-        }, 访问密钥: ${accessKeyId ? '已设置' : '未设置'}`,
-        'UploadService',
-      );
+      Logger.error('UPLOAD_OPERATION_FAILED');
+      Logger.error('UPLOAD_OPERATION_FAILED');
       throw new HttpException(`上传文件失败[S3]: ${error.message}`, HttpStatus.BAD_REQUEST);
     }
   }
@@ -658,7 +434,7 @@ export class UploadService implements OnModuleInit {
     try {
       await fs.mkdir(uploadDir, { recursive: true });
     } catch (err) {
-      Logger.error(`创建目录失败: ${uploadDir}`, err);
+      Logger.error('UPLOAD_OPERATION_FAILED');
       throw err;
     }
 
@@ -674,7 +450,7 @@ export class UploadService implements OnModuleInit {
     try {
       await fs.writeFile(filePath, buffer, { mode: 0o444 }); // 设置文件为只读
     } catch (err) {
-      Logger.error(`文件保存失败: ${filePath}`, err);
+      Logger.error('UPLOAD_OPERATION_FAILED');
       throw err;
     }
 
@@ -705,14 +481,11 @@ export class UploadService implements OnModuleInit {
       if (res?.status === 200) {
         return res.data.image.url;
       } else {
-        Logger.error(
-          `Chevereto上传失败 - 状态码: ${res?.data.code}, 错误信息: ${res?.data.error.message}`,
-          'UploadService',
-        );
-        Logger.error('上传图片失败[Chevereto]', JSON.stringify(res.data));
+        Logger.error('UPLOAD_OPERATION_FAILED');
+        Logger.error('UPLOAD_OPERATION_FAILED');
       }
     } catch (error) {
-      Logger.error(`Chevereto上传异常: ${error.message}`, 'UploadService');
+      Logger.error('UPLOAD_OPERATION_FAILED');
       throw new HttpException(
         `上传图片失败[Chevereto|buffer] --> ${error.response?.data.error.message}`,
         HttpStatus.BAD_REQUEST,
@@ -785,21 +558,46 @@ export class UploadService implements OnModuleInit {
       return { key, uploadPath };
     }
   }
+  private async resolveUploadUserPolicy(
+    userInfo: { id?: unknown; role?: unknown } | null | undefined,
+  ): Promise<ResolvedUploadPolicy> {
+    if (userInfo == null) return { exempt: true, legacyMember: false, upload: null };
+    const id = Number(userInfo.id);
+    if (!Number.isSafeInteger(id) || id < 1) throw new HttpException('请登录后上传文件', 401);
+    if (userInfo.role === 'admin' || userInfo.role === 'super')
+      return { id, exempt: true, legacyMember: await this.isAdvancedUser(id), upload: null };
+    const balance = await this.uploadUserBalanceService.queryUserBalance(id);
+    const upload = resolvePackageUploadEntitlement(balance?.packageEntitlements);
+    if (upload?.mode === 'disabled') throw new HttpException('当前套餐暂不支持上传文件', 403);
+    const legacyMember = upload ? true : await this.isAdvancedUser(id);
+    return { id, exempt: false, legacyMember, upload };
+  }
 
-  async getBufferFromUrl(url: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    const response = await axios.get(url, { responseType: 'stream' });
-
-    const buffer = await new Promise<Buffer>((resolve, reject) => {
-      streamToBuffer(response.data, (err, buffer) => {
-        if (err) {
-          reject(new HttpException('获取图片资源失败，请重新试试吧！', HttpStatus.BAD_REQUEST));
-        } else {
-          resolve(buffer);
-        }
-      });
-    });
-
-    const mimeType = response.headers['content-type'];
-    return { buffer, mimeType };
+  private async runUploadWithQuota<T>(
+    policy: ResolvedUploadPolicy,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const reservation = policy.exempt
+      ? null
+      : await this.checkUploadFrequency(policy.id!, policy.legacyMember, policy.upload);
+    let result: T;
+    try {
+      result = await operation();
+      if (result == null) throw new HttpException('文件上传未完成，请稍后再试', 500);
+    } catch {
+      try {
+        await reservation?.release();
+      } catch {
+        throw new HttpException('文件上传暂时无法完成，请稍后再试', 503);
+      }
+      throw new HttpException('文件上传未完成，请稍后再试', 500);
+    }
+    // A stored upload remains counted even if the commit acknowledgement fails.
+    try {
+      await reservation?.commit();
+    } catch {
+      throw new HttpException('文件上传暂时无法完成，请稍后再试', 503);
+    }
+    return result;
   }
 }

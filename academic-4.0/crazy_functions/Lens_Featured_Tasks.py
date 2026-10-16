@@ -9,6 +9,7 @@ from crazy_functions.lens_research_tasks import (
     strict_model_request,
     validate_and_render,
 )
+from crazy_functions.lens_research_proposal import PROPOSAL_TASK, publish_proposal
 
 
 def _run_task(task_key, txt, llm_kwargs, plugin_kwargs, chatbot, history, system_prompt, user_request):
@@ -57,6 +58,8 @@ def _run_task(task_key, txt, llm_kwargs, plugin_kwargs, chatbot, history, system
                 "Return only strict JSON. Do not add commentary or Markdown.",
             )
             report = validate_and_render(spec, task_input, retry_output)
+        if spec.name == PROPOSAL_TASK:
+            publish_proposal(report, chatbot)
         chatbot[row_index] = [f"特色能力：{spec.title}", report]
         history.extend([txt, report])
         yield from update_ui(chatbot=chatbot, history=history)

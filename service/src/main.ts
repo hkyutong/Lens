@@ -1,3 +1,4 @@
+import { loadAcademicPrivateConfig } from './modules/academic/academicPrivateConfig';
 import './preload-env';
 import { TypeOrmQueryFailedFilter } from '@/common/filters/typeOrmQueryFailed.filter';
 import { TransformInterceptor } from '@/common/interceptors/transform.interceptor';
@@ -77,6 +78,7 @@ function findFilePath(filename: string): string | null {
 }
 
 async function bootstrap() {
+  loadAcademicPrivateConfig();
   console.log('\n======================================');
   console.log('          Lens 服务启动中...             ');
   console.log('======================================\n');
@@ -150,7 +152,7 @@ async function bootstrap() {
 
   // 在应用配置后，但在监听端口前初始化数据库表结构
   try {
-    const initDbOnBoot = process.env.INIT_DB_ON_BOOT !== 'false';
+    const initDbOnBoot = process.env.INIT_DB_ON_BOOT === 'true';
     if (initDbOnBoot) {
       Logger.log('正在预初始化数据库结构...', 'Bootstrap');
       const initDbTimeoutMs = Number(process.env.INIT_DB_TIMEOUT_MS || 60000);

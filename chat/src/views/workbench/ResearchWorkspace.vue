@@ -347,6 +347,13 @@ const initializeWorkspace = async () => {
     return true
   }
 
+  try {
+    await chatStore.queryMyGroup()
+    await chatStore.queryActiveChatLogList()
+  } catch {
+    unavailable = true
+  }
+
   if (!unavailable) {
     try {
       const selectedModel = activeModel.value.trim()
@@ -362,13 +369,6 @@ const initializeWorkspace = async () => {
     } catch (error) {
       unavailable = true
     }
-  }
-
-  try {
-    await chatStore.queryMyGroup()
-    await chatStore.queryActiveChatLogList()
-  } catch {
-    unavailable = true
   }
 
   workspaceServiceState.value = unavailable ? 'unavailable' : 'ready'
@@ -2447,7 +2447,7 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                                     @keydown.space.prevent="handleScrollBtm"
                                     theme="outline"
                                     :strokeWidth="2"
-                                    aria-label="滚动到底部"
+                                    :aria-label="t('lens.workspace.scrollToBottom')"
                                     role="button"
                                     tabindex="0"
                                   />
@@ -2499,6 +2499,7 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                   :service-state="workspaceServiceState"
                   :embedded="false"
                   :show-close="false"
+                  :scrollable="true"
                   fill-container
                 />
               </div>
@@ -2506,6 +2507,7 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                 class="lens-shell__featured"
                 featured
                 compact
+                :scrollable="true"
                 fill-container
                 :include-research="isLogin"
               />

@@ -388,7 +388,6 @@ for (const key of [
   'loginRequired',
   'loggedOut',
   'quotaInfo',
-  'unlimitedQuota',
   'memberStatus',
   'expires',
   'nonMember',
@@ -396,7 +395,11 @@ for (const key of [
   'redeem',
 ]) {
   assert.match(memberCenterSource, new RegExp(`lens\\.member\\.${key}`))
+  // Large finite quotas stay numeric; their size does not grant unlimited access.
+  assert.doesNotMatch(memberCenterSource, /\b(?:value|sum\w+)\s*>\s*\d[\d_]*\s*\?\s*t\(['"][^'"]*unlimited['"]\)/i);
 }
+
+
 assert.doesNotMatch(memberCenterSource, />签到奖励</)
 assert.doesNotMatch(memberCenterSource, />签到赠送：</)
 assert.doesNotMatch(memberCenterSource, />额度信息</)
@@ -678,5 +681,10 @@ assert.deepEqual(
   }),
   [{ title: 'Paper', link: 'https://example.com/paper', media: 'journal' }]
 )
+
+await import('./verify_multilingual_contract.mjs');
+await import('./verify_member_currency_contract.mjs');
+await import('./verify_public_package_loading.mjs');
+await import('./verify_academic_model_selection.mjs');
 
 console.log('research contract verification passed')

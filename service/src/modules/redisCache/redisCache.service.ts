@@ -182,4 +182,7 @@ export class RedisCacheService {
       [],
     );
   }
+  eval(script: string, options: { keys: string[]; arguments: string[] }): Promise<unknown> {
+    return this.redisClient.eval(script, options);
+  }
 }

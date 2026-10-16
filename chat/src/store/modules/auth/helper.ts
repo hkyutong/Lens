@@ -15,6 +15,7 @@ export function removeToken() {
 }
 
 export interface UserBalance {
+  packageEntitlements?: string | null;
   isMember: boolean
   packageId: number
   packageName: string

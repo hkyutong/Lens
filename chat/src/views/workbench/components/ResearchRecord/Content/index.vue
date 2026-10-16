@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { fetchAttachmentBlob, isPrivateAttachmentReference, usePrivateMediaSources } from '@/utils/privateMedia'
+
 import { renderMermaidWithRecovery } from '@/utils/mermaidRecovery'
 
 import { fetchTtsAPIProcess } from '@/api'
@@ -18,7 +20,6 @@ import {
 import {
   getSafeFileName,
   isLikelyAcademicDownloadPath,
-  normalizeExternalDownloadUrl,
   parseAcademicDownloadFiles,
   parseUserUploadedFiles,
   sanitizeDownloadName,
@@ -73,18 +74,18 @@ const injectThemeStyles = () => {
       background: transparent !important;
       color: #383a42 !important;
     }
-    
+
     /* 深色模式覆盖 */
     html.dark .hljs {
       background: transparent !important;
       color: #abb2bf !important;
     }
-    
+
     /* 容器背景 */
     html:not(.dark) .code-block-wrapper {
       background-color: #fafafa;
     }
-    
+
     html.dark .code-block-wrapper {
       background-color: #2f2f2f;
     }
@@ -473,19 +474,13 @@ const setDownloadingFile = (pathValue: string, loading: boolean) => {
 
 const downloadAcademicFile = async (file: AcademicDownloadFile) => {
   const pathValue = String(file?.path || '').trim()
-  if (!pathValue || !isLikelyAcademicDownloadPath(pathValue)) {
+  if (!pathValue || !(isPrivateAttachmentReference(pathValue) || isLikelyAcademicDownloadPath(pathValue))) {
     message()?.error(t('lens.message.invalidDownloadLink'))
     return
   }
 
   setDownloadingFile(pathValue, true)
   try {
-    if (/^https?:\/\//i.test(pathValue)) {
-      const externalUrl = normalizeExternalDownloadUrl(pathValue)
-      if (!externalUrl) throw new Error(t('lens.message.invalidDownloadLink'))
-      window.open(externalUrl, '_blank', 'noopener,noreferrer')
-      return
-    }
     const apiBase = String(import.meta.env.VITE_GLOB_API_URL || '').replace(/\/$/, '')
     const url = `${apiBase}/academic/file?path=${encodeURIComponent(pathValue)}`
     const headers: Record<string, string> = {
@@ -612,23 +607,53 @@ const handlePlay = async () => {
   }
 }
 
-function playAudio(audioSrc: string | undefined) {
+let audioObjectUrl: string | undefined
+let audioRequestController: AbortController | undefined
+let audioPlaybackGeneration = 0
+
+function releaseAudio() {
+  audioPlaybackGeneration += 1
+  audioRequestController?.abort()
+  audioRequestController = undefined
   if (currentAudio) {
     currentAudio.pause()
-  }
-  currentAudio = new Audio(audioSrc)
-  currentAudio
-    .play()
-    .then(() => {
-      playbackState.value = 'playing'
-    })
-    .catch(error => {
-      playbackState.value = 'paused'
-    })
-
-  currentAudio.onended = () => {
-    playbackState.value = 'paused'
+    currentAudio.onended = null
+    currentAudio.removeAttribute('src')
+    currentAudio.load()
     currentAudio = null
+  }
+  if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl)
+  audioObjectUrl = undefined
+}
+
+async function playAudio(audioSrc: string | undefined) {
+  if (!audioSrc) return
+  releaseAudio()
+  const currentGeneration = audioPlaybackGeneration
+  audioRequestController = new AbortController()
+  const signal = audioRequestController.signal
+  try {
+    let resolvedSrc = audioSrc
+    if (isPrivateAttachmentReference(audioSrc)) {
+      const blob = await fetchAttachmentBlob(audioSrc, 'speech.mp3', signal)
+      if (signal.aborted || currentGeneration !== audioPlaybackGeneration) return
+      audioObjectUrl = URL.createObjectURL(blob)
+      resolvedSrc = audioObjectUrl
+    } else if (/^attachment:/i.test(audioSrc.trim())) {
+      return
+    }
+    currentAudio = new Audio(resolvedSrc)
+    currentAudio.onended = () => {
+      playbackState.value = 'paused'
+      releaseAudio()
+    }
+    await currentAudio.play()
+    if (currentGeneration === audioPlaybackGeneration) playbackState.value = 'playing'
+  } catch {
+    if (currentGeneration === audioPlaybackGeneration) {
+      playbackState.value = 'paused'
+      releaseAudio()
+    }
   }
 }
 
@@ -1851,14 +1876,15 @@ mdi.renderer.rules.image = function (tokens, idx, options, env, self) {
 
   if (!src) return ''
 
-  const safeSrc = String(src).replace(/"/g, '&quot;')
+  const safeSrc = String(resolveImageSource(String(src))).replace(/"/g, '&quot;')
+  if (!safeSrc) return ''
   const safeAlt = String(alt || '').replace(/"/g, '&quot;')
   const safeTitle = String(title || alt || '').replace(/"/g, '&quot;')
 
   return `<img src="${safeSrc}" alt="${safeAlt}" title="${safeTitle}" data-preview-src="${safeSrc}" class="rounded-md max-h-[30vh] cursor-pointer hover:opacity-90 transition-opacity" />`
 }
 
-const imageUrlArray = computed(() => {
+const imageSourceArray = computed(() => {
   const val = props.imageUrl
   if (!val) return []
   // 支持 JSON 字符串格式 {"imageUrls":[...]}
@@ -1889,6 +1915,12 @@ const imageUrlArray = computed(() => {
   if (Array.isArray(val)) return val
   return []
 })
+const { resolveSource: resolveImageSource } = usePrivateMediaSources(() => [
+  ...imageSourceArray.value,
+  ...(String(props.content || '').match(/attachment:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/ig) || []),
+])
+const imageUrlArray = computed(() => imageSourceArray.value.map(resolveImageSource).filter(Boolean))
+
 
 const isImageUrl = computed(() => {
   if (!props.imageUrl) return false
@@ -2624,6 +2656,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  releaseAudio()
   stopReasoningTips()
   textRef.value?.removeEventListener('click', handleTextContainerClick)
   copyTimeoutsMap.forEach(timeoutId => clearTimeout(timeoutId))
@@ -2893,7 +2926,7 @@ function openSingleImagePreview(src: string) {
           v-for="(file, index) in imageUrlArray"
           :key="index"
           :src="file"
-          alt="图片"
+          :alt="t('lens.message.imageAlt')"
           @click="openImagePreview(index)"
           class="workspace-record__image"
           :style="{
@@ -3041,7 +3074,7 @@ function openSingleImagePreview(src: string) {
 </template>
 
 <style lang="less">
-/* 
+/*
   注意：主要的highlight.js主题覆盖已移至 injectThemeStyles 函数
   此处只保留动画和其他非主题相关样式
 */

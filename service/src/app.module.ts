@@ -1,3 +1,5 @@
+import { AttachmentModule } from './modules/attachment/attachment.module';
+import { blockLegacyUploadStatic } from './modules/attachment/legacyUploadStatic.middleware';
 import { AbortInterceptor } from '@/common/interceptors/abort.interceptor';
 import { CustomLoggerService } from '@/common/logger/custom-logger.service';
 // import { LicenseValidatorMiddleware } from '@/common/middleware/license-validator.middleware';
@@ -46,11 +48,14 @@ import { VerificationModule } from './modules/verification/verification.module';
         serveRoot: process.env.ADMIN_SERVE_ROOT || '/admin',
       },
       {
-        rootPath: join(__dirname, '..', 'public/file'),
-        serveRoot: '/file',
+        rootPath: join(__dirname, '..', 'public', 'public-assets'),
+        serveRoot: '/public-assets',
         serveStaticOptions: {
-          setHeaders: (_res, _path, _stat) => {
-            _res.set('Access-Control-Allow-Origin', '*');
+          index: false,
+          fallthrough: false,
+          setHeaders: (res) => {
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
           },
         },
       },
@@ -107,6 +112,8 @@ import { VerificationModule } from './modules/verification/verification.module';
     ModelsModule,
     ShareModule,
     SpaModule,
+    AttachmentModule,
+
   ],
   providers: [
     {
@@ -119,6 +126,7 @@ import { VerificationModule } from './modules/verification/verification.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer.apply(blockLegacyUploadStatic).forRoutes('*');
     consumer;
   }
 }

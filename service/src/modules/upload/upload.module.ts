@@ -1,3 +1,5 @@
+import { AttachmentModule } from '../attachment/attachment.module';
+import { UserBalanceModule } from '../userBalance/userBalance.module';
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisCacheModule } from '../redisCache/redisCache.module';
@@ -7,7 +9,7 @@ import { UploadService } from './upload.service';
 
 @Global()
 @Module({
-  imports: [RedisCacheModule, TypeOrmModule.forFeature([UserBalanceEntity])],
+  imports: [RedisCacheModule, TypeOrmModule.forFeature([UserBalanceEntity]), UserBalanceModule, AttachmentModule],
   providers: [UploadService],
   controllers: [UploadController],
   exports: [UploadService],

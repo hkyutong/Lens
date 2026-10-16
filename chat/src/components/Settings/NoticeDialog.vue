@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { sanitizeMarkdownPreviewHtml } from '../../utils/markdownPreviewHtml'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useAppStore, useAuthStore } from '@/store'
 import { LENS_USAGE_NOTICE } from '@/constants/usageNotice'
@@ -139,7 +140,7 @@ onMounted(() => {
             </p>
           </section>
 
-          <section class="research-guide__tiers" aria-label="套餐能力对比">
+          <section class="research-guide__tiers" :aria-label="t('lens.usageNotice.comparisonLabel')">
             <details v-for="plan in usagePlans" :key="plan.key" class="research-guide__tier">
               <summary class="research-guide__tier-heading">
                 <div class="research-guide__tier-name">
@@ -171,7 +172,7 @@ onMounted(() => {
           </section>
         </div>
 
-        <MdPreview
+        <MdPreview :sanitize="sanitizeMarkdownPreviewHtml"
           v-else
           editorId="preview-only"
           :modelValue="noticeContent"
@@ -408,5 +409,10 @@ onMounted(() => {
   margin: 6px 0;
   font-size: 13px;
   line-height: 1.8;
+}
+
+.research-guide:lang(ko) .research-guide__tier-heading > :last-child:not(.research-guide__tier-name) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 </style>

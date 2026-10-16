@@ -78,7 +78,7 @@ meta:
           const form = new FormData();
           form.append('file', file);
           try {
-            const response = await uploadApi.uploadFile(form, 'system/others');
+            const response = await uploadApi.uploadFile(form, 'agreement-image');
             if (!response?.data?.data) {
               ElMessage.error('图片上传失败，请检查您的配置信息！');
             }

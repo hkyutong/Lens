@@ -1,5 +1,6 @@
+import { isPackageModelAllowed } from '../../common/utils/packageEntitlements';
+import { AcademicPlanTier, canUseAcademicModel, isAcademicModelEnabled, resolveAcademicPlanTier } from '@/common/utils/academicModelAccess';
 import {
-  convertUrlToBase64,
   correctApiBaseUrl,
   formatUrl,
   getClientIp,
@@ -22,7 +23,7 @@ import { ChatLogService } from '../chatLog/chatLog.service';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { ModelsService } from '../models/models.service';
 import { PluginEntity } from '../plugin/plugin.entity';
-import { UploadService } from '../upload/upload.service';
+import { AttachmentService } from '../attachment/attachment.service';
 import { UserService } from '../user/user.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 
@@ -37,7 +38,7 @@ export class ChatService {
     private readonly chatLogService: ChatLogService,
     private readonly userBalanceService: UserBalanceService,
     private readonly userService: UserService,
-    private readonly uploadService: UploadService,
+    private readonly attachmentService: AttachmentService,
     private readonly badWordsService: BadWordsService,
     private readonly autoReplyService: AutoReplyService,
     private readonly globalConfigService: GlobalConfigService,
@@ -46,7 +47,10 @@ export class ChatService {
     private readonly appService: AppService,
   ) {}
 
+  private async resolveTextModelAccessTier(req: any): Promise<AcademicPlanTier> { return resolveAcademicPlanTier(await this.resolveTextModelAccessBalance(req)); }
+
   async chatProcess(body: any, req?: Request, res?: Response) {
+    const modelAccessBalance = await this.resolveTextModelAccessBalance(req);
     await this.userBalanceService.checkUserCertification(req.user.id);
     /* 获取对话参数 */
     const {
@@ -224,6 +228,12 @@ export class ChatService {
       }
     }
 
+    const modelAccessTier: AcademicPlanTier = Number(currentRequestModelKey.keyType ?? 1) === 1
+      ? await resolveAcademicPlanTier(modelAccessBalance)
+      : 'free';
+    if ((Number(currentRequestModelKey.keyType ?? 1) === 1 && (!isAcademicModelEnabled(currentRequestModelKey) || !canUseAcademicModel(modelAccessTier, currentRequestModelKey.deductType))) || !isPackageModelAllowed(modelAccessBalance?.packageEntitlements, currentRequestModelKey)) {
+      throw new HttpException('当前套餐不支持此模型，请选择其他模型或升级套餐。', HttpStatus.PAYMENT_REQUIRED);
+    }
     const {
       deduct,
       isTokenBased,
@@ -259,7 +269,10 @@ export class ChatService {
     }
 
     // 检测用户余额
-    await this.userBalanceService.validateBalance(
+    for (const ref of this.extractImageUrls(imageUrl)) {
+        await this.requireImageAttachment(ref, req.user.id);
+      }
+      await this.userBalanceService.validateBalance(
       req,
       deductType,
       deduct * (usingDeepThinking ? deductDeepThink : 1),
@@ -413,7 +426,8 @@ export class ChatService {
 
     /* 获取历史消息 */
     const { messagesHistory } = await this.buildMessageFromParentMessageId(
-      {
+      ({
+          userId: req.user.id, ...({
         groupId,
         systemMessage: setSystemMessage,
         maxModelTokens,
@@ -424,7 +438,8 @@ export class ChatService {
         model: useModel,
         isFileUpload,
         isImageUpload,
-      },
+        modelAccessTier,
+      }), packageEntitlements: modelAccessBalance?.packageEntitlements }),
       this.chatLogService,
     );
 
@@ -445,6 +460,7 @@ export class ChatService {
     const abortController = new AbortController();
     /* 处理对话  */
     try {
+
       if (res) {
         res.on('close', () => {
           abortController.abort();
@@ -470,7 +486,7 @@ export class ChatService {
             temperature,
             isImageUpload,
             prompt,
-            imageUrl,
+
             isFileUpload,
             fileUrl,
             usingNetwork,
@@ -585,7 +601,7 @@ export class ChatService {
           try {
             if (isGeneratePromptReference === '1') {
               promptReference = await this.openAIChatService.chatFree(
-                `根据用户提问{${prompt}}以及AI的回答{${response.full_content}}，生成三个更进入一步的问题来向AI提问，用{}包裹每个问题，不需要分行，不需要其他任何内容，单个提问不超过30个字`,
+                `根据用户提问{${prompt}}以及AI的回答{${response.full_content}}，生成三个更进入一步的问题来向AI提问，用{}包裹每个问题，不需要分行，不需要其他任何内容，单个提问不超过30个字`, undefined, undefined, undefined, await resolveAcademicPlanTier(modelAccessBalance), modelAccessBalance?.packageEntitlements
               );
               await this.chatLogService.updateChatLog(assistantLogId, {
                 promptReference: promptReference,
@@ -646,13 +662,14 @@ export class ChatService {
   }
 
   async updateChatTitle(groupId, groupInfo, modelType, prompt, req) {
+      const modelAccessBalance = await this.resolveTextModelAccessBalance(req);
     if (groupInfo?.title === '新对话') {
       // '新对话' can be replaced with 'New chat' if needed
       let chatTitle: string;
       if (modelType === 1) {
         try {
           chatTitle = await this.openAIChatService.chatFree(
-            `根据用户提问{${prompt}}，给这个对话取一个名字，不超过10个字，只需要返回标题，不需要其他任何内容。`,
+            `根据用户提问{${prompt}}，给这个对话取一个名字，不超过10个字，只需要返回标题，不需要其他任何内容。`, undefined, undefined, undefined, await resolveAcademicPlanTier(modelAccessBalance), modelAccessBalance?.packageEntitlements
           );
           if (chatTitle.length > 15) {
             chatTitle = chatTitle.slice(0, 15);
@@ -744,7 +761,20 @@ export class ChatService {
     return `${summary}\n${content || ''}`.trim();
   }
 
-  private extractImageUrls(imageUrl: string) {
+  private async requireImageAttachment(ref: string, userId: number) {
+    const attachment = await this.attachmentService.readOwnedAttachment(ref, userId);
+    if (!/^image\/(?:png|jpeg|gif|webp|avif)$/i.test(attachment.contentType)) {
+      throw new HttpException('Attachment unavailable', HttpStatus.NOT_FOUND);
+    }
+    return attachment;
+  }
+
+  private async readImageDataUri(ref: string, userId: number): Promise<string> {
+    const attachment = await this.requireImageAttachment(ref, userId);
+    return `data:${attachment.contentType};base64,${attachment.buffer.toString('base64')}`;
+  }
+
+  private extractImageUrls(imageUrl: string): string[] {
     if (!imageUrl) return [] as string[];
 
     const readUrl = (item: any) => {
@@ -758,7 +788,7 @@ export class ChatService {
 
     try {
       const parsed = JSON.parse(imageUrl);
-      const urls = Array.isArray(parsed) ? parsed.map(readUrl) : [readUrl(parsed)];
+      const urls: string[] = (Array.isArray(parsed) ? parsed : Array.isArray(parsed?.imageUrls) ? parsed.imageUrls : [parsed]).map(readUrl);
       return Array.from(new Set(urls.filter(Boolean)));
     } catch (_error) {
       return Array.from(
@@ -775,27 +805,28 @@ export class ChatService {
   private async prependGlobalImageSummary(
     content: string,
     imageUrl: string,
-    isConvertToBase64?: string,
+    userId: number, planTier: AcademicPlanTier = 'free', packageEntitlements?: unknown
   ) {
     const urls = this.extractImageUrls(imageUrl).slice(0, 6);
     if (!urls.length) return content || '';
 
     const descriptions: string[] = [];
     for (const [index, url] of urls.entries()) {
+      const inputUrl = await this.readImageDataUri(url, userId);
       try {
-        const inputUrl = isConvertToBase64 === '1' ? await convertUrlToBase64(url) : url;
+
         const description = await this.openAIChatService.chatFree(
           '请客观、准确地解析这张图片。输出图片中的主要对象、文字、图表、界面信息、可见关系和与用户后续提问相关的关键信息。不要编造看不见的内容。',
           '你是图片解析助手。只描述图片中可见内容，遇到不确定信息要说明不确定。',
           undefined,
-          inputUrl,
+          inputUrl, planTier, packageEntitlements
         );
         const safeDescription = this.redactSensitivePathText(String(description || '').trim());
         if (safeDescription) {
           descriptions.push(`图片 ${index + 1}：${safeDescription}`);
         }
-      } catch (error) {
-        Logger.warn(`全局图片解析失败: ${error?.message || error}`, 'ChatService');
+      } catch {
+        continue;
       }
     }
 
@@ -859,29 +890,22 @@ export class ChatService {
             }
 
             // 2. 处理图片内容
-            if (isImageUpload === 3 && record.imageUrl) {
+            if ((isImageUpload === 3 || isImageUpload === 1) && record.imageUrl) {
               content = await this.prependGlobalImageSummary(
                 content,
                 record.imageUrl,
-                isConvertToBase64,
+                options.userId, options.modelAccessTier ?? 'free', (options as any).packageEntitlements
               );
             } else if (isImageUpload === 2 && record.imageUrl) {
               // GPT-Vision 格式处理 (特殊格式)
               hasSpecialFormat = true;
               const imageContent = await Promise.all(
-                record.imageUrl.split(',').map(async url => ({
+                this.extractImageUrls(record.imageUrl).map(async (ref) => ({
                   type: 'image_url',
-                  image_url: {
-                    url:
-                      isConvertToBase64 === '1' ? await convertUrlToBase64(url.trim()) : url.trim(),
-                  },
+                  image_url: { url: await this.readImageDataUri(ref, options.userId) },
                 })),
               );
               content = [{ type: 'text', text: content }, ...imageContent];
-            }
-            // 3. 逆向格式图片，直接添加到内容前面
-            else if (isImageUpload === 1 && record.imageUrl) {
-              content = record.imageUrl + '\n' + content;
             }
 
             // 处理assistant消息，移除think标签
@@ -914,8 +938,11 @@ export class ChatService {
               });
             }
           } catch (error) {
-            Logger.debug(`处理历史记录ID=${record.id}失败: ${error.message}`, 'ChatService');
-          }
+if (record.imageUrl && [1, 2, 3].includes(isImageUpload)) {
+              throw new HttpException('Attachment unavailable', HttpStatus.NOT_FOUND);
+            }
+Logger.debug('Chat history processing status', 'ChatService');
+}
         }
 
         // 直接按照严格的system-user-assistant交替顺序构建消息
@@ -946,8 +973,9 @@ export class ChatService {
           messages.push({ role: 'user', content: userMessages[userMessages.length - 1].content });
         }
       } catch (error) {
-        Logger.error(`获取聊天历史记录失败: ${error.message}`, 'ChatService');
-      }
+if (error instanceof HttpException) throw error;
+Logger.debug('Chat history processing status', 'ChatService');
+}
     }
 
     // 计算并限制token数量
@@ -1063,7 +1091,7 @@ export class ChatService {
       'ChatService',
     );
 
-    Logger.debug(`messages: ${JSON.stringify(messages)}`, 'ChatService');
+    Logger.debug('Chat history processing status', 'ChatService');
 
     // throw new Error('test');
     return {
@@ -1074,8 +1102,18 @@ export class ChatService {
 
   async ttsProcess(body: any, req: any, res?: any) {
     const { chatId, prompt } = body;
-
-    const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+    const ownerId = Number(req?.user?.id);
+    if (!Number.isSafeInteger(ownerId) || ownerId <= 0 || !Number.isSafeInteger(Number(chatId)) || Number(chatId) <= 0) {
+      throw new HttpException('Attachment unavailable', HttpStatus.NOT_FOUND);
+    }
+    const chatLog = await this.chatLogService.findOneChatLog(Number(chatId));
+    if (!chatLog || Number(chatLog.userId) !== ownerId) {
+      throw new HttpException('Attachment unavailable', HttpStatus.NOT_FOUND);
+    }
+    const packageModelSelection = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+    const packageModelBalance = await this.resolveTextModelAccessBalance(req);
+    if (!isPackageModelAllowed(packageModelBalance?.packageEntitlements, packageModelSelection)) throw new HttpException('当前套餐不支持所选模型', HttpStatus.FORBIDDEN);
+    const detailKeyInfo = packageModelSelection;
     const { openaiBaseUrl, openaiBaseKey, openaiVoice } = await this.globalConfigService.getConfigs(
       ['openaiBaseUrl', 'openaiBaseKey', 'openaiVoice'],
     );
@@ -1088,10 +1126,7 @@ export class ChatService {
     // 用户余额检测
     await this.userBalanceService.validateBalance(req, deductType, deduct);
 
-    Logger.debug(
-      `开始TTS处理: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`,
-      'TTSService',
-    );
+    Logger.debug('TTS request accepted', 'ChatService');
 
     try {
       // 使用OpenAI SDK进行TTS请求
@@ -1115,27 +1150,34 @@ export class ChatService {
       Logger.debug('TTS音频数据生成成功', 'TTSService');
 
       // 使用 Date 对象获取当前日期并格式化为 YYYYMM/DD
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0'); // 月份从0开始，所以+1
-      const day = String(now.getDate()).padStart(2, '0');
-      const currentDate = `${year}${month}/${day}`;
 
-      const ttsUrl = await this.uploadService.uploadFile(
-        { buffer, mimetype: 'audio/mpeg' },
-        `audio/openai/${currentDate}`,
+
+       // 月份从0开始，所以+1
+
+
+
+      const ttsUrl = await this.attachmentService.storePrivateAttachment(
+        buffer,
+        { filename: 'speech.mp3', contentType: 'audio/mpeg' },
+        ownerId,
       );
 
       // 更新聊天记录并扣除余额
       await Promise.all([
         this.chatLogService.updateChatLog(chatId, { ttsUrl }),
-        this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct),
+        this.userBalanceService.deductFromBalance(ownerId, deductType, deduct),
       ]);
 
       res.status(200).send({ ttsUrl });
     } catch (error) {
-      Logger.error('TTS处理失败', error, 'TTSService');
+      Logger.error('TTS request failed', 'ChatService');
       res.status(500).send({ error: '语音合成请求处理失败' });
     }
+  }
+
+  private async resolveTextModelAccessBalance(req: any) {
+    const userId = Number(req?.user?.id);
+    if (!Number.isFinite(userId) || userId <= 0) return null;
+    return await this.userBalanceService.queryUserBalance(userId);
   }
 }

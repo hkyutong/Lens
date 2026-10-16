@@ -1,3 +1,5 @@
+import { t } from '@/locales'
+import { localizeUploadErrorMessage } from './uploadErrorMessage'
 import { useAuthStore } from '@/store'
 import { message } from '@/utils/message'
 import type { AxiosProgressEvent, AxiosResponse, GenericAbortSignal } from 'axios'
@@ -77,14 +79,14 @@ function http<T = any>({
           '请先登录后再进行使用！'
         )
         if (Date.now() - last401ErrorTimestamp > 3000) {
-          ms.error(message)
+          ms.error(localizeUploadErrorMessage(message, t))
         }
       }
       last401ErrorTimestamp = Date.now()
     } else {
       if (data && !data?.success) {
         ms.error(
-          sanitizeUserFacingErrorMessage(data?.message || '', status, '请求接口错误！')
+          localizeUploadErrorMessage(sanitizeUserFacingErrorMessage(data?.message || '', status, '请求接口错误！'), t)
         )
       }
     }

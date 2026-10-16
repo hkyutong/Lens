@@ -1,3 +1,6 @@
+import { normalizePackageEntitlementsInput, parsePackageEntitlements, isMissingPackageEntitlementsColumn } from '../../common/utils/packageEntitlements';
+import { ModelsEntity } from '../models/models.entity';
+import { packageUsdToCny } from '../../common/constants/packageCurrency';
 import { RechargeType } from '@/common/constants/balance.constant';
 import { generateCramiCode, maskCrami, maskEmail } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
@@ -36,6 +39,7 @@ export class CramiService {
     @InjectRepository(UserEntity)
     private readonly userEntity: Repository<UserEntity>,
     private readonly userBalanceService: UserBalanceService,
+    @InjectRepository(ModelsEntity) private readonly packageModelsRepository: Repository<ModelsEntity>
   ) {}
 
   private normalizePackagePayload(payload: any) {
@@ -59,7 +63,7 @@ export class CramiService {
       name,
       des,
       coverImg,
-      price,
+      price: Number(usdPrice) > 0 ? packageUsdToCny(Number(usdPrice)) : price,
       usdPrice,
       order,
       status,
@@ -151,7 +155,8 @@ export class CramiService {
         where,
         order: { order: 'DESC' },
       });
-      return { rows: rows.map(item => withPackageBillingOptions(item)), count };
+      const packageEntitlementsById = await this.queryPackageEntitlements(rows.map(item => item.id));
+    return { rows: rows.map(item => ({ ...withPackageBillingOptions(item), entitlements: packageEntitlementsById.get(Number(item.id)) ?? null })), count };
     } catch (error) {
       throw new HttpException('套餐列表暂时不可用，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
     }
@@ -160,6 +165,9 @@ export class CramiService {
   /* 创建套餐 */
   async createPackage(body: CreatePackageDto) {
     const payload = this.normalizePackagePayload(body);
+      delete (payload as any).entitlements;
+      if (body.entitlements !== undefined) (payload as any).entitlements = await this.validatePackageEntitlements(body.entitlements);
+
     const { name, weight } = payload;
     const p = await this.cramiPackageEntity.findOne({
       where: [{ name }, { weight }],
@@ -170,19 +178,25 @@ export class CramiService {
     try {
       return await this.cramiPackageEntity.save(payload);
     } catch (error) {
-      console.log('error: ', error);
-      throw new HttpException(error, HttpStatus.BAD_REQUEST);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(isMissingPackageEntitlementsColumn(error) ? 'PACKAGE_ENTITLEMENTS_SCHEMA_REQUIRED' : 'PACKAGE_SAVE_FAILED', isMissingPackageEntitlementsColumn(error) ? HttpStatus.CONFLICT : HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
   /* 更新套餐 E */
   async updatePackage(body) {
+    try {
     const { id } = body;
     const payload = this.normalizePackagePayload(body);
+      delete (payload as any).entitlements;
     const { name, weight } = payload;
     const op = await this.cramiPackageEntity.findOne({ where: { id } });
     if (!op) {
       throw new HttpException('当前套餐不存在、请检查你的输入参数！', HttpStatus.BAD_REQUEST);
+    }
+    if (body.entitlements !== undefined) {
+      const stored = await this.queryPackageEntitlements([Number(id)]);
+      (payload as any).entitlements = await this.validatePackageEntitlements(body.entitlements, stored.get(Number(id)));
     }
     const count = await this.cramiPackageEntity.count({
       where: [
@@ -198,6 +212,11 @@ export class CramiService {
       return '更新套餐成功！';
     } else {
       throw new HttpException('更新套餐失败、请重试！', HttpStatus.BAD_REQUEST);
+    }
+
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(isMissingPackageEntitlementsColumn(error) ? 'PACKAGE_ENTITLEMENTS_SCHEMA_REQUIRED' : 'PACKAGE_SAVE_FAILED', isMissingPackageEntitlementsColumn(error) ? HttpStatus.CONFLICT : HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -361,5 +380,30 @@ export class CramiService {
     } else {
       throw new HttpException('删除卡密失败、请重试！', HttpStatus.BAD_REQUEST);
     }
+  }
+
+  private async queryPackageEntitlements(ids: number[]): Promise<Map<number, string | null>> {
+    if (!ids.length) return new Map();
+    try {
+      const rows = await this.cramiPackageEntity.find({ where: { id: In(ids) }, select: ['id', 'entitlements'] });
+      return new Map(rows.map(row => { const parsed = parsePackageEntitlements(row.entitlements); return [Number(row.id), parsed ? JSON.stringify(parsed) : null] as [number, string | null]; }));
+    } catch (error) {
+      if (isMissingPackageEntitlementsColumn(error)) return new Map();
+      throw new HttpException('PACKAGE_ENTITLEMENTS_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE);
+    }
+  }
+
+  private async validatePackageEntitlements(value: unknown, current?: unknown): Promise<string | null> {
+    let serialized: string | null;
+    try { serialized = normalizePackageEntitlementsInput(value); } catch { throw new HttpException('PACKAGE_ENTITLEMENTS_INVALID', HttpStatus.BAD_REQUEST); }
+    const policy = parsePackageEntitlements(serialized);
+    if (policy?.allowedModels?.length) {
+      let models: Pick<ModelsEntity, 'model'>[];
+      try { models = await this.packageModelsRepository.find({ select: ['model'] }); } catch { throw new HttpException('PACKAGE_MODELS_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE); }
+      const configured = new Set(models.map(row => row.model));
+      const historical = new Set(parsePackageEntitlements(current)?.allowedModels || []);
+      if (policy.allowedModels.some(model => !configured.has(model) && !historical.has(model))) throw new HttpException('PACKAGE_MODEL_NOT_CONFIGURED', HttpStatus.BAD_REQUEST);
+    }
+    return serialized;
   }
 }

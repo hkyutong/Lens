@@ -1,3 +1,4 @@
+import { parsePackageEntitlements, isMissingPackageEntitlementsColumn } from '../../common/utils/packageEntitlements';
 import { RechargeType } from '@/common/constants/balance.constant';
 import { createRandomUid, hideString } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
@@ -415,12 +416,10 @@ export class UserBalanceService {
         Number(res.packageId || 0) > 0 &&
         (!expirationDate || Number.isNaN(expirationDate.getTime()) || expirationDate.getTime() > Date.now());
       const packageInfo = res.packageId
-        ? await this.cramiPackageEntity.findOne({
-            where: { id: Number(res.packageId) },
-            select: ['id', 'name', 'weight'],
-          })
+        ? await this.findPackageEntitlementSnapshot(Number(res.packageId))
         : null;
       res.isMember = isActiveMember;
+      (res as any).packageEntitlements = isActiveMember && packageInfo && Number(packageInfo.status) === 1 ? parsePackageEntitlements(packageInfo.entitlements) : null;
       res.packageName = packageInfo?.name || '';
       res.packageWeight = isActiveMember ? Number(packageInfo?.weight || 0) : 0;
       res.expirationTime = res.expirationTime ? formatDate(res.expirationTime, 'YYYY-MM-DD') : null;
@@ -838,5 +837,14 @@ export class UserBalanceService {
     }
 
     // 如果不需要任何认证，方法直接结束，无需返回值
+  }
+
+  private async findPackageEntitlementSnapshot(id: number): Promise<CramiPackageEntity | null> {
+    try {
+      return await this.cramiPackageEntity.findOne({ where: { id }, select: ['id', 'name', 'weight', 'status', 'entitlements'] });
+    } catch (error) {
+      if (isMissingPackageEntitlementsColumn(error)) return this.cramiPackageEntity.findOne({ where: { id }, select: ['id', 'name', 'weight', 'status'] });
+      throw new HttpException('PACKAGE_ENTITLEMENTS_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE);
+    }
   }
 }

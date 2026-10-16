@@ -98,4 +98,10 @@ export class ModelsController {
   delModelType(@Body() params: { id: number }) {
     return this.modelsService.delModelType(params);
   }
+
+  @Get('packageModelOptions')
+  @UseGuards(AdminAuthGuard)
+  queryPackageModelOptions() {
+    return this.modelsService.queryPackageModelOptions();
+  }
 }

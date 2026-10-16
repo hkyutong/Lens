@@ -4,8 +4,12 @@ meta:
 </route>
 
 <script lang="ts" setup>
+import { PACKAGE_EXCHANGE_RATE_DATE, packageUsdToCny, resolvePackageUsdPrice } from '../../../../service/src/common/constants/packageCurrency';
+
   import ApiApp from '@/api/modules/app';
   import ApiPackage from '@/api/modules/package';
+import ApiModels from '@/api/modules/models';
+import { createPackageEntitlementDraft, serializePackageEntitlementDraft } from '@/utils/packageEntitlements';
   import { IS_OPTIONS, PACKAGE_TYPE_OPTIONS } from '@/constants/index';
   import { utcToShanghaiTime } from '@/utils/utcFormatTime';
   import type { FormInstance, FormRules, UploadProps } from 'element-plus';
@@ -46,6 +50,7 @@ meta:
     updatedAt?: Date | null;
     deletedAt?: Date | null;
     appCats?: string | null;
+    entitlements?: string | null;
   }
 
   const status = ref(0);
@@ -53,8 +58,8 @@ meta:
     name: null,
     des: null,
     coverImg: null,
-    price: null,
-    usdPrice: null,
+    price: 0,
+    usdPrice: 0,
     order: null,
     status: 0,
     weight: null,
@@ -63,6 +68,36 @@ meta:
     model4Count: null,
     drawMjCount: null,
     appCats: '',
+    entitlements: null as string | null,
+  });
+
+  const entitlementDraft = reactive(createPackageEntitlementDraft());
+  const modelOptions = ref<Array<{ model: string; label: string }>>([]);
+  const modelOptionsLoading = ref(false);
+  const modelOptionsFailed = ref(false);
+
+  async function loadPackageModelOptions() {
+    modelOptionsLoading.value = true;
+    modelOptionsFailed.value = false;
+    try {
+      const res = await ApiModels.queryPackageModelOptions();
+      modelOptions.value = Array.isArray(res.data)
+        ? res.data.map((model: { model: string; modelName: string; status: boolean }) => ({
+            model: model.model,
+            label: `${model.modelName || model.model}${model.status ? '' : '（已停用）'}`,
+          }))
+        : [];
+    } catch {
+      modelOptionsFailed.value = true;
+    } finally {
+      modelOptionsLoading.value = false;
+    }
+  }
+
+  watch(visible, (opened) => {
+    if (!opened) return;
+    Object.assign(entitlementDraft, createPackageEntitlementDraft(formPackage.entitlements));
+    void loadPackageModelOptions();
   });
 
   const rules = reactive<FormRules>({
@@ -77,8 +112,8 @@ meta:
         trigger: 'blur',
       },
     ],
-    price: [{ required: true, message: '请填写人民币付款价', trigger: 'blur' }],
-    usdPrice: [{ required: false, message: '请填写美元展示价', trigger: 'blur' }],
+
+    usdPrice: [{ required: true, type: 'number', min: 0.01, message: '请输入大于零的美元售价', trigger: 'blur' }],
     order: [{ required: true, message: '请填写套餐排序', trigger: 'blur' }],
     status: [{ required: true, message: '请选择套餐开启状态', trigger: 'change' }],
     days: [{ required: true, message: '请填写套餐有效期天数', trigger: 'blur' }],
@@ -186,6 +221,7 @@ meta:
   }
 
   function handleUpdatePackage(row: Package) {
+    formPackage.entitlements = row.entitlements ?? null;
     activePackageId.value = row.id as number;
     // 确保分类列表已加载
     if (appList.value.length === 0) {
@@ -197,6 +233,7 @@ meta:
       formPackageRef.value?.resetFields();
       // 然后赋值
       Object.assign(formPackage, row as any);
+      formPackage.usdPrice = Number(formPackage.usdPrice);
       // 确保appCats字段正确设置
       formPackage.appCats = row.appCats || '';
       // 移除不需要的字段
@@ -206,7 +243,8 @@ meta:
       delete (formPackage as any).id;
     });
     visible.value = true;
-  }
+    formPackage.usdPrice = resolvePackageUsdPrice(row);
+}
 
   const dialogTitle = computed(() => {
     return activePackageId.value ? '更新套餐' : '新增套餐';
@@ -217,6 +255,7 @@ meta:
   });
 
   function handleCreatePkg() {
+    formPackage.entitlements = null;
     activePackageId.value = 0;
     // 确保分类列表已加载
     queryCatList().then(() => {
@@ -249,10 +288,12 @@ meta:
   }
 
   async function handlerSubmit(formEl: FormInstance | undefined) {
+  formPackage.price = packageUsdToCny(Number(formPackage.usdPrice));
     formEl?.validate(async (valid) => {
       if (valid) {
         const submitData = {
           ...formPackage,
+        entitlements: serializePackageEntitlementDraft(entitlementDraft),
         };
 
         if (activePackageId.value) {
@@ -390,13 +431,10 @@ meta:
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="usdPrice" label="美元展示价" width="120" align="center">
+        <el-table-column prop="usdPrice" label="美元售价 (USD)" width="120" align="center">
           <template #default="scope">
-            {{ scope.row.usdPrice ? `$${scope.row.usdPrice}` : '-' }}
+            {{ '$' + resolvePackageUsdPrice(scope.row).toFixed(2) }}
           </template>
-        </el-table-column>
-        <el-table-column prop="price" label="人民币付款价" width="120" align="center">
-          <template #default="scope"> ¥{{ scope.row.price }} </template>
         </el-table-column>
         <el-table-column prop="weight" label="套餐等级" width="100" align="center" />
         <el-table-column prop="status" label="套餐状态" width="100">
@@ -470,6 +508,46 @@ meta:
         :rules="rules"
       >
         <el-row>
+          <el-col :span="24">
+            <el-form-item label="模型访问范围">
+              <div class="w-full">
+                <el-switch v-model="entitlementDraft.modelWhitelistEnabled" active-text="仅允许所选模型" inactive-text="沿用套餐等级" />
+                <el-select v-if="entitlementDraft.modelWhitelistEnabled" v-model="entitlementDraft.allowedModels" multiple filterable :loading="modelOptionsLoading" placeholder="选择此套餐可使用的模型" class="mt-2 w-full">
+                  <el-option v-for="model in modelOptions" :key="model.model" :label="model.label" :value="model.model" />
+                </el-select>
+                <p v-if="modelOptionsFailed" class="mt-2 text-sm text-red-600">模型列表加载失败，请重试；现有选择会保留。</p>
+                <p v-else-if="entitlementDraft.modelWhitelistEnabled && !modelOptionsLoading && modelOptions.length === 0" class="mt-2 text-sm text-gray-500">请先在模型配置中添加模型。</p>
+                <p class="mt-2 text-sm text-gray-500">所选模型仍受套餐等级和积分余额限制。开启后未选择任何模型，表示该套餐不允许使用模型。</p>
+              </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :span="24">
+            <el-form-item label="上传权限">
+              <el-select v-model="entitlementDraft.uploadMode" class="w-full">
+                <el-option label="沿用现有规则" value="legacy" />
+                <el-option label="禁止用户上传" value="disabled" />
+                <el-option label="每日限额" value="limited" />
+                <el-option label="不限每日次数" value="unlimited" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="entitlementDraft.uploadMode === 'limited'" :span="12">
+            <el-form-item label="每天上传次数">
+              <el-input-number v-model="entitlementDraft.dailyLimit" :min="1" :max="100000" :precision="0" class="w-full" />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="entitlementDraft.uploadMode === 'limited' || entitlementDraft.uploadMode === 'unlimited'" :span="12">
+            <el-form-item label="单文件上限 (MiB)">
+              <el-input-number v-model="entitlementDraft.maxFileSizeMb" :min="1" :max="30" :precision="0" placeholder="沿用全局上限" class="w-full" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <p class="mb-4 text-sm text-gray-500">成功上传一次计一次，存储失败不占日额度。文件类型、全局大小和短时频控继续生效，文件最大为 30 MiB。</p>
+          </el-col>
+        </el-row>
+        <el-row>
           <el-col :span="11">
             <el-form-item label="套餐详细名称" prop="name">
               <el-input v-model="formPackage.name" placeholder="请填写套餐名称" />
@@ -490,21 +568,17 @@ meta:
             </el-form-item>
           </el-col>
           <el-col :span="11">
-            <el-form-item label="美元展示价" prop="usdPrice">
+            <el-form-item label="美元售价 (USD)" prop="usdPrice">
               <el-input
                 v-model.number="formPackage.usdPrice"
-                placeholder="前台会员页展示，例如学生版填 6"
+                placeholder="请输入美元月价，例如 Plus 填 5"
                 type="number"
               />
             </el-form-item>
           </el-col>
           <el-col :span="11" :offset="2">
-            <el-form-item label="人民币付款价" prop="price">
-              <el-input
-                v-model.number="formPackage.price"
-                placeholder="实际创建订单和支付金额，例如填 45"
-                type="number"
-              />
+            <el-form-item label="人民币参考价">
+              <span>¥{{ packageUsdToCny(Number(formPackage.usdPrice) || 0).toFixed(2) }}（参考汇率日期：{{ PACKAGE_EXCHANGE_RATE_DATE }}）</span>
             </el-form-item>
           </el-col>
           <el-col :span="11">

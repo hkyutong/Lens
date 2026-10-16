@@ -45,15 +45,15 @@ export class AcademicController {
   @ApiOperation({ summary: 'Academic runtime readiness' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  academicHealth(@Query('model') model?: string, @Query('modelName') modelName?: string) {
-    return this.academicService.health(model, modelName);
+  academicHealth(@Req() req: Request, @Query('model') model?: string, @Query('modelName') modelName?: string) {
+    return this.academicService.health(model, modelName, req);
   }
 
   @Get('file')
   @ApiOperation({ summary: 'Academic file proxy' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  academicFile(@Query('path') path: string, @Res() res: Response) {
-    return this.academicService.proxyFile(path, res);
+  async academicFile(@Query('path') reference: string, @Req() req: Request, @Res() res: Response) {
+    return this.academicService.proxyFile(reference, req, res);
   }
 }

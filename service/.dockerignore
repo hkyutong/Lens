@@ -18,3 +18,7 @@ data
 docker
 docs
 README.md
+
+# User-owned private attachments
+private/
+**/.lens-academic-private.json

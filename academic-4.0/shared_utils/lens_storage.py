@@ -73,8 +73,8 @@ def get_result_ttl_seconds() -> int:
 
 
 def path_is_within(path_value: str, root_value: str) -> bool:
-    path_abs = os.path.abspath(str(path_value or ""))
-    root_abs = os.path.abspath(str(root_value or ""))
+    path_abs = os.path.realpath(str(path_value or ""))
+    root_abs = os.path.realpath(str(root_value or ""))
     if not path_abs or not root_abs:
         return False
     try:

@@ -5,6 +5,9 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Mapping
+from crazy_functions.lens_research_proposal import (
+    PROPOSAL_TASK, ProposalValidationError, proposal_model_request, render_proposal,
+)
 
 MAX_INPUT = 30000
 MAX_OUTPUT = 40000
@@ -105,6 +108,8 @@ def prepare_input(name: str, value: str) -> TaskInput:
 
 
 def model_request(spec: TaskSpec, task_input: TaskInput) -> str:
+    if spec.name == PROPOSAL_TASK:
+        return proposal_model_request(task_input)
     schema = {field: (0 if field in {"comment_id", "step_id"} else [] if field == "depends_on" else "文本") for field in spec.fields}
     schema.update(status="supported|proposal|missing", refs=[{"source_id": "D1", "quote": "原文逐字引文"}])
     result_schema = {"rows": [schema]} if spec.fields else {"groups": [{"concept": "概念", "terms": ["同义词"]}], "inclusion": ["纳入标准"], "exclusion": ["排除标准"]}
@@ -119,6 +124,8 @@ def model_request(spec: TaskSpec, task_input: TaskInput) -> str:
 
 def strict_model_request(spec: TaskSpec, task_input: TaskInput) -> str:
     """Retry with examples that satisfy the same task and source contract."""
+    if spec.name == PROPOSAL_TASK:
+        return proposal_model_request(task_input, retry=True)
     document_ids = [key for key in task_input.sources if key != "Q"]
     minimum_rows = {
         "Lens｜生成教学材料": 3,
@@ -323,6 +330,11 @@ def _search_report(spec, data):
 
 
 def validate_and_render(spec: TaskSpec, task_input: TaskInput, output: str) -> str:
+    if spec.name == PROPOSAL_TASK:
+        try:
+            return render_proposal(_parse_json(output), task_input.sources)
+        except ProposalValidationError:
+            _fail()
     data = _parse_json(output)
     if not spec.fields:
         return _search_report(spec, data)

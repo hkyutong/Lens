@@ -1,4 +1,7 @@
-<script setup lang="ts">
+<script setup lang="ts">import { resolveAcademicPlanTier } from '@/utils/academicPlanAccess';
+import { canUseAcademicModel } from '../../../../../service/src/common/utils/academicModelAccess';
+import { isPackageModelAllowed } from '../../../../../service/src/common/utils/packageEntitlements';
+
 import { fetchUpdateGroupAPI } from '@/api/group'
 import { fetchQueryModelsListAPI } from '@/api/models'
 import { DropdownMenu } from '@/components/common/DropdownMenu'
@@ -7,9 +10,10 @@ import { useAuthStore, useChatStore } from '@/store'
 import { message } from '@/utils/message'
 import { sanitizeUserFacingErrorMessage } from '@/utils/request/sanitizeErrorMessage'
 import { CheckOne, Down } from '@icon-park/vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref , watch } from 'vue'
 
 interface ModelOption {
+  model?: string;
   label: string
   value: string
   modelDescription?: string
@@ -48,6 +52,8 @@ const ms = message()
 const isMenuOpen = ref(false)
 const props = withDefaults(defineProps<{ position?: 'top-left' | 'bottom-left'; navigation?: boolean }>(), { position: 'top-left' })
 const modelOptions = ref<ModelOption[]>([])
+const modelsLoaded = ref(false);
+const academicTier = ref(resolveAcademicPlanTier(authStore.userBalance));
 
 const activeGroupInfo = computed(() => chatStore.getChatByGroupInfo())
 const activeGroupId = computed(() => Number(chatStore.active || 0))
@@ -66,7 +72,7 @@ const currentModelValue = computed(
   () => String(configObj.value?.modelInfo?.model || chatStore.preferredModel?.value || '')
 )
 
-const currentModelLabel = computed(() => {
+const baseCurrentModelLabel = computed(() => {
   return String(
     configObj.value?.modelInfo?.modelName ||
       chatStore.preferredModel?.label ||
@@ -74,6 +80,13 @@ const currentModelLabel = computed(() => {
       t('lens.modelSelector.defaultModel')
   )
 })
+const currentModelOption = computed(() => modelOptions.value.find(option => option.value === currentModelValue.value));
+const currentModelRestricted = computed(() => modelsLoaded.value && Boolean(currentModelValue.value) && !canSelectModel(currentModelOption.value));
+const currentModelLabel = computed(() => {
+  if (!currentModelRestricted.value) return baseCurrentModelLabel.value;
+  const plan = getRequiredModelPlan(currentModelOption.value);
+  return plan ? t('lens.modelSelector.restrictedModel', { model: baseCurrentModelLabel.value, plan }) : t('lens.modelSelector.unavailableModel', { model: baseCurrentModelLabel.value });
+});
 
 const getModelDisplayLabel = (model: Model) =>
   ['deepseek-chat', 'deepseek-v3.2'].includes(model.model.toLowerCase())
@@ -102,6 +115,7 @@ async function queryModelsList() {
     modelOptions.value = modelsToUse.map(model => ({
       label: getModelDisplayLabel(model),
       value: model.model,
+      model: model.model,
       deductType: model.deductType,
       keyType: model.keyType,
       deduct: model.deduct,
@@ -115,16 +129,10 @@ async function queryModelsList() {
       maxRounds: model.maxRounds,
     }))
 
-    if (chatStore.preferredModel?.value) {
-      const exists = modelOptions.value.some(option => option.value === chatStore.preferredModel.value)
-      if (!exists) chatStore.setPreferredModel(null)
-    } else {
-      const preferredAcademicModel = modelOptions.value.find(
-        option => ['deepseek-chat', 'deepseek-v3.2'].includes(option.value.toLowerCase()),
-      )
-      if (preferredAcademicModel) chatStore.setPreferredModel(preferredAcademicModel)
-    }
-  } catch (error) {}
+    refreshAcademicModelAccess();
+  } catch (error) {} finally {
+    modelsLoaded.value = true;
+  }
 }
 
 async function switchModel(option: ModelOption) {
@@ -132,6 +140,11 @@ async function switchModel(option: ModelOption) {
     authStore.setLoginDialog(true)
     ms.info(t('lens.footer.loginRequired'))
     return
+  }
+  academicTier.value = resolveAcademicPlanTier(authStore.userBalance);
+  if (!canSelectModel(option)) {
+    ms.info(getModelPermissionHint(option));
+    return;
   }
 
   chatStore.setUsingDeepThinking(false)
@@ -190,6 +203,38 @@ async function switchModel(option: ModelOption) {
 onMounted(() => {
   queryModelsList()
 })
+
+function canSelectModel(option: ModelOption | null | undefined) {
+  return Boolean(option) && canUseAcademicModel(academicTier.value, option?.deductType) && isPackageModelAllowed(authStore.userBalance?.packageEntitlements, option?.model);
+}
+function getRequiredModelPlan(option: ModelOption | null | undefined): string {
+  if (canUseAcademicModel('plus', option?.deductType)) return 'Plus';
+  if (canUseAcademicModel('pro', option?.deductType)) return 'Pro';
+  if (canUseAcademicModel('max', option?.deductType)) return 'Max';
+  return '';
+}
+function getModelPermissionHint(option: ModelOption | null | undefined) {
+  if (!isPackageModelAllowed(authStore.userBalance?.packageEntitlements, option?.model)) {
+    return t('lens.modelSelector.notIncluded');
+  }
+  const plan = getRequiredModelPlan(option);
+  return plan ? t('lens.modelSelector.upgradeRequired', { plan }) : t('lens.modelSelector.unavailable');
+}
+function reconcilePreferredAcademicModel() {
+  const preferred = modelOptions.value.find(option => option.value === chatStore.preferredModel?.value);
+  if (preferred && canSelectModel(preferred)) return;
+  const allowed = modelOptions.value.find(option => canSelectModel(option));
+  if (allowed) chatStore.setPreferredModel(allowed);
+  else if (chatStore.preferredModel) chatStore.setPreferredModel(null);
+}
+function refreshAcademicModelAccess() {
+  academicTier.value = resolveAcademicPlanTier(authStore.userBalance);
+  reconcilePreferredAcademicModel();
+}
+watch([() => authStore.userBalance, modelOptions], refreshAcademicModelAccess, { deep: true });
+watch(isMenuOpen, open => {
+  if (open) refreshAcademicModelAccess();
+});
 </script>
 
 <template>
@@ -238,7 +283,7 @@ onMounted(() => {
           role="menuitem"
           tabindex="0"
           :aria-label="t('lens.modelSelector.switchTo', { name: option.label })"
-        >
+         :disabled="!canSelectModel(option)">
           <div class="avatar avatar-md">
             <img
               v-if="option.modelAvatar"
@@ -257,11 +302,15 @@ onMounted(() => {
             <div v-if="option.modelDescription" class="menu-item-description">
               {{ option.modelDescription }}
             </div>
+
+            <span v-if="!canSelectModel(option)" class="block text-xs text-[var(--text-secondary)]">{{ getModelPermissionHint(option) }}</span>
           </div>
           <div class="flex-shrink-0" v-if="currentModelValue === option.value">
             <CheckOne theme="filled" size="16" class="text-gray-500" aria-hidden="true" />
           </div>
-        </button>
+
+
+</button>
       </div>
     </template>
   </DropdownMenu>
