@@ -1,6 +1,5 @@
 import { isCanonicalPackageModel } from '../../common/utils/packageEntitlements';
 import { ModelsMapCn } from '@/common/constants/status.constant';
-import { hideString } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
@@ -60,6 +59,11 @@ export class ModelsService {
     if (!modelInfo) return false;
     if (modelInfo.status === undefined || modelInfo.status === null) return true;
     return Number(modelInfo.status) !== 0;
+  }
+
+  private hasModelKey(value: unknown) {
+    if (Array.isArray(value)) return value.some(item => String(item || '').trim());
+    return Boolean(String(value || '').trim());
   }
 
   private sanitizeModelPayload(params: Partial<SetModelDto>) {
@@ -242,6 +246,9 @@ export class ModelsService {
       const { id } = params;
       const payload = this.sanitizeModelPayload(params);
       if (id) {
+        // A blank key means "keep the existing secret" when editing a model.
+        // The admin query intentionally never returns the secret itself.
+        if (!this.hasModelKey(payload.key)) delete payload.key;
         const res = await this.modelsEntity.update({ id }, payload);
         await this.initCalcKey();
         return res.affected > 0;
@@ -284,7 +291,6 @@ export class ModelsService {
   }
 
   async queryModels(req, params: QueryModelDto) {
-    const { role } = req.user;
     const { keyType, key, status, model, page = 1, size = 10 } = params;
     const where: any = {};
     keyType && (where.keyType = keyType);
@@ -299,13 +305,16 @@ export class ModelsService {
       skip: (page - 1) * size,
       take: size,
     });
-    if (role !== 'super') {
-      rows.forEach(item => {
-        item.key && (item.key = hideString(item.key));
-      });
-    }
+    const safeRows = rows.map(item => {
+      const configured = this.hasModelKey(item.key);
+      return {
+        ...item,
+        key: configured ? '[已配置]' : '',
+        keyConfigured: configured,
+      };
+    });
 
-    return { rows, count };
+    return { rows: safeRows, count };
   }
 
   /* 客户端查询到的所有的配置的模型类别 以及类别下自定义的多少中文模型名称 */

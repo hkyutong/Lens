@@ -53,6 +53,7 @@ import type { PublicAssetPurpose } from '@/api/modules/upload'
 
   const formPackageRef = ref<FormInstance>();
   const activeModelKeyId = ref(0);
+  const modelKeyConfigured = ref(false);
   const TEXT_MODEL_TIER_LABELS: Record<number, string> = {
     1: '基础（Plus；YutoGPT 5.5 / GPT-6 luna）',
     2: '高级（Pro；GPT-6.1 Sol）',
@@ -237,7 +238,14 @@ import type { PublicAssetPurpose } from '@/api/modules/upload'
 
   function handlerCloseDialog(formEl: FormInstance | undefined) {
     activeModelKeyId.value = 0;
+    modelKeyConfigured.value = false;
     formEl?.resetFields();
+  }
+
+  function openCreateDialog() {
+    activeModelKeyId.value = 0;
+    modelKeyConfigured.value = false;
+    visible.value = true;
   }
 
   const modelList = computed(
@@ -281,10 +289,10 @@ import type { PublicAssetPurpose } from '@/api/modules/upload'
 
   function handleEditKey(row: any) {
     activeModelKeyId.value = row.id;
+    modelKeyConfigured.value = Boolean(row.keyConfigured || row.key);
     const {
       keyType,
       modelName,
-      key,
       status,
       model,
       modelOrder,
@@ -314,7 +322,7 @@ import type { PublicAssetPurpose } from '@/api/modules/upload'
       Object.assign(formPackage, {
         keyType,
         modelName,
-        key,
+        key: '',
         status: Boolean(status),
         model,
         modelOrder,
@@ -454,7 +462,11 @@ import type { PublicAssetPurpose } from '@/api/modules/upload'
         const params: any = JSON.parse(JSON.stringify(formPackage));
         delete params.id;
         activeModelKeyId.value && (params.id = activeModelKeyId.value);
-        if (Number(formPackage.keyType) === 1) {
+        const replacingKey = Boolean(String(formPackage.key || '').trim());
+        if (activeModelKeyId.value && !replacingKey) {
+          delete params.key;
+        }
+        if (Number(formPackage.keyType) === 1 && (replacingKey || !activeModelKeyId.value)) {
           const key = JSON.parse(JSON.stringify(formPackage.key));
           const formatKeyArr = key.split('\n');
           params.key = formatKeyArr;
@@ -523,7 +535,7 @@ import type { PublicAssetPurpose } from '@/api/modules/upload'
           <div>顶级模型：用户端不展示，包含【TTS朗读】【GPTs】。</div>
         </div>
       </template>
-      <HButton outline type="success" @click="visible = true">
+      <HButton outline type="success" @click="openCreateDialog">
         <SvgIcon name="i-ri:file-text-line" />
         添加模型
       </HButton>
@@ -849,7 +861,11 @@ import type { PublicAssetPurpose } from '@/api/modules/upload'
           </div>
         </el-form-item>
         <el-form-item label="模型密钥" prop="key">
-          <el-input v-model="formPackage.key" type="text" placeholder="请填写模型Key" />
+          <el-input
+            v-model="formPackage.key"
+            type="text"
+            :placeholder="modelKeyConfigured ? '已配置，留空保持不变；填写新值可替换' : '请填写模型Key'"
+          />
         </el-form-item>
 
         <el-form-item label="账号关联模型" prop="model">
