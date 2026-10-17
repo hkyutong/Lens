@@ -100,6 +100,24 @@ def _unpack(request):
     return {"ok": True, "file_count": len(items)}
 
 
+# Fixed-name brand assets need the same verified backup and rollback as HTML.
+# Content-addressed and unreviewed static assets remain immutable.
+_MUTABLE_BRAND_TARGETS = frozenset({
+    "public/chat/logo.svg",
+    "public/chat/logo.png",
+    "public/chat/favicon.svg",
+    "public/chat/apple-touch-icon.png",
+    "public/chat/mstile-150x150.png",
+    "public/chat/safari-pinned-tab.svg",
+    "public/chat/icon/favicon.svg",
+    "public/chat/icon/favicon-16x16.png",
+    "public/chat/icon/favicon-32x32.png",
+    "public/chat/icon/apple-touch-icon.png",
+    "public/chat/icon/android-chrome-192x192.png",
+    "public/chat/icon/android-chrome-512x512.png",
+})
+
+
 def _prepare_file_plan(request):
     (stage, target, bundle) = map(tx._absolute, (request['stage'], request['target'], request['bundle']))
     source = stage / 'publish-source'
@@ -128,7 +146,7 @@ def _prepare_file_plan(request):
             mode = stat.S_IMODE(previous.st_mode)
             if mode & 3602:
                 raise _PreflightValueError('target_mode_unsafe')
-        if item['role'] in ('chat_static', 'admin_static') and (not target_name.endswith('/index.html')):
+        if (item['role'] in ('chat_static', 'admin_static') and (not target_name.endswith('/index.html'))) and target_name not in _MUTABLE_BRAND_TARGETS:
             if existing.exists():
                 if _hash(existing) != item['sha256']:
                     scope = 'chat' if item['role'] == 'chat_static' else 'admin'
