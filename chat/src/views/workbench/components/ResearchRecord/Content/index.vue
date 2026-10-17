@@ -31,6 +31,7 @@ import {
   Copy,
   Delete,
   Down,
+  Download,
   Edit,
   LoadingOne,
   PauseOne,
@@ -458,6 +459,7 @@ const parsedEvidenceFiles = computed<UserUploadedFile[]>(() => {
 })
 
 const downloadingFilePaths = ref<string[]>([])
+const isDownloadingReport = ref(false)
 
 const isDownloadingFile = (pathValue: string) => downloadingFilePaths.value.includes(pathValue)
 
@@ -576,6 +578,24 @@ const downloadUserUploadedFile = async (file: UserUploadedFile) => {
     )
   } finally {
     setDownloadingFile(source, false)
+  }
+}
+
+const downloadResearchReport = () => {
+  if (props.isUserMessage || props.loading || !props.content?.trim() || isDownloadingReport.value) {
+    return
+  }
+
+  isDownloadingReport.value = true
+  try {
+    const document = createShareDocument(sanitizeShareFragment(text.value))
+    const blob = new Blob([document], { type: 'text/html;charset=utf-8' })
+    triggerBlobDownload(blob, 'Lens-research-report.html')
+    ms.success(t('lens.message.downloadReportSuccess'))
+  } catch (_error) {
+    ms.error(t('lens.message.downloadReportFailed'))
+  } finally {
+    isDownloadingReport.value = false
   }
 }
 
@@ -3054,6 +3074,19 @@ function openSingleImagePreview(src: string) {
           >
             <Sound v-if="browserTtsState === 'paused'" />
             <PauseOne v-else-if="browserTtsState === 'playing'" />
+          </button>
+        </div>
+
+        <div v-if="!isUserMessage && !loading && text" class="relative group-btn">
+          <button
+            class="btn-icon btn-sm btn-icon-action"
+            :class="{ 'opacity-60 cursor-not-allowed': isDownloadingReport }"
+            :disabled="isDownloadingReport"
+            @click="downloadResearchReport"
+            :aria-label="t('lens.message.downloadReport')"
+          >
+            <LoadingOne v-if="isDownloadingReport" class="rotate-icon" />
+            <Download v-else />
           </button>
         </div>
 
