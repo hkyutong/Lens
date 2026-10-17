@@ -61,7 +61,7 @@ async function loadSharedHtml() {
 useGlobalStore.updateFingerprint(client.getFingerprint())
 
 // 获取配置
-const defaultFavicon = '/favicon.svg'
+const defaultFavicon = '/logo.svg'
 const faviconPath = computed(() => authStore.globalConfig?.clientFaviconPath || defaultFavicon)
 const isAutoOpenNotice = computed(() => Number(authStore.globalConfig?.isAutoOpenNotice) === 1)
 const wechatSilentLoginStatus = computed(
