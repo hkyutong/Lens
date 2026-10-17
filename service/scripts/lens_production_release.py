@@ -46,6 +46,15 @@ _ERRORS = _ERRORS | frozenset({"download_public_hosts_invalid", "download_bounda
 _ERRORS |= {"boundary_config_invalid", "boundary_context_invalid",
             "boundary_public_unproven", "runtime_config_changed", "academic_transaction_failed",
     'academic_context_invalid', 'academic_controller_failed', 'academic_route_invalid', 'academic_ready_failed', 'academic_restore_failed', 'academic_manager_failed', 'academic_apply_failed', 'academic_cleanup_failed'}
+_ERRORS |= {f"file_preflight_{code}" for code in (
+    'invalid_input', 'unsafe_path', 'protected_path', 'unsupported_file',
+    'source_changed', 'baseline_changed', 'io_failed', 'busy',
+)}
+_ERRORS |= {f"file_preflight_{code}" for code in (
+    'target_unsupported', 'target_mode_unsafe', 'target_directory_unsupported', 'artifact_unsupported',
+    'static_target_mismatch', 'static_asset_name_invalid',
+    'chat_static_target_mismatch', 'admin_static_target_mismatch',
+)}
 
 
 class ReleaseError(Exception):

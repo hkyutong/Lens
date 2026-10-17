@@ -13,6 +13,12 @@ import tarfile
 import lens_release_transaction as tx
 
 
+class _PreflightValueError(ValueError):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
 def _regular(path):
     s = path.lstat()
     if not stat.S_ISREG(s.st_mode) or s.st_nlink != 1:
@@ -106,22 +112,29 @@ def _prepare_file_plan(request):
         target_name = _role(item)
         tx._allowed(target_name, ('dist', 'public/chat', 'public/admin', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'), ())
         original = stage / 'artifacts' / item['source']
-        _regular(original)
+        try:
+            _regular(original)
+        except ValueError:
+            raise _PreflightValueError('artifact_unsupported') from None
         if _hash(original) != item['sha256']:
-            raise ValueError
+            raise _PreflightValueError('source_changed')
         existing = target / target_name
         mode = 420
         if existing.exists() or existing.is_symlink():
-            previous = _regular(existing)
+            try:
+                previous = _regular(existing)
+            except ValueError:
+                raise _PreflightValueError('target_unsupported') from None
             mode = stat.S_IMODE(previous.st_mode)
             if mode & 3602:
-                raise ValueError
+                raise _PreflightValueError('target_mode_unsafe')
         if item['role'] in ('chat_static', 'admin_static') and (not target_name.endswith('/index.html')):
             if existing.exists():
                 if _hash(existing) != item['sha256']:
-                    raise ValueError
+                    scope = 'chat' if item['role'] == 'chat_static' else 'admin'
+                    raise _PreflightValueError(f'{scope}_static_target_mismatch')
             elif re.search('[-.][A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$', existing.name) is None:
-                raise ValueError
+                raise _PreflightValueError('static_asset_name_invalid')
         published = source / item['source']
         published.parent.mkdir(parents=True, exist_ok=True, mode=448)
         shutil.copyfile(original, published, follow_symlinks=False)
@@ -134,10 +147,13 @@ def _prepare_file_plan(request):
             for (directory, directories, files) in os.walk(dist, followlinks=False):
                 for leaf in directories:
                     if (Path(directory) / leaf).is_symlink():
-                        raise ValueError
+                        raise _PreflightValueError('target_directory_unsupported')
                 for leaf in files:
                     path = Path(directory) / leaf
-                    _regular(path)
+                    try:
+                        _regular(path)
+                    except ValueError:
+                        raise _PreflightValueError('target_unsupported') from None
                     relative = str(path.relative_to(target))
                     tx._allowed(relative, ('dist',), ())
                     if relative not in targets:
@@ -182,6 +198,16 @@ def main():
             result = tx.verify_backup(Path(request['bundle']) / 'files').to_dict()
         else:
             raise ValueError
+    except tx.TransactionError as error:
+        result = {'ok': False, 'error': error.code}
+    except FileNotFoundError:
+        result = {'ok': False, 'error': 'source_changed' if action == 'files_preflight' else 'file_transaction_failed'}
+    except PermissionError:
+        result = {'ok': False, 'error': 'io_failed' if action == 'files_preflight' else 'file_transaction_failed'}
+    except ValueError as error:
+        result = {'ok': False, 'error': getattr(error, 'code', 'unsupported_file') if action == 'files_preflight' else 'file_transaction_failed'}
+    except OSError:
+        result = {'ok': False, 'error': 'io_failed' if action == 'files_preflight' else 'file_transaction_failed'}
     except BaseException:
         result = {'ok': False, 'error': 'file_transaction_failed'}
     sys.stdout.write(json.dumps(result, separators=(',', ':')))

@@ -466,7 +466,10 @@ backup = await databaseCore.createDatabaseBackup(connection, { databaseFingerpri
     report.database_restore_verified = true;
     const filePreparation = await __fileWorker(stage, { action: 'files_preflight', stage, target: context.serviceCwd, bundle,
       release_id: request.release_id, entries: request.entries });
-    if (!filePreparation.ok) __fail('file_transaction_failed');
+    if (!filePreparation.ok) {
+      const preflightErrors = new Set(['invalid_input','unsafe_path','protected_path','unsupported_file','source_changed','baseline_changed','io_failed','busy','target_unsupported','target_mode_unsafe','target_directory_unsupported','artifact_unsupported','static_target_mismatch','static_asset_name_invalid','chat_static_target_mismatch','admin_static_target_mismatch']);
+      __fail(preflightErrors.has(filePreparation.error) ? 'file_preflight_' + filePreparation.error : 'file_transaction_failed');
+    }
     stopped = true;
 report.production_changed = true;
 
