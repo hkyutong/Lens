@@ -214,13 +214,23 @@ async function recover(stage, bundle) {
   return independent(stage, bundle, '--recover', { action: 'restore', bundle });
 }
 async function prepare(options) {
-  let control;
+  let control, academicManager;
+  const disconnectManager = () => {
+    if (academicManager) {
+      const manager = academicManager; academicManager = undefined;
+      manager.disconnect();
+    }
+  };
   try {
-    const { stage, bundle, releaseId, nodeCwd, privateStorage, entries, pm2, pm2Call } = options;
+    const { stage, bundle, releaseId, nodeCwd, privateStorage, entries, pm2, pm2Call,
+      pm2ModuleRoot, nodeProcessId, getNodeProcessId } = options;
     insist(typeof pm2Call === 'function' && pm2 && path.isAbsolute(stage) && path.isAbsolute(bundle) && path.isAbsolute(nodeCwd));
+    const attestedNode = nodeProcessId !== undefined;
+    insist(!attestedNode || Number.isInteger(nodeProcessId) && nodeProcessId > 1 && typeof getNodeProcessId === 'function');
     control = controller(stage);
     const prepared = await control.call({ action: 'prepare', stage, bundle, release_id: releaseId,
-      node_cwd: nodeCwd, private_storage: privateStorage, entries });
+      node_cwd: nodeCwd, private_storage: privateStorage, entries,
+      ...(attestedNode ? { node_process_id: nodeProcessId } : {}) });
     insist(prepared.ok && prepared.prepared, 'academic_context_invalid');
     const controlFile = path.join(stage, 'academic-control.json'), observed = privateJson(controlFile);
     insist(exact(observed, ['version', 'process_id', 'pm2_id', 'pm2_home', 'cwd', 'executable', 'arguments',
@@ -228,7 +238,22 @@ async function prepare(options) {
     insist(observed.version === 1 && Number.isInteger(observed.process_id) && observed.process_id > 0
       && /^\d+$/.test(observed.pm2_id) && observed.node_cwd === nodeCwd
       && JSON.stringify(observed.clear_environment) === JSON.stringify(MANAGED));
-    const call = async (method, ...args) => { try { return await pm2Call(pm2, method, ...args); } catch (_) { throw failure('academic_manager_failed'); } };
+    if (pm2ModuleRoot !== undefined) {
+      insist(typeof pm2ModuleRoot === 'string' && path.isAbsolute(pm2ModuleRoot)
+        && typeof observed.pm2_home === 'string' && path.isAbsolute(observed.pm2_home));
+      const home = fs.lstatSync(observed.pm2_home);
+      const socket = fs.lstatSync(path.join(observed.pm2_home, 'rpc.sock'));
+      insist(home.isDirectory() && !home.isSymbolicLink() && home.uid === process.geteuid()
+        && !(home.mode & 0o022) && fs.realpathSync(observed.pm2_home) === observed.pm2_home
+        && socket.isSocket() && socket.uid === home.uid);
+      const api = require(pm2ModuleRoot);
+      insist(typeof api.custom === 'function');
+      academicManager = new api.custom({ pm2_home: observed.pm2_home });
+      await new Promise((resolve, reject) => academicManager.connect(error =>
+        error ? reject(failure('academic_manager_failed')) : resolve()));
+    }
+    const targetManager = academicManager || pm2;
+    const call = async (method, ...args) => { try { return await pm2Call(targetManager, method, ...args); } catch (_) { throw failure('academic_manager_failed'); } };
     const rows = await call('list');
     insist(Array.isArray(rows));
     const matches = rows.filter(row => row?.pid === observed.process_id && String(row.pm_id) === observed.pm2_id
@@ -309,7 +334,10 @@ async function prepare(options) {
         insist(value.ok && value.backup_verified, 'academic_apply_failed'); return true; },
       async startNew() { insist(applied, 'academic_apply_failed'); return start(true); },
       async ready() {
-        const value = await control.call({ action: 'ready' }); insist(value.ok, 'academic_ready_failed');
+        const currentNode = attestedNode ? await getNodeProcessId() : undefined;
+        insist(!attestedNode || Number.isInteger(currentNode) && currentNode > 1, 'academic_ready_failed');
+        const value = await control.call({ action: 'ready',
+          ...(attestedNode ? { node_process_id: currentNode } : {}) }); insist(value.ok, 'academic_ready_failed');
         const readyFile = path.join(stage, 'academic-ready.json'), ready = privateJson(readyFile);
         insist(exact(ready, ['version', 'listener_endpoints', 'academic_url_environment']) && ready.version === 1, 'academic_ready_failed');
         fs.unlinkSync(readyFile);
@@ -336,8 +364,12 @@ async function prepare(options) {
       async close(options = {}) { insist(exact(options, []) || exact(options, ['committed']) && typeof options.committed === 'boolean', 'academic_cleanup_failed');
         if (options.committed === true) insist(applied && !restored && !stopped && readyVerified, 'academic_cleanup_failed');
         if (closed) return true; closed = true;
-        if (!control.broken) { try { const value = await control.call({ action: 'close' }); insist(value.ok); } catch (_) { control.kill(); throw failure('academic_cleanup_failed'); } }
-        await control.terminate(); return true; },
+        try {
+          if (!control.broken) { try { const value = await control.call({ action: 'close' }); insist(value.ok); } catch (_) { control.kill(); throw failure('academic_cleanup_failed'); } }
+        } finally {
+          try { await control.terminate(); } finally { disconnectManager(); }
+        }
+        return true; },
     };
     const opaque = Object.create(null);
     for (const [name, method] of Object.entries(methods)) Object.defineProperty(opaque, name, { value: async (...args) => {
@@ -346,7 +378,11 @@ async function prepare(options) {
     Object.defineProperty(opaque, 'toJSON', { value() { throw failure('academic_context_invalid'); } });
     Object.defineProperty(opaque, util.inspect.custom, { value() { return '<AcademicRelease redacted>'; } });
     return Object.freeze(opaque);
-  } catch (error) { if (control) { try { await control.terminate(); } catch (_) {} } throw failure(error?.lensCode); }
+  } catch (error) {
+    if (control) { try { await control.terminate(); } catch (_) {} }
+    try { disconnectManager(); } catch (_) {}
+    throw failure(error?.lensCode);
+  }
 }
 
 module.exports = Object.freeze({ prepare, verifyAcademicRoute, selectedAcademicUrls });

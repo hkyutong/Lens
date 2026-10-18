@@ -445,7 +445,19 @@ if(!dependencyGraph.passed)__fail('dependency_closure_invalid'); report.dependen
     if (__copyTree(__path.join(bundle, 'dependencies'), probe) !== oldDependencies) __fail('backup_verification_failed');
     __fs.rmSync(probe, { recursive: true });
     __write600(__path.join(bundle, 'dependencies.json'), JSON.stringify({ hash: oldDependencies }));
-    try { academic=await require(__path.join(stage,'lens_academic_release.cjs')).prepare({stage,bundle,releaseId:request.release_id,nodeCwd:context.serviceCwd,privateStorage:context.privateStorage,entries:request.entries,pm2,pm2Call:__pm2Call}); } catch (_) { __fail('academic_transaction_failed'); }
+    try {
+      academic = await require(__path.join(stage, 'lens_academic_release.cjs')).prepare({
+        stage, bundle, releaseId: request.release_id, nodeCwd: context.serviceCwd,
+        privateStorage: context.privateStorage, entries: request.entries, pm2, pm2Call: __pm2Call,
+        pm2ModuleRoot: context.pm2ModuleRoot, nodeProcessId: current[0].pid,
+        getNodeProcessId: async () => {
+          const rows = await __current(pm2, context);
+          if (rows.length !== 1 || rows[0].pm2_env?.status !== 'online'
+              || !Number.isInteger(rows[0].pid) || rows[0].pid <= 1) __fail('context_unavailable');
+          return rows[0].pid;
+        },
+      });
+    } catch (_) { __fail('academic_transaction_failed'); }
 backup = await databaseCore.createDatabaseBackup(connection, { databaseFingerprint: fingerprint, bundleDirectory: __path.join(bundle, 'database') });
     if (!backup.ok) {
       report.needs_manual_review = !!backup.needs_manual_review;

@@ -192,7 +192,7 @@ def _shares_verified_pm2_parent(node, environment, runtime):
 class AcademicController:
     __slots__ = (
         "_runtime", "_node", "_stage", "_bundle", "_private", "_plan", "_configuration",
-        "_original", "_config_paths", "_root_identities", "_created_roots", "_status", "_recovery_manifest",
+        "_original", "_config_paths", "_root_identities", "_created_roots", "_status", "_recovery_manifest", "_node_pid_attested",
     )
 
     def __init__(self):
@@ -200,6 +200,7 @@ class AcademicController:
         self._configuration = self._original = self._config_paths = self._root_identities = None
         self._created_roots = []
         self._recovery_manifest = None
+        self._node_pid_attested = False
         self._status = dict(ok=False, error="none", prepared=False, files_applied=False,
                             configs_applied=False, backup_verified=False, rollback_completed=False,
                             manual_intervention=False, changed_files=0)
@@ -220,7 +221,11 @@ class AcademicController:
     def prepare(self, request, proc="/proc"):
         if self._status["prepared"]:
             raise AcademicError("already_prepared")
-        if set(request) != {"action", "stage", "bundle", "release_id", "node_cwd", "private_storage", "entries"}:
+        request_fields = {"action", "stage", "bundle", "release_id", "node_cwd", "private_storage", "entries"}
+        node_pid_attested = "node_process_id" in request
+        if set(request) != request_fields | ({"node_process_id"} if node_pid_attested else set()):
+            raise AcademicError("invalid_request")
+        if node_pid_attested and (type(request["node_process_id"]) is not int or request["node_process_id"] <= 1):
             raise AcademicError("invalid_request")
         stage, bundle = _directory(request["stage"], True), _directory(request["bundle"], True)
         node_root = _directory(request["node_cwd"])
@@ -243,15 +248,18 @@ class AcademicController:
         matching = []
         for node in nodes:
             try:
+                if node_pid_attested and node["identifier"] != request["node_process_id"]:
+                    continue
                 if _identity(inventory._filesystem_path(node, node["cwd"])) == _identity(node_root):
                     environment = inventory._environment(node["directory"] / "environ")
-                    manager, handle = inventory._manager(proc, node, environment)
+                    manager, handle = ("attested", None) if node_pid_attested else inventory._manager(proc, node, environment)
                     # PM2 may inject pm_id after exec, outside the initial OS environment.
                     # The already verified academic process attests its direct PM2 parent.
                     shared_pm2_parent = (
-                        _shares_verified_pm2_parent(node, environment, runtime)
+                        not node_pid_attested and _shares_verified_pm2_parent(node, environment, runtime)
                     )
-                    if (manager == "pm2" and handle and handle[0] == runtime._handle[0]) or shared_pm2_parent:
+                    # The orchestrator attests the PID through the business service's own manager.
+                    if node_pid_attested or (manager == "pm2" and handle and handle[0] == runtime._handle[0]) or shared_pm2_parent:
                         matching.append((node, environment, handle))
             except Exception:
                 continue
@@ -343,6 +351,7 @@ class AcademicController:
             artifact_roots=inventory.ARTIFACTS,
         )
         self._runtime, self._node, self._stage, self._bundle, self._private = runtime, node, stage, bundle, private
+        self._node_pid_attested = node_pid_attested
         self._plan, self._configuration, self._original, self._config_paths = plan, configured, original, paths
         existing_private_roots = [root for root in (private, *(Path(configured[key]) for key in ("workspace_root", "log_root", "upload_root"))) if root.exists()]
         self._root_identities = [(root, _identity(root)) for root in (node_root, academic_root, stage, bundle, *existing_private_roots)]
@@ -461,7 +470,10 @@ class AcademicController:
         self._status["backup_verified"] = True
         return self.status(True)
 
-    def ready(self):
+    def ready(self, node_process_id=None):
+        node_pid_attested = type(node_process_id) is int and node_process_id > 1
+        if (node_process_id is not None or self._node_pid_attested) and not node_pid_attested:
+            raise AcademicError("verification_failed")
         def deadline(_number, _frame):
             raise _ReadyDeadline()
         previous_handler = signal.getsignal(signal.SIGALRM)
@@ -483,14 +495,16 @@ class AcademicController:
             node_matches = []
             for node in nodes:
                 try:
+                    if node_pid_attested and node["identifier"] != node_process_id:
+                        continue
                     root = inventory._filesystem_path(node, node["cwd"])
                     if _identity(root) != _identity(Path(self._node["cwd"])):
                         continue
                     if _process_owner(node) != tuple(self._original[0]["owner"]):
                         continue
                     environment = inventory._environment(node["directory"] / "environ")
-                    manager, handle = inventory._manager("/proc", node, environment)
-                    if (manager == "pm2" and handle and handle[0] == self._runtime._handle[0]) or _shares_verified_pm2_parent(node, environment, self._runtime):
+                    manager, handle = ("attested", None) if node_pid_attested else inventory._manager("/proc", node, environment)
+                    if node_pid_attested or (manager == "pm2" and handle and handle[0] == self._runtime._handle[0]) or _shares_verified_pm2_parent(node, environment, self._runtime):
                         node_matches.append(environment)
                 except Exception:
                     continue
@@ -562,6 +576,8 @@ class AcademicController:
             action = request.get("action")
             if action == "prepare":
                 return self.prepare(request)
+            if action == "ready" and set(request) in ({"action"}, {"action", "node_process_id"}):
+                return self.ready(request.get("node_process_id"))
             if set(request) != {"action"}:
                 raise AcademicError("invalid_request")
             if action not in {"apply", "verify", "ready", "restore", "close"}:

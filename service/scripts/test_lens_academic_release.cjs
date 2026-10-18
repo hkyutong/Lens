@@ -7,6 +7,7 @@ const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
 const util = require('node:util');
+const net = require('node:net');
 const bridge = require('./lens_academic_release.cjs');
 const SECRET = 'synthetic-academic-bridge-secret-0123456789';
 
@@ -103,6 +104,89 @@ async function fixture(t, mode = 'normal') {
   return { options: { stage, bundle, releaseId: 'abc01234'.repeat(4), nodeCwd,
     privateStorage: path.join(nodeCwd, 'private/attachments'), entries: [], pm2, pm2Call }, mutations, environment };
 }
+
+async function independentManager(t, value) {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(fs.realpathSync('/tmp'), 'lens-manager-')));
+  fs.chmodSync(home, 0o700);
+  const socket = net.createServer();
+  await new Promise(resolve => socket.listen(path.join(home, 'rpc.sock'), resolve));
+  t.after(() => new Promise(resolve => socket.close(() => {
+    fs.rmSync(home, { recursive: true, force: true }); resolve();
+  })));
+  const moduleRoot = path.join(value.options.stage, 'manager-module');
+  fs.mkdirSync(moduleRoot);
+  fs.writeFileSync(path.join(moduleRoot, 'index.js'), `
+    const events = [];
+    class Manager {
+      constructor(options) { events.push({ action: 'create', home: options.pm2_home }); }
+      connect(callback) { events.push({ action: 'connect' }); callback(null); }
+      disconnect() { events.push({ action: 'disconnect' }); }
+    }
+    module.exports = { custom: Manager, events };
+  `);
+  const fixtureFile = path.join(value.options.stage, 'fixture.json');
+  const contract = JSON.parse(fs.readFileSync(fixtureFile, 'utf8'));
+  contract.contract.pm2_home = home;
+  fs.writeFileSync(fixtureFile, JSON.stringify(contract), { mode: 0o600 });
+  const api = require(moduleRoot), originalCall = value.options.pm2Call;
+  value.options.pm2ModuleRoot = moduleRoot;
+  value.options.pm2Call = async (manager, method, ...args) => {
+    if (manager instanceof api.custom) return originalCall(value.options.pm2, method, ...args);
+    throw new Error('the business manager must not control the academic service');
+  };
+  return { home, api };
+}
+
+test('academic lifecycle uses its separately verified manager and closes the connection', async t => {
+  const value = await fixture(t);
+  const manager = await independentManager(t, value);
+  const release = await bridge.prepare(value.options);
+  await release.stop(); await release.apply(); await release.startNew();
+  await release.ready(); await release.close({ committed: true });
+  assert.deepEqual(manager.api.events, [
+    { action: 'create', home: manager.home }, { action: 'connect' }, { action: 'disconnect' },
+  ]);
+});
+
+test('a failed independent manager match disconnects without stopping a service', async t => {
+  const value = await fixture(t);
+  const manager = await independentManager(t, value);
+  value.options.pm2Call = async () => [];
+  await assert.rejects(bridge.prepare(value.options), /academic_context_invalid/);
+  assert.equal(manager.api.events.at(-1).action, 'disconnect');
+  assert.equal(value.mutations.length, 0);
+});
+
+test('a missing academic manager socket never starts a replacement daemon', async t => {
+  const value = await fixture(t);
+  const manager = await independentManager(t, value);
+  const fixtureFile = path.join(value.options.stage, 'fixture.json');
+  const contract = JSON.parse(fs.readFileSync(fixtureFile, 'utf8'));
+  contract.contract.pm2_home = path.join(value.options.stage, 'missing-manager');
+  fs.writeFileSync(fixtureFile, JSON.stringify(contract), { mode: 0o600 });
+  await assert.rejects(bridge.prepare(value.options), /academic_context_invalid/);
+  assert.equal(manager.api.events.length, 0);
+});
+
+test('independent manager recovery starts the old academic service and disconnects', async t => {
+  const value = await fixture(t);
+  const manager = await independentManager(t, value);
+  const release = await bridge.prepare(value.options);
+  await release.stop(); await release.apply(); await release.startNew();
+  await release.stop(); await release.restore(); await release.startOld(); await release.close();
+  assert.equal(value.mutations.filter(item => item.method === 'start').length, 2);
+  assert.equal(manager.api.events.at(-1).action, 'disconnect');
+});
+
+test('readiness rejects a missing fresh business process attestation', async t => {
+  const value = await fixture(t);
+  value.options.nodeProcessId = 31;
+  value.options.getNodeProcessId = async () => 0;
+  const release = await bridge.prepare(value.options);
+  await release.stop(); await release.apply(); await release.startNew();
+  await assert.rejects(release.ready(), /academic_ready_failed/);
+  await release.stop(); await release.restore(); await release.startOld(); await release.close();
+});
 test('bridge lifecycle preserves old start and clears only managed environment on new start', async t => {
   const value = await fixture(t);
   const release = await bridge.prepare(value.options);

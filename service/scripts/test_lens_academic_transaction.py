@@ -191,6 +191,49 @@ class AcademicTransactionTests(unittest.TestCase):
             self.prepare()
         self.assert_original()
 
+    def test_prepare_accepts_node_pid_attested_by_its_own_manager(self):
+        self.request['node_process_id'] = self.node_process['identifier']
+        self.node_process['parent'] = 901
+        with patch.object(inventory, '_environment', return_value={}), patch.object(inventory, '_manager', return_value=('unresolved', None)):
+            self.prepare()
+        self.assert_original()
+
+    def test_prepare_rejects_attested_pid_not_in_the_observed_project(self):
+        self.request['node_process_id'] = self.node_process['identifier'] + 1
+        with self.assertRaises(transaction.AcademicError):
+            self.prepare()
+        self.assert_original()
+
+    def test_prepare_rejects_boolean_process_attestation(self):
+        self.request['node_process_id'] = True
+        with self.assertRaises(transaction.AcademicError):
+            self.prepare()
+        self.assert_original()
+
+    def test_attested_ready_requires_a_fresh_process_attestation(self):
+        self.request['node_process_id'] = self.node_process['identifier']
+        self.prepare()
+        self.controller.apply()
+        with patch.object(inventory, 'inventory', return_value={'ok': True}):
+            self.assertFalse(self.controller.dispatch({'action': 'ready'})['ok'])
+
+    def test_attested_ready_accepts_its_own_manager_process(self):
+        self.request['node_process_id'] = self.node_process['identifier']
+        self.prepare()
+        self.controller.apply()
+        environment = {'ACADEMIC_API_URL': 'http://127.0.0.1:9029'}
+        self.node_process['parent'] = 901
+        with patch.object(inventory, 'inventory', return_value={'ok': True}), patch.object(inventory, '_environment', return_value=environment), patch.object(inventory, '_manager', return_value=('unresolved', None)):
+            result = self.controller.dispatch({'action': 'ready', 'node_process_id': self.node_process['identifier']})
+        self.assertTrue(result['ok'])
+
+    def test_attested_ready_rejects_an_unobserved_process(self):
+        self.request['node_process_id'] = self.node_process['identifier']
+        self.prepare()
+        self.controller.apply()
+        with patch.object(inventory, 'inventory', return_value={'ok': True}):
+            self.assertFalse(self.controller.dispatch({'action': 'ready', 'node_process_id': self.node_process['identifier'] + 1})['ok'])
+
     def test_prepare_rejects_unmanaged_node_with_different_parent(self):
         self.environment.pop('pm_id', None)
         self.node_process['parent'] = 902
