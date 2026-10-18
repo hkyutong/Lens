@@ -1,3 +1,4 @@
+import { startAcademicResponseHeartbeat } from './academic.response-heartbeat';
 import { randomUUID } from 'crypto';
 import { AcademicRequestIdentity, academicScopeUserName, parseAcademicScopeUserName, signAcademicRequest } from './academicInternalAuth';
 import { AttachmentService } from '../attachment/attachment.service';
@@ -2827,6 +2828,7 @@ export class AcademicService {
     streamRes.flushHeaders?.();
     res.write(`${JSON.stringify({ chatId: assistantLogId, requestId })}\n`);
     streamRes.flush?.();
+    startAcademicResponseHeartbeat(streamRes);
 
     const controller = new AbortController();
     let upstreamAbortStream: Readable | null = null;
@@ -5168,6 +5170,8 @@ export class AcademicService {
   }
 
   private isAcademicPlaceholderContent(text: string) {
+    if (this.isAcademicHeartbeatText(text)) return true;
+
     const normalized = this.sanitizeAcademicOutput(String(text || '')).trim();
     if (!normalized) return true;
     if (normalized === '已收到请求，但学术后端未返回可展示内容。') return true;
@@ -6418,6 +6422,8 @@ export class AcademicService {
   }
 
   private isAcademicHeartbeatText(text: string) {
+    if (/^正在生成并核验研究结果[.。…\s]*$/.test(String(text || '').trim())) return true;
+
     const normalized = String(text || '').trim();
     if (normalized === '正在生成结构化结果...') return true;
     if (!normalized) return true;

@@ -51,3 +51,34 @@ describe('featured research execution boundaries', () => {
     ).toBe(true);
   });
 });
+
+
+describe('featured research generation placeholder', () => {
+  it('retains a substantive report containing the generation status', () => {
+    const service = Object.create(AcademicService.prototype) as any;
+    const report = '# 研究方案\n\n界面曾显示“正在生成并核验研究结果…”。\n\n## 研究方法\n采用聚类随机设计，并调整基线测量。';
+
+    expect(service.isAcademicPlaceholderContent(report)).toBe(false);
+    expect(service.isAcademicHeartbeatText(report)).toBe(false);
+    expect(service.isMeaningfulAcademicContent(report)).toBe(true);
+  });
+
+
+  it('rejects the featured generation status as a completed research result', () => {
+    const service = Object.create(AcademicService.prototype) as any;
+    const pending = '正在生成并核验研究结果…';
+
+    expect({
+      placeholder: service.isAcademicPlaceholderContent(pending),
+      heartbeat: service.isAcademicHeartbeatText(pending),
+      meaningful: service.isMeaningfulAcademicContent(pending),
+    }).toEqual({ placeholder: true, heartbeat: true, meaningful: false });
+    expect(service.isAcademicEmptyFailureState({
+      fullContent: pending,
+      stablePolishContent: '',
+      finishReason: 'stop',
+      streamError: '',
+      fileVectorResult: [],
+    }, pending)).toBe(true);
+  });
+});
