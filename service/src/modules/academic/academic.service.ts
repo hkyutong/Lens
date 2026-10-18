@@ -2909,7 +2909,10 @@ export class AcademicService {
     const handleReqClose = () => {
       if (responseCompleted || res.writableEnded || res.writableFinished) return;
       const closedByClient = Boolean(
-        (req as any).aborted || (req as any).readableAborted || (req as any).destroyed,
+        (req as any)?.aborted ||
+          (req as any)?.readableAborted ||
+          ((req as any)?.destroyed && !(req as any)?.complete) ||
+          res.destroyed,
       );
       if (closedByClient) {
         abortUpstream('request_closed');
@@ -2919,8 +2922,10 @@ export class AcademicService {
       clearForceCloseTimer();
       req.off('aborted', handleReqAborted);
       req.off('close', handleReqClose);
+      res.off('close', handleReqClose);
     };
     req.on('close', handleReqClose);
+    res.on('close', handleReqClose);
     res.on('finish', () => {
       responseCompleted = true;
       cleanupConnectionListeners();
@@ -4142,6 +4147,7 @@ export class AcademicService {
     const cleanupConnectionListeners = () => {
       req.off('aborted', handleReqAborted);
       req.off('close', handleReqClose);
+      res.off('close', handleReqClose);
     };
     const handleReqAborted = () => {
       if (!controller.signal.aborted) controller.abort();
@@ -4149,13 +4155,17 @@ export class AcademicService {
     const handleReqClose = () => {
       if (responseCompleted || res.writableEnded || res.writableFinished) return;
       const closedByClient = Boolean(
-        (req as any).aborted || (req as any).readableAborted || (req as any).destroyed,
+        (req as any)?.aborted ||
+          (req as any)?.readableAborted ||
+          ((req as any)?.destroyed && !(req as any)?.complete) ||
+          res.destroyed,
       );
       if (closedByClient && !controller.signal.aborted) {
         controller.abort();
       }
     };
     req.on('close', handleReqClose);
+    res.on('close', handleReqClose);
     req.on('aborted', handleReqAborted);
     res.on('finish', () => {
       responseCompleted = true;
