@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import lensBrandLogo from '@/assets/yutogpt-logo.svg'
   import useSettingsStore from '@/store/modules/settings';
 
   defineOptions({
@@ -32,7 +33,7 @@
     :class="{ 'cursor-pointer': settingsStore.settings.home.enable }"
     :title="title"
   >
-    <!-- <img v-if="showLogo" :src="logo" class="logo h-[30px] w-[30px] object-contain"> -->
+    <!-- <img v-if="showLogo" :src="lensBrandLogo" class="logo h-[30px] w-[30px] object-contain"> -->
     <span v-if="showTitle" class="block truncate font-bold">{{ title }}</span>
   </RouterLink>
 </template>
