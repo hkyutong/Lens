@@ -43,11 +43,17 @@ function existingYaml(nodeModulesPath) {
   for (const modules of [nodeModulesPath, path.resolve(__dirname, '..', 'node_modules')]) {
     try {
       const store = fs.realpathSync(path.join(modules, '.pnpm'));
-      for (const entry of fs.readdirSync(store).filter(name => /^yaml@[^/]+$/.test(name)).sort()) {
-        const location = fs.realpathSync(path.join(store, entry, 'node_modules', 'yaml'));
+      const entries = fs.readdirSync(store).sort();
+      for (const entry of [
+        ...entries.filter(name => /^yaml@[^/]+$/.test(name)),
+        ...entries.filter(name => /^js-yaml@4\.[^/]+$/.test(name)),
+      ]) {
+        const name = entry.startsWith('js-yaml@') ? 'js-yaml' : 'yaml';
+        const location = fs.realpathSync(path.join(store, entry, 'node_modules', name));
         if (!inside(location, store)) continue;
         const api = require(location);
-        if (typeof api.parseDocument === 'function') return api;
+        if (typeof api.parseDocument === 'function' ||
+            (typeof api.load === 'function' && api.JSON_SCHEMA)) return api;
       }
     } catch { /* Try the other existing runtime; no installation is permitted. */ }
   }
@@ -56,9 +62,22 @@ function existingYaml(nodeModulesPath) {
 
 function document(filename, yaml) {
   try {
-    const parsed = yaml.parseDocument(readFile(filename), { uniqueKeys: true, strict: true, version: '1.2' });
-    if (parsed.errors.length || parsed.warnings.length) fail('invalid_document');
-    const value = parsed.toJS({ maxAliasCount: 0 });
+    const source = readFile(filename);
+    let value;
+    if (typeof yaml.parseDocument === 'function') {
+      const parsed = yaml.parseDocument(source, { uniqueKeys: true, strict: true, version: '1.2' });
+      if (parsed.errors.length || parsed.warnings.length) fail('invalid_document');
+      value = parsed.toJS({ maxAliasCount: 0 });
+    } else {
+      value = yaml.load(source, {
+        schema: yaml.JSON_SCHEMA,
+        json: false,
+        onWarning() { fail('invalid_document'); },
+        listener(_event, state) {
+          if (!record(state.anchorMap) || Object.keys(state.anchorMap).length) fail('invalid_document');
+        },
+      });
+    }
     if (!record(value)) fail('invalid_document');
     return value;
   } catch (error) {

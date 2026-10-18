@@ -4,6 +4,41 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+
+function productionParserFixture(f) {
+  const store = fs.realpathSync(path.join(__dirname, '..', 'node_modules', '.pnpm'));
+  const entry = fs.readdirSync(store).find(name => /^js-yaml@4\.3\./.test(name));
+  assert.ok(entry, 'the existing patched production parser must be available');
+  const installed = new Map();
+  function copyPackage(source) {
+    const metadata = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
+    if (installed.has(metadata.name)) return installed.get(metadata.name);
+    const target = f.install(metadata.name, metadata.version, metadata.dependencies || {});
+    installed.set(metadata.name, { version: metadata.version, target });
+    fs.cpSync(source, target, { recursive: true, filter: item => path.basename(item) !== 'node_modules' });
+    const key = metadata.name + '@' + metadata.version;
+    f.lock.packages[key] = { resolution: { integrity: 'synthetic-parser' } };
+    f.lock.snapshots[key] = { dependencies: {} };
+    const resolve = createRequire(path.join(source, 'package.json'));
+    for (const name of Object.keys(metadata.dependencies || {})) {
+      const child = copyPackage(path.dirname(resolve.resolve(name + '/package.json')));
+      f.lock.snapshots[key].dependencies[name] = child.version;
+      f.link(path.dirname(target), name, child.target);
+    }
+    return installed.get(metadata.name);
+  }
+  const parser = copyPackage(path.join(store, entry, 'node_modules', 'js-yaml'));
+  const specifier = '^' + parser.version;
+  f.pkg.dependencies['js-yaml'] = specifier;
+  f.lock.importers['.'].dependencies['js-yaml'] = { specifier, version: parser.version };
+  f.link(f.nodeModulesPath, 'js-yaml', parser.target);
+  const tools = path.join(f.root, 'tools');
+  fs.mkdirSync(tools);
+  f.verifierPath = path.join(tools, 'lens_dependency_closure.cjs');
+  fs.copyFileSync(path.join(__dirname, 'lens_dependency_closure.cjs'), f.verifierPath);
+  f.flush();
+}
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-dependency-test-'));
@@ -55,7 +90,7 @@ function check(name, mutate, expected, expectedCount = 2) {
   const f = fixture();
   try {
     mutate?.(f);
-    const api = require('./lens_dependency_closure.cjs');
+    const api = require(f.verifierPath || './lens_dependency_closure.cjs');
     const result = api.verify(f);
     assert.equal(result.passed, expected, name);
     assert.deepEqual(Object.keys(result).sort(), ['count', 'error', 'passed']);
@@ -104,6 +139,27 @@ function main() {
   check('a compatible optional package cannot silently disappear', f => { f.lock.packages['platform-only@1.0.0'] = { os: [process.platform] }; f.lock.snapshots['platform-only@1.0.0'] = {}; f.lock.snapshots['alpha@1.0.0'].optionalDependencies = { 'platform-only': '1.0.0' }; f.flush(); }, false);
   check('dependency aliases resolve to their actual locked package', f => { delete f.pkg.dependencies.alpha; f.pkg.dependencies.alias = 'npm:alpha@^1.0.0'; delete f.lock.importers['.'].dependencies.alpha; f.lock.importers['.'].dependencies.alias = { specifier: 'npm:alpha@^1.0.0', version: 'alpha@1.0.0' }; fs.renameSync(path.join(f.nodeModulesPath, 'alpha'), path.join(f.nodeModulesPath, 'alias')); f.flush(); }, true);
   check('scoped peer-context snapshots keep their resolved physical graph', f => { fs.unlinkSync(path.join(f.nodeModulesPath, 'alpha')); fs.rmSync(path.dirname(path.dirname(f.packageDirs.get('alpha'))), { recursive: true }); const dir = f.install('@scope/alpha', '1.0.0', { beta: '^2.0.0' }); f.link(path.join(f.store, '@scope+alpha@1.0.0', 'node_modules'), 'beta', f.packageDirs.get('beta')); f.link(f.nodeModulesPath, '@scope/alpha', dir); f.pkg.dependencies = { '@scope/alpha': '^1.0.0' }; f.lock.importers['.'].dependencies = { '@scope/alpha': { specifier: '^1.0.0', version: '1.0.0(beta@2.0.0)' } }; delete f.lock.packages['alpha@1.0.0']; delete f.lock.snapshots['alpha@1.0.0']; f.lock.packages['@scope/alpha@1.0.0'] = {}; f.lock.snapshots['@scope/alpha@1.0.0(beta@2.0.0)'] = { dependencies: { beta: '2.0.0' } }; f.flush(); }, true);
+  check('the standalone verifier uses the existing production parser without development dependencies', productionParserFixture, true, 4);
+  check('the production parser rejects duplicate YAML keys', f => {
+    productionParserFixture(f);
+    fs.writeFileSync(f.workspacePath, 'overrides:\n  beta: 2.0.0\n  beta: 2.0.0\n');
+  }, false);
+  check('the production parser rejects scalar anchors and aliases', f => {
+    productionParserFixture(f);
+    fs.writeFileSync(f.workspacePath, 'overrides:\n  beta: &shared 2.0.0\nunused: *shared\n');
+  }, false);
+  check('the production parser rejects collection anchors before expansion', f => {
+    productionParserFixture(f);
+    fs.writeFileSync(f.workspacePath, 'overrides: &shared { beta: 2.0.0 }\nunused: [*shared, *shared]\n');
+  }, false);
+  check('the production parser rejects custom tags', f => {
+    productionParserFixture(f);
+    fs.writeFileSync(f.workspacePath, 'overrides: !synthetic { beta: 2.0.0 }\n');
+  }, false);
+  check('the production parser rejects multiple documents', f => {
+    productionParserFixture(f);
+    fs.writeFileSync(f.workspacePath, 'overrides: { beta: 2.0.0 }\n---\noverrides: { beta: 2.0.0 }\n');
+  }, false);
   process.stdout.write(JSON.stringify({ passed: true, tests }));
 }
 
