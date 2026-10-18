@@ -47,7 +47,7 @@ def _role(item):
     for kind in ("chat", "admin"):
         if role == kind + "_static" and source.startswith(kind + "/dist/"):
             return "public/" + kind + "/" + source.removeprefix(kind + "/dist/")
-    if role == "academic_runtime" and source in frozenset({'academic-4.0/crazy_functions/Lens_Featured_Tasks.py', 'academic-4.0/shared_utils/lens_request_security.py', 'academic-4.0/toolbox.py', 'academic-4.0/shared_utils/lens_storage.py', 'academic-4.0/crazy_functions/lens_research_tasks.py', 'academic-4.0/crazy_functions/lens_research_proposal.py', 'academic-4.0/shared_utils/fastapi_stream_server.py'}):
+    if role == "academic_runtime" and source in frozenset({'academic-4.0/crazy_functions/Lens_Featured_Tasks.py', 'academic-4.0/shared_utils/lens_request_security.py', 'academic-4.0/crazy_functional.py', 'academic-4.0/toolbox.py', 'academic-4.0/shared_utils/lens_storage.py', 'academic-4.0/crazy_functions/lens_research_tasks.py', 'academic-4.0/crazy_functions/lens_research_proposal.py', 'academic-4.0/shared_utils/fastapi_stream_server.py'}):
         return source
     raise ValueError
 

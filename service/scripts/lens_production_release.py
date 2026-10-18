@@ -126,7 +126,8 @@ _ACADEMIC_RUNTIME_FILES = frozenset({
     "academic-4.0/shared_utils/fastapi_stream_server.py",
     "academic-4.0/shared_utils/lens_storage.py",
     "academic-4.0/shared_utils/lens_request_security.py",
-    "academic-4.0/toolbox.py",
+    "academic-4.0/crazy_functional.py",
+        "academic-4.0/toolbox.py",
 })
 
 

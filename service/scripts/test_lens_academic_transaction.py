@@ -17,7 +17,7 @@ import lens_academic_transaction as transaction
 
 class AcademicTransactionTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="synthetic-academic-transaction-", dir="/private/tmp")
+        self.temporary = tempfile.TemporaryDirectory(prefix="synthetic-academic-transaction-", dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name).resolve()
         self.stage, self.bundle, self.node, self.academic = [self.base / name for name in ("stage", "bundle", "node", "academic")]
@@ -44,6 +44,8 @@ class AcademicTransactionTests(unittest.TestCase):
         for identifier in (10, 11):
             process = self.proc / str(identifier)
             process.mkdir(parents=True)
+            # Synthetic proc metadata represents the effective process group.
+            os.chown(process, -1, os.getegid())
             (process / "root").symlink_to("/")
             (process / "ns").mkdir()
             (process / "ns/net").symlink_to("synthetic-network")
@@ -84,6 +86,103 @@ class AcademicTransactionTests(unittest.TestCase):
         for role, expected in self.original.items():
             self.assertEqual((self.academic / role).read_bytes(), expected)
 
+    def test_runtime_owner_contract_allows_only_private_storage_access(self):
+        same = (1101, 1101)
+        other = (1102, 1102)
+        privileged = (0, 0)
+        self.assertTrue(transaction._storage_owners_supported(same, same, same))
+        self.assertTrue(transaction._storage_owners_supported(same, privileged, privileged))
+        self.assertFalse(transaction._storage_owners_supported(same, other, privileged))
+        self.assertFalse(transaction._storage_owners_supported(same, privileged, same))
+        self.assertFalse(transaction._storage_owners_supported(same, same, other))
+
+    def test_atomic_configuration_preserves_explicit_owner_and_mode(self):
+        target = self.node / "synthetic-owner-config"
+        owner = (os.geteuid(), os.getegid())
+        transaction._atomic_private(target, b"synthetic configuration", owner=owner)
+        observed = target.stat()
+        self.assertEqual((observed.st_uid, observed.st_gid), owner)
+        self.assertEqual(observed.st_mode & 0o777, 0o600)
+        self.assertEqual(transaction._read_regular(target, private=True, owner=owner)[0], b"synthetic configuration")
+
+    def test_atomic_configuration_owner_failure_preserves_original(self):
+        target = self.node / "synthetic-owner-config"
+        target.write_bytes(b"synthetic original")
+        owner = (os.geteuid() + 1, os.getegid())
+        with patch.object(transaction.os, "fchown", return_value=None):
+            with self.assertRaises(transaction.AcademicError):
+                transaction._atomic_private(target, b"synthetic replacement", owner=owner)
+        self.assertEqual(target.read_bytes(), b"synthetic original")
+        self.assertEqual(list(self.node.glob(".lens-config-*")), [])
+
+    def test_configuration_owner_contract_survives_independent_recovery(self):
+        self.prepare()
+        backup = json.loads((self.bundle / transaction.BACKUP_NAME).read_bytes())
+        owner = [os.geteuid(), os.getegid()]
+        self.assertEqual([item["owner"] for item in backup["configurations"]], [owner, owner])
+        self.controller.apply()
+        for root in (self.node, self.academic):
+            observed = (root / transaction.CONFIG_NAME).stat()
+            self.assertEqual([observed.st_uid, observed.st_gid], owner)
+        for root in (self.private, *(self.private / role for role in ("academic-workspaces", "academic-logs", "academic-uploads"))):
+            observed = root.stat()
+            self.assertEqual([observed.st_uid, observed.st_gid], owner)
+            self.assertEqual(observed.st_mode & 0o777, 0o700)
+        self.controller.close()
+        result = transaction.recover_bundle({"action": "restore", "bundle": str(self.bundle)})
+        self.assertTrue(result["rollback_completed"])
+        self.assert_original()
+        self.assertFalse((self.node / transaction.CONFIG_NAME).exists())
+        self.assertFalse((self.academic / transaction.CONFIG_NAME).exists())
+
+    def test_legacy_recovery_record_without_owner_still_restores(self):
+        self.prepare()
+        self.controller.apply()
+        backup = self.bundle / transaction.BACKUP_NAME
+        value = json.loads(backup.read_bytes())
+        for before in value["configurations"]:
+            before.pop("owner")
+        backup.write_text(json.dumps(value))
+        result = transaction.recover_bundle({"action": "restore", "bundle": str(self.bundle)})
+        self.assertTrue(result["rollback_completed"])
+        self.assert_original()
+        self.assertFalse((self.node / transaction.CONFIG_NAME).exists())
+        self.assertFalse((self.academic / transaction.CONFIG_NAME).exists())
+
+    def test_existing_configuration_bytes_and_owner_are_restored(self):
+        self.prepare()
+        self.controller.apply()
+        configured = json.loads((self.node / transaction.CONFIG_NAME).read_bytes())
+        original = json.dumps(configured, indent=2).encode()
+        owner = (os.geteuid(), os.getegid())
+        for root in (self.node, self.academic):
+            transaction._atomic_private(root / transaction.CONFIG_NAME, original, owner=owner)
+        self.controller.close()
+        for key in ("stage", "bundle"):
+            replacement = self.base / ("synthetic-second-" + key)
+            replacement.mkdir(mode=0o700)
+            if key == "stage":
+                shutil.copytree(self.stage / "artifacts", replacement / "artifacts")
+            self.request[key] = str(replacement)
+        another = transaction.AcademicController()
+        another.prepare(self.request, self.proc)
+        another.apply()
+        self.assertNotEqual((self.node / transaction.CONFIG_NAME).read_bytes(), original)
+        self.assertTrue(another.restore()["rollback_completed"])
+        for root in (self.node, self.academic):
+            target = root / transaction.CONFIG_NAME
+            self.assertEqual(target.read_bytes(), original)
+            self.assertEqual((target.stat().st_uid, target.stat().st_gid), owner)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+
+    def test_existing_private_directory_contract_rejected_before_backup(self):
+        self.private.mkdir(mode=0o755)
+        with self.assertRaises(transaction.AcademicError):
+            self.prepare()
+        self.assert_original()
+        self.assertFalse((self.bundle / transaction.BACKUP_NAME).exists())
+        self.assertEqual(self.private.stat().st_mode & 0o777, 0o755)
+
     def test_prepare_accepts_missing_node_pm_id_with_verified_shared_parent(self):
         self.environment.pop('pm_id', None)
         self.node_process['parent'] = 901
@@ -121,6 +220,61 @@ class AcademicTransactionTests(unittest.TestCase):
         ):
             with self.assertRaises(transaction.AcademicError):
                 self.prepare()
+        self.assert_original()
+
+    def test_upgrade_registers_research_plan_and_restores_old_registry(self):
+        role = "crazy_functional.py"
+        original = b"def get_crazy_functions():\n    return {'legacy_feature': {}}\n"
+        updated = (
+            "def get_crazy_functions():\n"
+            "    return {'legacy_feature': {}, 'Lens｜研究方案设计': {}}\n"
+        ).encode("utf8")
+        (self.academic / role).write_bytes(original)
+        (self.source / role).write_bytes(updated)
+        self.original[role] = original
+        entry = next(
+            (item for item in self.entries if item["source"] == "academic-4.0/" + role),
+            None,
+        )
+        if entry is None:
+            entry = dict(self.entries[0])
+            self.entries.append(entry)
+        entry.update(
+            source="academic-4.0/" + role,
+            sha256=hashlib.sha256(updated).hexdigest(),
+            size=len(updated),
+        )
+
+        self.prepare()
+        self.assertTrue(self.controller.apply()["ok"])
+        namespace = {}
+        exec(compile((self.academic / role).read_bytes(), "<synthetic registry>", "exec"), namespace)
+        self.assertIn("Lens｜研究方案设计", namespace["get_crazy_functions"]())
+
+        self.assertTrue(self.controller.restore()["ok"])
+        restored = {}
+        exec(compile((self.academic / role).read_bytes(), "<synthetic registry>", "exec"), restored)
+        self.assertEqual(set(restored["get_crazy_functions"]()), {"legacy_feature"})
+        self.assert_original()
+
+    def test_registry_missing_before_upgrade_is_removed_on_restore(self):
+        role = "crazy_functional.py"
+        target = self.academic / role
+        if target.exists():
+            target.unlink()
+        self.original.pop(role, None)
+        updated = b"def get_crazy_functions():\n    return {'new_feature': {}}\n"
+        (self.source / role).write_bytes(updated)
+        entry = next((item for item in self.entries if item["source"] == "academic-4.0/" + role), None)
+        if entry is None:
+            entry = dict(self.entries[0])
+            self.entries.append(entry)
+        entry.update(source="academic-4.0/" + role, sha256=hashlib.sha256(updated).hexdigest(), size=len(updated))
+        self.prepare()
+        self.assertTrue(self.controller.apply()["ok"])
+        self.assertEqual(target.read_bytes(), updated)
+        self.assertTrue(self.controller.restore()["ok"])
+        self.assertFalse(target.exists())
         self.assert_original()
 
     def test_apply_verify_restore_preserves_new_business_data(self):
@@ -326,6 +480,19 @@ class AcademicTransactionTests(unittest.TestCase):
         self.assertTrue(evidence_path.is_file())
         evidence = json.loads(evidence_path.read_text())
         self.assertEqual(evidence, {"version": 1, "checks": checks})
+
+    def test_ready_rejects_changed_runtime_identity(self):
+        self.prepare()
+        self.controller.apply()
+        owner = (os.geteuid(), os.getegid())
+        for changed in (self.node_process, self.python):
+            with self.subTest(runtime="node" if changed is self.node_process else "academic"):
+                def observed_owner(process):
+                    return (owner[0] + 1, owner[1]) if process is changed else owner
+                with patch.object(inventory, "inventory", return_value={"ok": True}), patch.object(transaction, "_process_owner", side_effect=observed_owner):
+                    result = self.controller.dispatch({"action": "ready"})
+                    self.assertFalse(result["ok"])
+                    self.assertEqual(result["error"], "verification_failed")
 
     def test_ready_projects_only_new_node_route_after_unique_runtime_match(self):
         self.prepare()

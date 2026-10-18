@@ -60,28 +60,68 @@ def _identity(path):
     return value.st_dev, value.st_ino
 
 
-def _directory(path, private=False):
+def _validated_owner(value):
+    if not isinstance(value, (list, tuple)) or len(value) != 2 or any(type(item) is not int or not 0 <= item < 2 ** 32 - 1 for item in value):
+        raise AcademicError("configuration_invalid")
+    return tuple(value)
+
+
+def _owner_matches(observed, owner):
+    if owner is None:
+        return observed.st_uid == os.geteuid()
+    return (observed.st_uid, observed.st_gid) == _validated_owner(owner)
+
+
+def _process_owner(process):
+    observed = process["directory"].stat()
+    if not stat.S_ISDIR(observed.st_mode):
+        raise AcademicError("runtime_contract_invalid")
+    return _validated_owner((observed.st_uid, observed.st_gid))
+
+
+def _storage_owners_supported(node, academic, caller):
+    node, academic, caller = (_validated_owner(value) for value in (node, academic, caller))
+    return node == academic == caller or caller[0] == academic[0] == 0
+
+
+def _directory(path, private=False, owner=None):
     value = Path(path)
     if not value.is_absolute() or value != Path(os.path.normpath(value)):
         raise AcademicError("private_boundary_invalid")
-    # Every existing component is opened without following a symlink.
     for parent in [*reversed(value.parents), value]:
         observed = os.lstat(parent)
         if not stat.S_ISDIR(observed.st_mode):
             raise AcademicError("private_boundary_invalid")
-    if private and (stat.S_IMODE(observed.st_mode) != 0o700 or observed.st_uid != os.geteuid()):
+    if private and (stat.S_IMODE(observed.st_mode) != 0o700 or not _owner_matches(observed, owner)):
         raise AcademicError("private_boundary_invalid")
     return value
 
 
-def _read_regular(path, maximum=8192, private=False):
+def _assign_new_directory_owner(path, owner):
+    owner = _validated_owner(owner)
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        observed = os.fstat(descriptor)
+        named = os.lstat(path)
+        if not stat.S_ISDIR(observed.st_mode) or stat.S_IMODE(observed.st_mode) != 0o700 or (observed.st_dev, observed.st_ino) != (named.st_dev, named.st_ino):
+            raise AcademicError("private_boundary_invalid")
+        if not _owner_matches(observed, owner):
+            os.fchown(descriptor, *owner)
+        if not _owner_matches(os.fstat(descriptor), owner):
+            raise AcademicError("private_boundary_invalid")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _read_regular(path, maximum=8192, private=False, owner=None):
     descriptor = None
     try:
         descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         observed = os.fstat(descriptor)
         if not stat.S_ISREG(observed.st_mode) or observed.st_nlink != 1 or observed.st_size > maximum:
             raise AcademicError("configuration_invalid")
-        if private and (stat.S_IMODE(observed.st_mode) != 0o600 or observed.st_uid != os.geteuid()):
+        if private and (stat.S_IMODE(observed.st_mode) != 0o600 or not _owner_matches(observed, owner)):
             raise AcademicError("configuration_invalid")
         raw = os.read(descriptor, maximum + 1)
         if len(raw) > maximum:
@@ -92,9 +132,11 @@ def _read_regular(path, maximum=8192, private=False):
             os.close(descriptor)
 
 
-def _atomic_private(path, data, mode=0o600):
+def _atomic_private(path, data, mode=0o600, owner=None):
     path = Path(path)
     parent = _directory(path.parent)
+    if owner is not None:
+        owner = _validated_owner(owner)
     temporary = parent / (".lens-config-" + secrets.token_hex(16))
     descriptor = None
     try:
@@ -103,7 +145,11 @@ def _atomic_private(path, data, mode=0o600):
             descriptor = None
             stream.write(data)
             stream.flush()
+            if owner is not None and not _owner_matches(os.fstat(stream.fileno()), owner):
+                os.fchown(stream.fileno(), *owner)
             os.fchmod(stream.fileno(), mode)
+            if owner is not None and not _owner_matches(os.fstat(stream.fileno()), owner):
+                raise AcademicError("configuration_invalid")
             os.fsync(stream.fileno())
         os.replace(temporary, path)
         directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -212,7 +258,8 @@ class AcademicController:
         if len(matching) != 1:
             raise AcademicError("runtime_contract_invalid")
         node, node_environment, _ = matching[0]
-        if node["directory"].stat().st_uid != os.geteuid():
+        owners = [_process_owner(node), _process_owner(runtime._process)]
+        if not _storage_owners_supported(*owners, (os.geteuid(), os.getegid())):
             raise AcademicError("runtime_contract_invalid")
         if not inventory.node_source_verified(node_root):
             raise AcademicError("runtime_contract_invalid")
@@ -229,7 +276,7 @@ class AcademicController:
         private = academic_root.parent / ".lens-academic-storage"
         _directory(private.parent)
         if private.exists():
-            _directory(private)
+            _directory(private, private=True, owner=owners[0])
         for code in (node_root, academic_root):
             if private == code or code in private.parents or private in code.parents:
                 raise AcademicError("private_boundary_invalid")
@@ -241,7 +288,7 @@ class AcademicController:
         selected = [entry for entry in entries if isinstance(entry, dict) and isinstance(entry.get("source"), str)
                     and entry["source"].startswith("academic-4.0/")]
         expected = {"academic-4.0/" + role for role in inventory.ARTIFACTS}
-        if len(selected) != 7 or {entry["source"] for entry in selected} != expected:
+        if len(selected) != len(expected) or {entry["source"] for entry in selected} != expected:
             raise AcademicError("artifact_invalid")
         source = _directory(stage / "artifacts/academic-4.0")
         for entry in selected:
@@ -254,14 +301,14 @@ class AcademicController:
                 raise AcademicError("artifact_invalid")
         original, paths = [], [node_root / CONFIG_NAME, academic_root / CONFIG_NAME]
         existing = []
-        for path in paths:
+        for path, owner in zip(paths, owners):
             try:
-                raw, mode = _read_regular(path, private=True)
+                raw, mode = _read_regular(path, private=True, owner=owner)
                 value = _load_configuration(raw)
                 existing.append(value)
-                original.append({"present": True, "raw": base64.b64encode(raw).decode("ascii"), "mode": mode})
+                original.append({"present": True, "raw": base64.b64encode(raw).decode("ascii"), "mode": mode, "owner": list(owner)})
             except FileNotFoundError:
-                original.append({"present": False, "raw": "", "mode": 0o600})
+                original.append({"present": False, "raw": "", "mode": 0o600, "owner": list(owner)})
         if existing and any(item != existing[0] for item in existing):
             raise AcademicError("configuration_conflict")
         environments = [node_environment, runtime._environment]
@@ -283,9 +330,9 @@ class AcademicController:
                     raise AcademicError("configuration_conflict")
         for field in ("workspace_root", "log_root", "upload_root"):
             root = Path(configured[field])
-            if root.parent != private:
-                # Existing deployments may use other proved private directories.
-                _directory(root)
+            if root.exists() or root.parent != private:
+                # Existing directories must retain the private runtime contract.
+                _directory(root, private=True, owner=owners[0])
             for code in (node_root, academic_root):
                 if root == code or code in root.parents:
                     raise AcademicError("private_boundary_invalid")
@@ -297,7 +344,8 @@ class AcademicController:
         )
         self._runtime, self._node, self._stage, self._bundle, self._private = runtime, node, stage, bundle, private
         self._plan, self._configuration, self._original, self._config_paths = plan, configured, original, paths
-        self._root_identities = [(root, _identity(root)) for root in (node_root, academic_root, stage, bundle)]
+        existing_private_roots = [root for root in (private, *(Path(configured[key]) for key in ("workspace_root", "log_root", "upload_root"))) if root.exists()]
+        self._root_identities = [(root, _identity(root)) for root in (node_root, academic_root, stage, bundle, *existing_private_roots)]
         recovery = bundle / "academic-recovery"
         recovery.mkdir(mode=0o700)
         recovery_manifest = {}
@@ -340,7 +388,9 @@ class AcademicController:
     def _check_original_configurations(self):
         for path, before in zip(self._config_paths, self._original):
             try:
-                raw, mode = _read_regular(path, private=True)
+                raw, mode = _read_regular(path, private=True, owner=before["owner"])
+            except AcademicError:
+                raise AcademicError("configuration_conflict") from None
             except FileNotFoundError:
                 if before["present"]:
                     raise AcademicError("configuration_conflict")
@@ -381,11 +431,13 @@ class AcademicController:
             if not root.exists():
                 root.mkdir(mode=0o700)
                 self._created_roots.append(root)
-            _directory(root)
+                _assign_new_directory_owner(root, self._original[0]["owner"])
+                self._root_identities.append((root, _identity(root)))
+            _directory(root, private=True, owner=self._original[0]["owner"])
         for index, path in enumerate(self._config_paths):
             if fault_injector:
                 fault_injector("configuration_write", index)
-            _atomic_private(path, _json(self._configuration))
+            _atomic_private(path, _json(self._configuration), owner=self._original[index]["owner"])
         self._status["configs_applied"] = True
         return self.verify()
 
@@ -396,8 +448,10 @@ class AcademicController:
         self._backup_valid()
         if not self._status["files_applied"] or not self._status["configs_applied"]:
             raise AcademicError("verification_failed")
-        for path in self._config_paths:
-            raw, _ = _read_regular(path, private=True)
+        for root in (self._private, *(Path(self._configuration[key]) for key in ("workspace_root", "log_root", "upload_root"))):
+            _directory(root, private=True, owner=self._original[0]["owner"])
+        for path, before in zip(self._config_paths, self._original):
+            raw, _ = _read_regular(path, private=True, owner=before["owner"])
             if _load_configuration(raw) != self._configuration:
                 raise AcademicError("verification_failed")
         for entry, expected in zip(self._plan.entries, self._plan.after):
@@ -424,7 +478,7 @@ class AcademicController:
             if not observed["ok"]:
                 raise AcademicError("verification_failed")
             candidates, nodes = inventory.discover()
-            if len(candidates) != 1 or _identity(candidates[0]._root) != _identity(self._plan.target_root):
+            if len(candidates) != 1 or _identity(candidates[0]._root) != _identity(self._plan.target_root) or _process_owner(candidates[0]._process) != tuple(self._original[1]["owner"]):
                 raise AcademicError("verification_failed")
             node_matches = []
             for node in nodes:
@@ -432,7 +486,7 @@ class AcademicController:
                     root = inventory._filesystem_path(node, node["cwd"])
                     if _identity(root) != _identity(Path(self._node["cwd"])):
                         continue
-                    if node["directory"].stat().st_uid != os.geteuid():
+                    if _process_owner(node) != tuple(self._original[0]["owner"]):
                         continue
                     environment = inventory._environment(node["directory"] / "environ")
                     manager, handle = inventory._manager("/proc", node, environment)
@@ -463,7 +517,7 @@ class AcademicController:
             candidate = _json(self._configuration)
             for path, before in zip(self._config_paths, self._original):
                 try:
-                    current, _ = _read_regular(path, private=True)
+                    current, _ = _read_regular(path, private=True, owner=before["owner"])
                 except FileNotFoundError:
                     current = None
                 original = base64.b64decode(before["raw"]) if before["present"] else None
@@ -473,7 +527,7 @@ class AcademicController:
                     if current is not None:
                         path.unlink()
                 elif current != original:
-                    _atomic_private(path, original, before["mode"])
+                    _atomic_private(path, original, before["mode"], owner=before["owner"])
             if self._status["files_applied"]:
                 result = files.restore_backup(self._plan.backup_root, self._plan.target_root)
                 if not result.ok:
@@ -564,8 +618,9 @@ def recover_bundle(request):
         # Check all original/current records before beginning any recovery write.
         changes = []
         for root, before in zip(roots, originals):
-            if not isinstance(before, dict) or set(before) != {"present", "raw", "mode"} or type(before["present"]) is not bool or before["mode"] != 0o600:
+            if not isinstance(before, dict) or set(before) not in ({"present", "raw", "mode"}, {"present", "raw", "mode", "owner"}) or type(before["present"]) is not bool or before["mode"] != 0o600:
                 raise AcademicError("backup_invalid")
+            owner = _validated_owner(before["owner"]) if "owner" in before else None
             original = base64.b64decode(before["raw"], validate=True) if before["present"] else None
             if original is not None:
                 _load_configuration(original)
@@ -573,22 +628,22 @@ def recover_bundle(request):
                 raise AcademicError("backup_invalid")
             target = root / CONFIG_NAME
             try:
-                current, _ = _read_regular(target, private=True)
+                current, _ = _read_regular(target, private=True, owner=owner)
             except FileNotFoundError:
                 current = None
             old_hash = hashlib.sha256(original).hexdigest() if original is not None else None
             actual_hash = hashlib.sha256(current).hexdigest() if current is not None else None
             if actual_hash not in {old_hash, record["candidate_sha256"]}:
                 raise AcademicError("rollback_incomplete")
-            changes.append((target, current, original))
+            changes.append((target, current, original, owner))
         file_backup = bundle / "academic-files"
         if file_backup.exists() and not files.verify_backup(file_backup).ok:
             raise AcademicError("backup_invalid")
-        for target, current, original in changes:
+        for target, current, original, owner in changes:
             if original is None and current is not None:
                 target.unlink()
             elif original is not None and current != original:
-                _atomic_private(target, original)
+                _atomic_private(target, original, owner=owner)
         if file_backup.exists():
             result = files.restore_backup(file_backup, roots[1])
             if not result.ok:

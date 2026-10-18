@@ -40,6 +40,7 @@ class ProductionReleaseTests(unittest.TestCase):
         self.manifest["entries"].append({"role": "service_workspace", "source": "service/pnpm-workspace.yaml", "sha256": hashlib.sha256(workspace.read_bytes()).hexdigest(), "size": workspace.stat().st_size})
         # The atomic release includes exactly the seven reviewed Academic runtime files.
         academic_files = (
+            "crazy_functional.py",
             "crazy_functions/Lens_Featured_Tasks.py",
             "crazy_functions/lens_research_tasks.py",
             "crazy_functions/lens_research_proposal.py",
@@ -64,7 +65,7 @@ class ProductionReleaseTests(unittest.TestCase):
 
     def test_closed_manifest_accepts_only_build_roles(self):
         bundle = release.prepare_artifact_bundle(self.artifacts, self.manifest)
-        self.assertEqual(len(bundle.entries), 14)
+        self.assertEqual(len(bundle.entries), 15)
         self.assertEqual(repr(bundle), "<ArtifactBundle>")
         self.assertEqual(hashlib.sha256(bundle.archive).hexdigest(), bundle.archive_digest)
 
@@ -246,12 +247,13 @@ class ProductionReleaseTests(unittest.TestCase):
         context["runtime"]["cwd"] = str(tools)
         self.assertFalse(self.node_preflight(context, tools).ok)
 
-    def test_academic_runtime_requires_exact_seven_reviewed_files(self):
-        incomplete = dict(self.manifest)
-        incomplete["entries"] = [entry for entry in self.manifest["entries"]
-                                 if entry["source"] != "academic-4.0/toolbox.py"]
-        with self.assertRaises(release.ReleaseError):
-            release.prepare_artifact_bundle(self.artifacts, incomplete)
+    def test_academic_runtime_requires_complete_reviewed_files(self):
+        for source in release._ACADEMIC_RUNTIME_FILES:
+            with self.subTest(source=source):
+                incomplete = dict(self.manifest)
+                incomplete["entries"] = [entry for entry in self.manifest["entries"] if entry["source"] != source]
+                with self.assertRaises(release.ReleaseError):
+                    release.prepare_artifact_bundle(self.artifacts, incomplete)
         with self.assertRaises(release.ReleaseError):
             release._role_path("academic_runtime", "academic-4.0/config.py")
         with self.assertRaises(release.ReleaseError):

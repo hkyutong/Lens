@@ -20,6 +20,7 @@ import uuid
 
 
 ARTIFACTS = (
+    "crazy_functional.py",
     "crazy_functions/Lens_Featured_Tasks.py",
     "crazy_functions/lens_research_tasks.py",
     "crazy_functions/lens_research_proposal.py",

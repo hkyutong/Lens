@@ -151,7 +151,7 @@ class InventoryTests(unittest.TestCase):
             result = inventory.inventory(self.proc)
         self.assertTrue(result["ok"])
         self.assertEqual(result["process_count"], 1)
-        self.assertEqual(result["artifact_count"], 7)
+        self.assertEqual(result["artifact_count"], 8)
         self.assertEqual(result["listener_count"], 1)
         self.assertEqual(result["manager"], "pm2")
         self.assertTrue(result["shared_workspace_match"])
