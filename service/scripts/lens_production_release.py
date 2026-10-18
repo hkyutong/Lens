@@ -387,6 +387,10 @@ def build_remote_program(request):
         worker = Path(__file__).with_name("lens_production_release_worker.cjs").read_text()
         download_source = Path(__file__).with_name('lens_download_boundary.cjs').read_text()
         maintenance_source = Path(__file__).with_name("lens_maintenance_gate.cjs").read_text()
+        if request.get('mode') == 'backup_inventory':
+            backup_source = Path(__file__).with_name('lens_backup_inventory.cjs').read_text(encoding='utf-8')
+            worker = ('const __lensBackupInventory = (() => { const module = {exports: {}};\n'
+                      + backup_source + '\nreturn module.exports; })();\n' + worker)
         worker = "const __lensMaintenance=(()=>{const module={exports:{}};" + maintenance_source + ";return module.exports;})();\n" + worker
         worker = 'const __lensDownloadBoundaryHash=' + json.dumps(hashlib.sha256(download_source.encode()).hexdigest()) + ';' + 'const __lensDownloadBoundary=(()=>{const module={exports:{}};' + download_source + ';return module.exports;})();\n' + worker
         base = _replace_finish(base, _FINISH_CONTROL)

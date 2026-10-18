@@ -173,7 +173,11 @@ async function __lensControl() {
     __lensEmit(report);
     return;
   }
-const checked = __preflight(context), request = __lensRequest;
+if (__lensRequest.mode === 'backup_inventory') {
+    const namespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
+    return __lensEmit(__lensBackupInventory.inventoryBackupNamespace(namespace, __owner(context)));
+  }
+  const checked = __preflight(context), request = __lensRequest;
   if (!checked.report.ok || request.mode === 'preflight') return __lensEmit(checked.report);
   checked.report.mode = 'deploy';
   if (request.deploy !== true || !/^[0-9a-f]{32}$/.test(request.release_id || '')) {
