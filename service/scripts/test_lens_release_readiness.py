@@ -1,4 +1,7 @@
+import ast
 import json
+import os
+from pathlib import Path
 import contextlib
 import subprocess
 import unittest
@@ -12,6 +15,20 @@ from lens_safe_ops import SafeFailure
 
 
 class ReadinessSchemaTests(unittest.TestCase):
+    def test_node_child_uses_the_discovered_existing_daemon(self):
+        tree = ast.parse(remote_program())
+        launches = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute) and node.func.attr == 'run']
+        self.assertEqual(len(launches), 1)
+        environments = [item.value for item in launches[0].keywords if item.arg == 'env']
+        self.assertEqual(len(environments), 1, 'discovered_pm2_home_not_propagated')
+        expression = ast.Expression(body=environments[0])
+        rpc = Path('/synthetic/lens-daemon/rpc.sock')
+        value = eval(compile(ast.fix_missing_locations(expression), '<synthetic-env>', 'eval'),
+                     {'os': os, 'rpc': rpc})
+        self.assertEqual(value['PM2_HOME'], str(rpc.parent))
+        self.assertEqual(set(value) - {'PM2_HOME'}, set(os.environ) - {'PM2_HOME'})
+
     def payload(self):
         return {**{key: False for key in BOOL_FIELDS},
                 **{key: 0 for key in COUNT_FIELDS}}

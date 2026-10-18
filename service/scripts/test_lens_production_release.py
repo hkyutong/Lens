@@ -484,10 +484,11 @@ process.stdout.write(JSON.stringify({valid:valid.every(v => capture({PORT:v}) ==
                     raise OSError('synthetic single-argument limit')
         expr = ast.Expression(body=child)
         ast.fix_missing_locations(expr)
-        eval(compile(expr, '<synthetic>', 'eval'), {'subprocess': Process, 'node': 'node', 'module_root': 'synthetic-root', 'rpc': 'synthetic-rpc'})
+        eval(compile(expr, '<synthetic>', 'eval'), {'subprocess': Process, 'node': 'node', 'module_root': 'synthetic-root', 'rpc': Path('synthetic-rpc'), 'os': os})
         self.assertGreater(len(captured['input']), 200000)
         self.assertEqual(captured['timeout'], 1500)
         self.assertEqual(captured['argv'][3:], ['synthetic-root', 'synthetic-rpc'])
+        self.assertEqual(captured['env']['PM2_HOME'], '.')
         self.assertLess(len(captured['argv'][2]), 256)
         import subprocess
         result = subprocess.run(captured['argv'], input=b"const a='" + b'x' * 200000 + b"';process.stdout.write(JSON.stringify({size:a.length,first:process.argv[1]==='synthetic-root',second:process.argv[2]==='synthetic-rpc'}));", capture_output=True, timeout=5)

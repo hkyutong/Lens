@@ -2,6 +2,7 @@
 
 import json
 import time
+from pathlib import Path
 
 from lens_safe_ops import SafeFailure, _silent_boundary, _trusted_connection
 
@@ -288,15 +289,17 @@ def remote_program():
     # Discover the existing PM2 socket without starting a daemon or writing files.
     return r'''
 import json, os, pathlib, shutil, stat, subprocess
+__PM2_DISCOVERY__
 result = __EMPTY__
 try:
     binary = shutil.which('pm2')
     node = shutil.which('node')
     home = pathlib.Path(os.environ.get('PM2_HOME') or pathlib.Path.home() / '.pm2')
-    rpc = home / 'rpc.sock'
+    rpc = discover_rpc(home)
     if binary and node and stat.S_ISSOCK(rpc.stat().st_mode):
         module_root = pathlib.Path(binary).resolve().parent.parent
-        completed = subprocess.run([node, '-e', __NODE__, str(module_root), str(rpc)], capture_output=True, timeout=21)
+        completed = subprocess.run([node, '-e', __NODE__, str(module_root), str(rpc)], capture_output=True, timeout=21,
+                                   env=dict(os.environ, PM2_HOME=str(rpc.parent)))
         if completed.returncode == 0 and not completed.stderr and len(completed.stdout) <= 4096:
             value = json.loads(completed.stdout)
             if type(value) is dict and set(value) == set(result):
@@ -304,7 +307,7 @@ try:
 except Exception:
     pass
 print(json.dumps(result, separators=(',', ':')))
-'''.replace('__EMPTY__', repr({**dict.fromkeys(BOOL_FIELDS, False), **dict.fromkeys(COUNT_FIELDS, 0)})).replace('__NODE__', repr(NODE_PROGRAM))
+'''.replace('__EMPTY__', repr({**dict.fromkeys(BOOL_FIELDS, False), **dict.fromkeys(COUNT_FIELDS, 0)})).replace('__NODE__', repr(NODE_PROGRAM)).replace('__PM2_DISCOVERY__', Path(__file__).with_name('lens_pm2_discovery.py').read_text())
 
 
 def run_release_readiness(secrets, *, host_key_reviewed=False):
