@@ -387,6 +387,7 @@ class AcademicController:
             "arguments": list(runtime._process["arguments"]),
             "clear_environment": [*ENVIRONMENT.values(), "ACADEMIC_TEMP_ROOT"],
             "source_root": str(academic_root), "node_cwd": str(node_root),
+            "node_owner": list(owners[0]),
             "listener_endpoints": [list(endpoint) for endpoint in sorted(inventory._listeners(runtime._process))],
             "academic_url_environment": node_environment.get("ACADEMIC_API_URL", ""),
         }

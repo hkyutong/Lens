@@ -198,6 +198,12 @@ class AcademicTransactionTests(unittest.TestCase):
             self.prepare()
         self.assert_original()
 
+    def test_prepare_control_attests_node_configuration_owner(self):
+        self.prepare()
+        observed = json.loads((self.stage / transaction.CONTROL_NAME).read_text())
+        owner = self.node_process['directory'].stat()
+        self.assertEqual(observed['node_owner'], [owner.st_uid, owner.st_gid])
+
     def test_prepare_rejects_attested_pid_not_in_the_observed_project(self):
         self.request['node_process_id'] = self.node_process['identifier'] + 1
         with self.assertRaises(transaction.AcademicError):

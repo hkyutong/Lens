@@ -25,13 +25,14 @@ function failure(code) {
 function insist(condition, code = 'academic_context_invalid') { if (!condition) throw failure(code); }
 function exact(value, keys) { return value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).sort().join('\0') === [...keys].sort().join('\0'); }
-function privateJson(file, maximum = 65536) {
+function privateJson(file, maximum = 65536, owner) {
   let fd;
   try {
     fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
     const st = fs.fstatSync(fd);
     insist(st.isFile() && st.nlink === 1 && (st.mode & 0o777) === 0o600
-      && st.uid === process.geteuid() && st.size <= maximum);
+      && st.uid === (owner ? owner[0] : process.geteuid())
+      && (!owner || st.gid === owner[1]) && st.size <= maximum);
     return JSON.parse(fs.readFileSync(fd));
   } catch (_) { throw failure('academic_context_invalid'); }
   finally { if (fd !== undefined) fs.closeSync(fd); }
@@ -233,8 +234,12 @@ async function prepare(options) {
       ...(attestedNode ? { node_process_id: nodeProcessId } : {}) });
     insist(prepared.ok && prepared.prepared, 'academic_context_invalid');
     const controlFile = path.join(stage, 'academic-control.json'), observed = privateJson(controlFile);
-    insist(exact(observed, ['version', 'process_id', 'pm2_id', 'pm2_home', 'cwd', 'executable', 'arguments',
-      'clear_environment', 'source_root', 'node_cwd', 'listener_endpoints', 'academic_url_environment']));
+    const controlFields = ['version', 'process_id', 'pm2_id', 'pm2_home', 'cwd', 'executable', 'arguments',
+      'clear_environment', 'source_root', 'node_cwd', 'listener_endpoints', 'academic_url_environment'];
+    const nodeOwnerPresent = Object.hasOwn(observed, 'node_owner');
+    insist(exact(observed, [...controlFields, ...(nodeOwnerPresent ? ['node_owner'] : [])]));
+    insist(!nodeOwnerPresent || Array.isArray(observed.node_owner) && observed.node_owner.length === 2
+      && observed.node_owner.every(value => Number.isSafeInteger(value) && value >= 0));
     insist(observed.version === 1 && Number.isInteger(observed.process_id) && observed.process_id > 0
       && /^\d+$/.test(observed.pm2_id) && observed.node_cwd === nodeCwd
       && JSON.stringify(observed.clear_environment) === JSON.stringify(MANAGED));
@@ -341,7 +346,8 @@ async function prepare(options) {
         const readyFile = path.join(stage, 'academic-ready.json'), ready = privateJson(readyFile);
         insist(exact(ready, ['version', 'listener_endpoints', 'academic_url_environment']) && ready.version === 1, 'academic_ready_failed');
         fs.unlinkSync(readyFile);
-        const configuration = privateJson(path.join(nodeCwd, '.lens-academic-private.json'), 8192);
+        const configuration = privateJson(path.join(nodeCwd, '.lens-academic-private.json'), 8192,
+          nodeOwnerPresent ? observed.node_owner : undefined);
         insist(exact(configuration, ['version', 'secret', 'workspace_root', 'log_root', 'upload_root']) && configuration.version === 1, 'academic_ready_failed');
         const urls = selectedAcademicUrls(nodeCwd, ready.academic_url_environment);
         const passed = await verifyAcademicRoute({ urls, listeners: ready.listener_endpoints, secret: configuration.secret });

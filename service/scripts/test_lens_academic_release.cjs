@@ -187,6 +187,32 @@ test('readiness rejects a missing fresh business process attestation', async t =
   await assert.rejects(release.ready(), /academic_ready_failed/);
   await release.stop(); await release.restore(); await release.startOld(); await release.close();
 });
+
+test('readiness reads the private configuration using its attested runtime owner', async t => {
+  const value = await fixture(t);
+  const file = path.join(value.options.stage, 'fixture.json');
+  const source = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const stat = fs.statSync(path.join(value.options.nodeCwd, '.lens-academic-private.json'));
+  source.contract.node_owner = [stat.uid, stat.gid];
+  fs.writeFileSync(file, JSON.stringify(source), { mode: 0o600 });
+  const release = await bridge.prepare(value.options);
+  await release.stop(); await release.apply(); await release.startNew();
+  assert.equal(await release.ready(), true);
+  await release.close({ committed: true });
+});
+
+test('readiness rejects private configuration whose owner differs from the attested runtime', async t => {
+  const value = await fixture(t);
+  const file = path.join(value.options.stage, 'fixture.json');
+  const source = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const stat = fs.statSync(path.join(value.options.nodeCwd, '.lens-academic-private.json'));
+  source.contract.node_owner = [stat.uid + 1, stat.gid];
+  fs.writeFileSync(file, JSON.stringify(source), { mode: 0o600 });
+  const release = await bridge.prepare(value.options);
+  await release.stop(); await release.apply(); await release.startNew();
+  await assert.rejects(release.ready(), /academic_context_invalid/);
+  await release.stop(); await release.restore(); await release.startOld(); await release.close();
+});
 test('bridge lifecycle preserves old start and clears only managed environment on new start', async t => {
   const value = await fixture(t);
   const release = await bridge.prepare(value.options);
