@@ -8,8 +8,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { inventoryBackupNamespace } = require('./lens_backup_inventory.cjs');
+const { auditAndRetainBackups } = require('./lens_backup_retention.cjs');
 
-test('inventory dispatch reads only its owned namespace and bypasses release operations', async () => {
+for (const mode of ['backup_inventory', 'backup_retention_audit', 'backup_retention_cleanup']) {
+test(`backup dispatch ${mode} bypasses release operations`, async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'lens-inventory-contract-')));
   try {
     const source = fs.readFileSync(path.join(__dirname, 'lens_production_release_worker.cjs'), 'utf8');
@@ -32,14 +34,18 @@ test('inventory dispatch reads only its owned namespace and bypasses release ope
     });
     const context = { serviceCwd: path.join(root, 'synthetic-service') };
     const sandbox = {
+    __lensBackupCoverage: { prepareBackupCoverage: async () => () => false, createFileBackupVerifier: () => () => false },
+    __lensStoredDatabaseCoverage: {},
+    __lensFileBackupVerifierFactory: {},
       require(name) {
         if (name === 'fs' || name === 'node:fs') return readOnlyFs;
         if (name === 'child_process' || name === 'node:child_process') return new Proxy({}, { get: () => forbidden });
         return require(name);
       },
       process: { stdout: { write: forbidden }, stderr: { write: forbidden } },
-      __lensRequest: { mode: 'backup_inventory' },
+      __lensRequest: { mode, expected_backups: 1, expected_unverified: 0 },
       __lensBackupInventory: { inventoryBackupNamespace },
+      __lensBackupRetention: { auditAndRetainBackups },
       context,
       forbidden,
     };
@@ -60,9 +66,10 @@ test('inventory dispatch reads only its owned namespace and bypasses release ope
     const before = fs.readdirSync(sandbox.namespace).sort();
     await vm.runInContext('__lensControl()', sandbox);
     assert.equal(sandbox.result.sole_verified_backup, true);
-    assert.equal(sandbox.result.backup_directory_count, 1);
+    assert.equal(sandbox.result.backup_directory_count ?? sandbox.result.backup_count_before, 1);
     assert.deepEqual(fs.readdirSync(sandbox.namespace).sort(), before);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+}

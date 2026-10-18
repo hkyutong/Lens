@@ -173,7 +173,15 @@ async function __lensControl() {
     __lensEmit(report);
     return;
   }
-if (__lensRequest.mode === 'backup_inventory') {
+if (__lensRequest.mode === 'backup_retention_audit' || __lensRequest.mode === 'backup_retention_cleanup') {
+    const namespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
+    const __proveBackupCoverage = await __lensBackupCoverage.prepareBackupCoverage({ namespace: namespace, owner: __owner(context), roles: {"control":"control.json","verified":"verified.json","database":"database","files":["pm2.conf.json","control.json","dependencies.json","download-boundary-checks.json","verified.json","nginx-maintenance-backup.json","config-restore-probe"],"directories":["dependencies","dependency-restore-probe"],"artifacts":"files"}, databaseCore: __lensStoredDatabaseCoverage, fileBackupVerifier: __lensBackupCoverage.createFileBackupVerifier(__lensFileBackupVerifierFactory) });
+return __lensEmit(__lensBackupRetention.auditAndRetainBackups({ namespace, owner: __owner(context),
+      inventory: __lensBackupInventory.inventoryBackupNamespace,
+      cleanup: __lensRequest.mode === 'backup_retention_cleanup',
+      expectedBackups: __lensRequest.expected_backups, expectedUnverified: __lensRequest.expected_unverified , proveCoverage: __proveBackupCoverage}));
+  }
+  if (__lensRequest.mode === 'backup_inventory') {
     const namespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
     return __lensEmit(__lensBackupInventory.inventoryBackupNamespace(namespace, __owner(context)));
   }
