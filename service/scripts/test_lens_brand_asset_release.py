@@ -11,7 +11,7 @@ import test_lens_compiled_module_release as baseline
 
 
 class BrandAssetReleaseTests(unittest.TestCase):
-    def fixture(self, base, names):
+    def fixture(self, base, names, scope='chat'):
         base = base.resolve()
         request, current, candidate = baseline.FilePreflightReleaseTests().fixture(base)
         artifacts = Path(request['stage']) / 'artifacts'
@@ -19,16 +19,16 @@ class BrandAssetReleaseTests(unittest.TestCase):
         for name in names:
             old = b'synthetic old brand'
             new = b'synthetic new brand'
-            target = Path(request['target']) / 'public/chat' / name
+            target = Path(request['target']) / 'public' / scope / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(old)
             previous[target] = old
-            source = 'chat/dist/' + name
+            source = scope + '/dist/' + name
             artifact = artifacts / source
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_bytes(new)
             request['entries'].append({
-                'role': 'chat_static', 'source': source,
+                'role': scope + '_static', 'source': source,
                 'sha256': hashlib.sha256(new).hexdigest(),
                 'size': len(new), 'mode': 0o644,
             })
@@ -89,6 +89,52 @@ class BrandAssetReleaseTests(unittest.TestCase):
     def test_unreviewed_fixed_name_asset_is_not_overwritable(self):
         with tempfile.TemporaryDirectory() as temporary:
             request, previous = self.fixture(Path(temporary), ['custom-static.svg'])
+            with self.assertRaises(worker._PreflightValueError):
+                worker._prepare_file_plan(request)
+            for target, data in previous.items():
+                self.assertEqual(target.read_bytes(), data)
+
+    def test_admin_favicon_is_installed_and_independently_restored(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            request, previous = self.fixture(Path(temporary), ['favicon.svg'], scope='admin')
+            self.assertTrue(worker._files_preflight(request)['ok'])
+            for target, data in previous.items():
+                self.assertEqual(target.read_bytes(), data)
+            plan = worker._prepare_file_plan(request)
+            installed = transaction.execute_release(plan)
+            self.assertTrue(installed.ok)
+            self.assertTrue(installed.backup_verified)
+            self.assertEqual((Path(request['target']) / 'public/admin/favicon.svg').read_bytes(), b'synthetic new brand')
+            self.assertTrue(transaction.restore_backup(plan.backup_root, plan.target_root).ok)
+            for target, data in previous.items():
+                self.assertEqual(target.read_bytes(), data)
+
+    def test_admin_favicon_failure_restores_previous_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            request, previous = self.fixture(Path(temporary), ['favicon.svg'], scope='admin')
+            plan = worker._prepare_file_plan(request)
+
+            def fail_after_swap(event, index):
+                if event == 'after_swap' and index == len(plan.entries) - 1:
+                    raise OSError('synthetic swap failure')
+
+            result = transaction.execute_release(plan, fault_injector=fail_after_swap)
+            self.assertFalse(result.ok)
+            self.assertTrue(result.rollback_succeeded)
+            for target, data in previous.items():
+                self.assertEqual(target.read_bytes(), data)
+
+    def test_admin_fingerprinted_assets_remain_immutable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            request, previous = self.fixture(Path(temporary), ['assets/index-abc12345.js'], scope='admin')
+            with self.assertRaises(worker._PreflightValueError):
+                worker._prepare_file_plan(request)
+            for target, data in previous.items():
+                self.assertEqual(target.read_bytes(), data)
+
+    def test_admin_unreviewed_fixed_assets_remain_immutable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            request, previous = self.fixture(Path(temporary), ['loading.css'], scope='admin')
             with self.assertRaises(worker._PreflightValueError):
                 worker._prepare_file_plan(request)
             for target, data in previous.items():

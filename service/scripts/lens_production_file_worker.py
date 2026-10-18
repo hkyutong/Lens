@@ -103,6 +103,7 @@ def _unpack(request):
 # Fixed-name brand assets need the same verified backup and rollback as HTML.
 # Content-addressed and unreviewed static assets remain immutable.
 _MUTABLE_BRAND_TARGETS = frozenset({
+    "public/admin/favicon.svg",
     "public/chat/logo.svg",
     "public/chat/logo.png",
     "public/chat/favicon.svg",
