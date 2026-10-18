@@ -18,7 +18,7 @@ function multipartHandler() {
   const ast = ts.createSourceFile('controller.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const handlers = [];
   function visit(node) {
-    if (ts.isMethodDeclaration(node) && node.parameters.some(parameter => (ts.getDecorators(parameter) || []).some(decorator => /UploadedFile/.test(decorator.expression.getText(ast))))) handlers.push(node);
+    if (ts.isMethodDeclaration(node) && node.name.getText(ast) === 'uploadFile' && node.parameters.some(parameter => (ts.getDecorators(parameter) || []).some(decorator => /UploadedFile/.test(decorator.expression.getText(ast))))) handlers.push(node);
     ts.forEachChild(node, visit);
   }
   visit(ast);

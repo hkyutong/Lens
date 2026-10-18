@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,6 +20,9 @@ const proxyKeys = [
   'NO_PROXY',
   'no_proxy',
 ];
+const syntheticSecret = 'synthetic-academic-contract-secret-0123456789';
+const syntheticOwner = '4242';
+const syntheticRequest = randomUUID();
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -42,6 +46,34 @@ const readJson = async (url, options = {}) => {
     body = null;
   }
   return { response, body };
+};
+
+const signedRequest = async (baseUrl, method, resource, body = null) => {
+  let payload = body;
+  const headers = {};
+  if (body instanceof FormData) {
+    const request = new Request(`${baseUrl}${resource}`, { method, body });
+    payload = Buffer.from(await request.arrayBuffer());
+    headers['content-type'] = request.headers.get('content-type');
+  } else if (typeof body === 'string') {
+    payload = Buffer.from(body, 'utf8');
+  } else if (body == null) {
+    payload = Buffer.alloc(0);
+  }
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = randomUUID();
+  const digest = createHash('sha256').update(payload).digest('hex');
+  const message = [method.toUpperCase(), resource, digest, timestamp, nonce, syntheticOwner, syntheticRequest].join('\n');
+  headers['X-Lens-Academic-Timestamp'] = timestamp;
+  headers['X-Lens-Academic-Nonce'] = nonce;
+  headers['X-Lens-Academic-Owner'] = syntheticOwner;
+  headers['X-Lens-Academic-Request'] = syntheticRequest;
+  headers['X-Lens-Academic-Signature'] = createHmac('sha256', syntheticSecret).update(message).digest('hex');
+  return fetch(`${baseUrl}${resource}`, {
+    method,
+    headers,
+    ...(method.toUpperCase() === 'GET' || method.toUpperCase() === 'HEAD' ? {} : { body: payload }),
+  });
 };
 
 const rowsFrom = body => (Array.isArray(body?.rows) ? body.rows : null);
@@ -91,6 +123,8 @@ const run = async () => {
     Object.assign(childEnv, {
       GPT_ACADEMIC_API_KEY: '',
       GPT_ACADEMIC_USE_PROXY: 'False',
+      LENS_ACADEMIC_INTERNAL_SECRET: syntheticSecret,
+      LENS_ACADEMIC_WORKSPACE_ROOT: path.join(tempRoot, 'workspaces'),
       GPT_ACADEMIC_PATH_LOGGING: path.join(tempRoot, 'logs'),
       GPT_ACADEMIC_PATH_PRIVATE_UPLOAD: path.join(tempRoot, 'private'),
       ACADEMIC_SHARED_UPLOAD_ROOT: path.join(tempRoot, 'shared'),
@@ -192,28 +226,43 @@ const run = async () => {
       'lens-contract.txt',
     );
     form.append('user_name', 'contract-gate');
-    const upload = await readJson(`${baseUrl}/academic/upload`, { method: 'POST', body: form });
-    const uploadedFiles = Array.isArray(upload.body?.files) ? upload.body.files : [];
+    const unsignedUpload = await fetch(`${baseUrl}/academic/upload`, { method: 'POST', body: form });
+    summary.steps.push({
+      name: 'unsigned upload rejected',
+      passed: unsignedUpload.status === 401,
+      status: unsignedUpload.status,
+    });
+    const uploadResponse = await signedRequest(baseUrl, 'POST', '/academic/upload', form);
+    let uploadBody = null;
+    try { uploadBody = await uploadResponse.json(); } catch { uploadBody = null; }
+    const uploadedFiles = Array.isArray(uploadBody?.files) ? uploadBody.files : [];
     const uploadedPath = uploadedFiles.find(file => /lens-contract\.txt$/i.test(String(file)));
-    const uploadPassed = upload.response.status === 200 && Boolean(uploadedPath);
+    const uploadPassed = uploadResponse.status === 200 && Boolean(uploadedPath);
     summary.steps.push({
       name: 'isolated upload',
       passed: uploadPassed,
-      status: upload.response.status,
+      status: uploadResponse.status,
       fileCount: uploadedFiles.length,
     });
+
+    let uploadedBytesVerified = false;
+    if (uploadedPath === 'lens-contract.txt') {
+      const inputFile = path.join(tempRoot, 'workspaces', syntheticOwner, syntheticRequest, 'input', uploadedPath);
+      const uploadedContent = await fs.readFile(inputFile, 'utf8');
+      const uploadedStat = await fs.stat(inputFile);
+      uploadedBytesVerified = uploadedContent === 'Lens academic contract gate\n' && (uploadedStat.mode & 0o777) === 0o600;
+    }
+    summary.steps.push({ name: 'isolated private input persisted', passed: uploadedBytesVerified });
 
     let filePassed = false;
     let fileStatus = 0;
     if (uploadedPath) {
-      const fileResponse = await fetch(
-        `${baseUrl}/academic/file?path=${encodeURIComponent(uploadedPath)}`,
-      );
+      const resource = `/academic/file?path=${encodeURIComponent(uploadedPath)}`;
+      const fileResponse = await signedRequest(baseUrl, 'GET', resource);
       fileStatus = fileResponse.status;
-      const content = await fileResponse.text();
-      filePassed = fileResponse.status === 200 && content === 'Lens academic contract gate\n';
+      filePassed = fileResponse.status === 404;
     }
-    summary.steps.push({ name: 'isolated file read', passed: filePassed, status: fileStatus });
+    summary.steps.push({ name: 'raw upload filename download rejected', passed: filePassed, status: fileStatus });
     summary.passed = summary.steps.every(step => step.passed);
     process.exitCode = summary.passed ? 0 : 1;
   } catch (error) {
