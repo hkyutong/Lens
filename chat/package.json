@@ -66,7 +66,6 @@
     "html2pdf.js": "0.14.0",
     "jschardet": "^3.1.4",
     "katex": "^0.18.2",
-    "mammoth": "^1.13.0",
     "markdown-it": "^14.3.2",
     "markmap-common": "0.15.0",
     "markmap-lib": "0.15.0",

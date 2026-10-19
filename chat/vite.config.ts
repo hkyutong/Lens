@@ -57,7 +57,6 @@ const manualChunkGroups: Array<{ name: string; patterns: string[] }> = [
     name: 'document-vendor',
     patterns: [
       '/node_modules/pdfjs-dist/',
-      '/node_modules/mammoth/',
       '/node_modules/xlsx/',
       '/node_modules/pptxtojson/',
       '/node_modules/office-text-extractor/',
