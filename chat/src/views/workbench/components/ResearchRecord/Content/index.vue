@@ -581,8 +581,17 @@ const downloadUserUploadedFile = async (file: UserUploadedFile) => {
   }
 }
 
+const canDownloadResearchReport = computed(
+  () =>
+    props.status === 3 &&
+    !props.aborted &&
+    !props.isUserMessage &&
+    !props.loading &&
+    Boolean(props.content?.trim())
+)
+
 const downloadResearchReport = () => {
-  if (props.isUserMessage || props.loading || !props.content?.trim() || isDownloadingReport.value) {
+  if (!canDownloadResearchReport.value || isDownloadingReport.value) {
     return
   }
 
@@ -3079,6 +3088,7 @@ function openSingleImagePreview(src: string) {
 
         <div v-if="!isUserMessage && !loading && text" class="relative group-btn">
           <button
+            v-if="canDownloadResearchReport"
             class="btn-icon btn-sm btn-icon-action"
             :class="{ 'opacity-60 cursor-not-allowed': isDownloadingReport }"
             :disabled="isDownloadingReport"

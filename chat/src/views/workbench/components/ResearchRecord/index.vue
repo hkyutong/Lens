@@ -14,6 +14,7 @@ interface Props {
   modelName?: string
   modelType?: number
   status?: number
+  aborted?: boolean
   role?: string
   loading?: boolean
   imageUrl?: string
@@ -233,6 +234,8 @@ onUnmounted(() => {
       :isUserMessage="isUserMessage"
       :content="content"
       :modelType="modelType"
+      :status="status"
+      :aborted="aborted"
       :imageUrl="imageUrl"
       :ttsUrl="ttsUrl"
       :fileUrl="fileUrl"

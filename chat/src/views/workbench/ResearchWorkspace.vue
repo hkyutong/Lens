@@ -2401,6 +2401,7 @@ provide('onOpenImagePreviewer', openImagePreviewer)
                                   :modelName="entry.item.modelName"
                                   :modelAvatar="entry.item.modelAvatar"
                                   :status="entry.item.status"
+                                  :aborted="entry.item.aborted"
                                   :imageUrl="entry.item.imageUrl"
                                   :fileUrl="entry.item.fileUrl"
                                   :ttsUrl="entry.item.ttsUrl"
