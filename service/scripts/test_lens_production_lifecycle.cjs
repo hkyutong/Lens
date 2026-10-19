@@ -157,6 +157,10 @@ if (String(name).endsWith('lens_academic_release.cjs')) return { prepare:async (
     setTimeout(callback) { return setTimeout(callback, 1); },
     clearTimeout, setInterval, clearInterval,
     process: { ...process, env: { ...process.env }, stdout: { write() { return true; } }, stderr: { write() { return true; } } },
+    __lensBackupInventory: { inventoryBackupNamespace(...args) {
+      const result = require(path.join(__dirname, 'lens_backup_inventory.cjs')).inventoryBackupNamespace(...args);
+      return input.fault === 'historyInventory' ? { ...result, unknown_entry_count: 1 } : result;
+    } },
     __lensRequest: input.request,
     __testContext: context,
     __testFault: input.fault,

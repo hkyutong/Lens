@@ -13,13 +13,14 @@ const markerKeys = new Set(['version', 'project', 'bundle_verified']);
 function auditAndRetainBackups({ namespace, owner, inventory, cleanup = false,
   expectedBackups, expectedUnverified, proveCoverage = null }) {
   const result = {
-    coverage_latest_valid: false, coverage_unknown_file_count: 0, coverage_unknown_directory_count: 0, coverage_binding_failure_count: 0, coverage_extra_database_file_count: 0, coverage_manifest_read: false, coverage_manifest_valid: false, coverage_tables_valid: false, coverage_bundle_valid: false, coverage_database_valid_count: 0, coverage_database_unique_count: 0, coverage_database_invalid_count: 0, coverage_unknown_layout_count: 0, coverage_metadata_rejected_count: 0, ok: false, scan_complete: false, namespace_owned: false,
+    coverage_latest_valid: false, coverage_unknown_file_count: 0, coverage_unknown_symlink_count: 0, coverage_unknown_regular_file_count: 0, coverage_unknown_empty_file_count: 0, coverage_unknown_empty_directory_count: 0, coverage_unknown_directory_file_count: 0, coverage_unknown_directory_count: 0, coverage_binding_failure_count: 0, coverage_extra_database_file_count: 0, coverage_manifest_read: false, coverage_manifest_valid: false, coverage_tables_valid: false, coverage_bundle_valid: false, coverage_database_valid_count: 0, coverage_database_unique_count: 0, coverage_database_invalid_count: 0, coverage_unknown_layout_count: 0, coverage_metadata_rejected_count: 0, ok: false, scan_complete: false, namespace_owned: false,
     backup_count_before: 0, verified_count: 0, unverified_count: 0,
     eligible_count: 0, retained_unverified_count: 0,
     unique_content_candidate_count: 0, metadata_rejected_count: 0,
     referenced_candidate_count: 0,
     unsafe_candidate_count: 0, removed_count: 0, backup_count_after: 0,
     verified_backup_preserved: false, sole_verified_backup: false,
+    history_memory_recovery_verified: false, history_archived_schema_count: 0, history_archived_version_count: 0, history_archived_row_count: 0, history_source_snapshot_count: 0, history_committed: false, history_cleanup_complete: false,
     cleanup_requested: cleanup === true, error: 'scan_incomplete',
     failure_stage: 'none', failure_reason: 'none' };
   let statVisits = 0, hashedBytes = 0, retained, stage = 'inventory';
@@ -215,7 +216,7 @@ function auditAndRetainBackups({ namespace, owner, inventory, cleanup = false,
   if (proveCoverage && proveCoverage.facts) {
       result.coverage_latest_valid = proveCoverage.facts.coverage_latest_valid === true;
       for (const key of ["coverage_manifest_read","coverage_manifest_valid","coverage_tables_valid","coverage_bundle_valid"]) result[key] = proveCoverage.facts[key] === true;
-      for (const key of ["coverage_database_valid_count","coverage_database_unique_count","coverage_database_invalid_count","coverage_unknown_layout_count","coverage_metadata_rejected_count","coverage_unknown_file_count","coverage_unknown_directory_count","coverage_binding_failure_count","coverage_extra_database_file_count"]) {
+      for (const key of ['coverage_unknown_symlink_count', 'coverage_unknown_regular_file_count', 'coverage_unknown_empty_file_count', 'coverage_unknown_empty_directory_count', 'coverage_unknown_directory_file_count', "coverage_database_valid_count","coverage_database_unique_count","coverage_database_invalid_count","coverage_unknown_layout_count","coverage_metadata_rejected_count","coverage_unknown_file_count","coverage_unknown_directory_count","coverage_binding_failure_count","coverage_extra_database_file_count"]) {
         const value = proveCoverage.facts[key];
         if (Number.isSafeInteger(value) && value >= 0) result[key] = value;
       }

@@ -459,3 +459,78 @@ test('rejects malformed transaction input with a fixed public error', async () =
       error && error.message === 'retention history transaction failed');
   }
 });
+
+
+test('allocates and removes an independent history staging directory', async () => {
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory] });
+    const proof = await core.verifyStoredRetentionHistory({ directory: currentDirectory, currentDirectory });
+    check.equal(await proof.coversSnapshot(await core.loadStoredForRetention(oldDirectory), oldDirectory), true);
+    check.deepEqual(io.readdirSync(p.dirname(currentDirectory)).filter(name => name.startsWith('.lens-retention-history-')), []);
+  });
+});
+
+test('removes automatic staging after an installation failure', async () => {
+  let failInstall = false;
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory] });
+    const previous = io.readFileSync(p.join(currentDirectory, 'retention-history.json'));
+    failInstall = true;
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory] }), /retention history transaction failed/);
+    check.deepEqual(io.readFileSync(p.join(currentDirectory, 'retention-history.json')), previous);
+    check.deepEqual(io.readdirSync(p.dirname(currentDirectory)).filter(name => name.startsWith('.lens-retention-history-')), []);
+  }, { rename: async (...args) => {
+    if (failInstall) throw new Error('synthetic install failure');
+    return require('node:fs').promises.rename(...args);
+  }});
+});
+
+test('preserves automatic staging when independent recovery is required', async () => {
+  let replaceInstall = false;
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory] });
+    const previous = io.readFileSync(p.join(currentDirectory, 'retention-history.json'));
+    replaceInstall = true;
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory] }), /retention history recovery required/);
+    const stages = io.readdirSync(p.dirname(currentDirectory)).filter(name => name.startsWith('.lens-retention-history-'));
+    check.equal(stages.length, 1);
+    check.deepEqual(io.readFileSync(p.join(p.dirname(currentDirectory), stages[0], '.retention-history.previous')), previous);
+    check.equal(io.readFileSync(p.join(currentDirectory, 'retention-history.json'), 'utf8'), 'synthetic replacement');
+  }, { rename: async (from, to) => {
+    const io = require('node:fs').promises;
+    await io.rename(from, to);
+    if (replaceInstall && require('node:path').basename(from) === 'retention-history.json') {
+      replaceInstall = false;
+      await io.unlink(to);
+      await io.writeFile(to, 'synthetic replacement', { flag: 'wx', mode: 0o600 });
+    }
+  }});
+});
+
+test('independent memory recovery needs no original historical snapshots', async () => {
+  await withHistoryTransactionFixture(async ({ core: transactionCore, oldDirectory, currentDirectory, destinationDirectory }) => {
+    await transactionCore.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory], destinationDirectory });
+    const source = fs.readFileSync(path.join(__dirname, 'lens_retention_history_recovery.py'), 'utf8');
+    fs.rmSync(oldDirectory, { recursive: true });
+    const receipt = await transactionCore.verifyStoredRetentionHistoryMemoryRecovery({
+      directory: currentDirectory, currentDirectory, decoderSource: source });
+    assert.equal(receipt.verified, true);
+    assert.ok(receipt.rowVersionCount > 0);
+    assert.ok(receipt.sourceCount > 0);
+  });
+});
+
+test('memory recovery rejects a decoder returning unapproved fields', async () => {
+  await withHistoryTransactionFixture(async ({ core: transactionCore, oldDirectory, currentDirectory, destinationDirectory }) => {
+    await transactionCore.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory], destinationDirectory });
+    await assert.rejects(transactionCore.verifyStoredRetentionHistoryMemoryRecovery({
+      directory: currentDirectory, currentDirectory,
+      decoderSource: 'import json; print(json.dumps({"ok":True,"synthetic-private":"synthetic"}))',
+    }), /retention history recovery verification failed/);
+  });
+});

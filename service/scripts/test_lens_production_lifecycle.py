@@ -121,6 +121,9 @@ class ProductionLifecycleTests(unittest.TestCase):
         self.assertTrue(result['new_environment_cleared'])
         self.assertTrue(result['rollback_environment_preserved'])
 
+    def test_history_inventory_rejection_restores_old_application(self):
+        self.assert_recovered(self.exercise("historyInventory"))
+
     def test_dependency_swap_failure_restores_old_application(self):
         result = self.exercise('dependency_swap')
         self.assertTrue(result['fault_injected'])

@@ -149,6 +149,17 @@ if (app && typeof app.script==='string' && (app.cwd===undefined || typeof app.cw
   return result;
 }
 
+function __historyRecoveryFacts(receipt) {
+  if (receipt.verified !== true) throw new Error('history recovery failed');
+  return { history_memory_recovery_verified: true, history_archived_schema_count: receipt.schemaCount,
+    history_archived_version_count: receipt.rowVersionCount, history_archived_row_count: receipt.rowCount,
+    history_source_snapshot_count: receipt.sourceCount };
+}
+
+async function __backupHistoryCoverage(context, namespace) {
+  return __lensBackupCoverage.prepareBackupCoverage({ namespace: namespace, owner: __owner(context), roles: {"control":"control.json","verified":"verified.json","database":"database","files":["pm2.conf.json","control.json","dependencies.json","download-boundary-checks.json","verified.json","nginx-maintenance-backup.json","config-restore-probe"],"directories":["dependencies","dependency-restore-probe"],"artifacts":"files"}, databaseCore: __lensStoredDatabaseCoverage, fileBackupVerifier: __lensBackupCoverage.createFileBackupVerifier(__lensFileBackupVerifierFactory) });
+}
+
 async function __lensControl() {
   // Library warnings, entity imports, and PM2 diagnostics never reach SSH output.
   process.stdout.write = () => true;
@@ -173,13 +184,52 @@ async function __lensControl() {
     __lensEmit(report);
     return;
   }
-if (__lensRequest.mode === 'backup_retention_audit' || __lensRequest.mode === 'backup_retention_cleanup') {
+if (['backup_retention_audit', 'backup_retention_cleanup', 'backup_history_commit', 'backup_history_recovery'].includes(__lensRequest.mode)) {
     const namespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
-    const __proveBackupCoverage = await __lensBackupCoverage.prepareBackupCoverage({ namespace: namespace, owner: __owner(context), roles: {"control":"control.json","verified":"verified.json","database":"database","files":["pm2.conf.json","control.json","dependencies.json","download-boundary-checks.json","verified.json","nginx-maintenance-backup.json","config-restore-probe"],"directories":["dependencies","dependency-restore-probe"],"artifacts":"files"}, databaseCore: __lensStoredDatabaseCoverage, fileBackupVerifier: __lensBackupCoverage.createFileBackupVerifier(__lensFileBackupVerifierFactory) });
-return __lensEmit(__lensBackupRetention.auditAndRetainBackups({ namespace, owner: __owner(context),
+    let __proveBackupCoverage = await __backupHistoryCoverage(context, namespace);
+    const options = { namespace, owner: __owner(context),
       inventory: __lensBackupInventory.inventoryBackupNamespace,
-      cleanup: __lensRequest.mode === 'backup_retention_cleanup',
-      expectedBackups: __lensRequest.expected_backups, expectedUnverified: __lensRequest.expected_unverified , proveCoverage: __proveBackupCoverage}));
+      cleanup: false,
+      expectedBackups: __lensRequest.expected_backups, expectedUnverified: __lensRequest.expected_unverified , proveCoverage: __proveBackupCoverage};
+    if (__lensRequest.mode === 'backup_history_recovery') {
+      const before = __lensBackupRetention.auditAndRetainBackups(options);
+      if (!before.ok) return __lensEmit(before);
+      try {
+        const receipt = await __lensBackupCoverage.recoverBackupHistory(__proveBackupCoverage, __lensHistoryRecoverySource);
+        Object.assign(before, __historyRecoveryFacts(receipt));
+      } catch (_) { before.ok = false; before.error = 'history_recovery_failed'; }
+      return __lensEmit(before);
+    }
+    if (__lensRequest.mode === 'backup_history_commit') {
+      const before = __lensBackupRetention.auditAndRetainBackups(options);
+      if (!before.ok || before.metadata_rejected_count || before.unsafe_candidate_count ||
+          before.referenced_candidate_count || before.coverage_database_invalid_count) return __lensEmit(before);
+      try {
+        const receipt = await __lensBackupCoverage.commitBackupHistory(__proveBackupCoverage);
+        __proveBackupCoverage = await __backupHistoryCoverage(context, namespace);
+        const after = __lensBackupRetention.auditAndRetainBackups({ ...options, proveCoverage: __proveBackupCoverage });
+        after.history_committed = receipt.committed === true || receipt.noHistoryRequired === true;
+        after.history_cleanup_complete = receipt.cleanupComplete === true;
+        return __lensEmit(after);
+      } catch (_) {
+        before.ok = false;
+        before.error = 'history_commit_failed';
+        return __lensEmit(before);
+      }
+    }
+    let recoveryFacts = {};
+    if (__lensRequest.mode === 'backup_retention_cleanup') {
+      try {
+        recoveryFacts = __historyRecoveryFacts(await __lensBackupCoverage.recoverBackupHistory(
+          __proveBackupCoverage, __lensHistoryRecoverySource));
+      } catch (_) {
+        const before = __lensBackupRetention.auditAndRetainBackups(options);
+        before.ok = false; before.error = 'history_recovery_failed';
+        return __lensEmit(before);
+      }
+    }
+    return __lensEmit(Object.assign(__lensBackupRetention.auditAndRetainBackups({ ...options,
+      cleanup: __lensRequest.mode === 'backup_retention_cleanup' }), recoveryFacts));
   }
   if (__lensRequest.mode === 'backup_inventory') {
     const namespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
@@ -541,6 +591,19 @@ report.download_boundary_verified=true;
     if (maintenance && !maintenance.verifyBackup()) __fail('backup_verification_failed');
     if (!__fileWorker(stage, { action: 'verify', bundle }).ok || __tree(__path.join(bundle, 'dependencies')).hash !== oldDependencies
         || !__fs.readFileSync(__path.join(bundle, 'pm2.conf.json')).equals(config.raw)) __fail('backup_verification_failed');
+    const historyNamespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
+    const previousInventory = __lensBackupInventory.inventoryBackupNamespace(historyNamespace, __owner(context));
+    if (!previousInventory.ok || !previousInventory.scan_complete || !previousInventory.namespace_owned ||
+        previousInventory.unknown_entry_count || previousInventory.unsafe_entry_count) __fail('backup_verification_failed');
+    if (previousInventory.declared_verified_count === 1) {
+      const historyCoverage = await __backupHistoryCoverage(context, historyNamespace);
+      await __lensBackupCoverage.inheritBackupHistory(historyCoverage, __path.join(bundle, 'database'));
+      const recoveredHistory = await __lensStoredDatabaseCoverage.verifyStoredRetentionHistoryMemoryRecovery({
+        directory: __path.join(bundle, 'database'), currentDirectory: __path.join(bundle, 'database'), decoderSource: __lensHistoryRecoverySource });
+      if (!recoveredHistory.verified) __fail('backup_verification_failed');
+    } else if (previousInventory.declared_verified_count !== 0 || previousInventory.backup_directory_count !== 1) {
+      __fail('backup_verification_failed');
+    }
     __write600(__path.join(bundle, 'verified.json'), JSON.stringify({ version: 1, project: __owner(context), bundle_verified: true }));
     // Only explicit, previously verified bundles in this owned namespace qualify.
     committed=true;

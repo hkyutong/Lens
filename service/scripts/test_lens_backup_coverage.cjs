@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { prepareBackupCoverage, createFileBackupVerifier } = require('./lens_backup_coverage.cjs');
+const { prepareBackupCoverage, createFileBackupVerifier, commitBackupHistory, inheritBackupHistory } = require('./lens_backup_coverage.cjs');
 const { auditAndRetainBackups } = require('./lens_backup_retention.cjs');
 
 const privateModule = { exports: {} };
@@ -198,4 +198,155 @@ test('refuses to discard history stored only in the older backup', fixture(async
     fs.chmodSync(path.join(oldDatabase, archive), 0o600);
     assert.equal(await proof(context), false);
   } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
+}));
+
+
+test('requires a captured coverage context before writing history', async () => {
+  const check = require('node:assert/strict');
+  const api = require('./lens_backup_coverage.cjs');
+  check.equal(typeof api.commitBackupHistory, 'function');
+  await check.rejects(api.commitBackupHistory({}), /backup history context invalid/);
+});
+
+
+async function historyCoverage(context) {
+  return prepareBackupCoverage({ namespace: context.root,
+    owner: JSON.parse(fs.readFileSync(path.join(context.latest, roles.control), 'utf8')).project,
+    roles, databaseCore: core });
+}
+
+test('explicit history commit rechecks and preserves unique synthetic rows', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-history-only']);
+  database(path.join(context.latest, roles.database), ['synthetic-current-only']);
+  const before = snapshot(context.root);
+  const coverage = await historyCoverage(context);
+  assert.deepEqual(snapshot(context.root), before, 'inspection must remain read only');
+  assert.equal(coverage({ candidate: snapshot(context.older), retained: snapshot(context.latest) }), false);
+  assert.deepEqual(await commitBackupHistory(coverage),
+    { committed: true, noHistoryRequired: false, cleanupComplete: true });
+  assert.equal(await proof(context), true);
+  await assert.rejects(commitBackupHistory(coverage), /backup history context invalid/);
+}));
+
+test('history commit rejects a changed source snapshot', fixture(async context => {
+  const older = path.join(context.older, roles.database);
+  database(older, ['synthetic-original']);
+  database(path.join(context.latest, roles.database), ['synthetic-current']);
+  const coverage = await historyCoverage(context);
+  fs.rmSync(older, { recursive: true });
+  database(older, ['synthetic-replacement']);
+  await assert.rejects(commitBackupHistory(coverage), /backup history context changed/);
+  await assert.rejects(commitBackupHistory(coverage), /backup history context invalid/);
+}));
+
+test('history commit rejects partial database inspection', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-broken']);
+  database(path.join(context.latest, roles.database), ['synthetic-current']);
+  const files = fs.readdirSync(path.join(context.older, roles.database));
+  for (const file of files) fs.writeFileSync(path.join(context.older, roles.database, file), 'invalid synthetic data');
+  const coverage = await historyCoverage(context);
+  assert.equal(coverage.facts.coverage_database_invalid_count, 1);
+  await assert.rejects(commitBackupHistory(coverage), /backup history context invalid/);
+}));
+
+test('history commit rejects failed metadata inspection', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-old']);
+  database(path.join(context.latest, roles.database), ['synthetic-current']);
+  fs.writeFileSync(path.join(context.older, roles.control), 'invalid synthetic metadata');
+  const coverage = await historyCoverage(context);
+  await assert.rejects(commitBackupHistory(coverage), /backup history context invalid/);
+}));
+
+
+test('new backup inherits current archive and earlier row versions', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-first-generation']);
+  database(path.join(context.latest, roles.database), ['synthetic-second-generation']);
+  await commitBackupHistory(await historyCoverage(context));
+  const next = path.join(context.root, 'synthetic-next-generation');
+  fs.mkdirSync(next, { mode: 0o700 });
+  fs.copyFileSync(path.join(context.older, roles.control), path.join(next, roles.control));
+  database(path.join(next, roles.database), ['synthetic-third-generation']);
+  const coverage = await historyCoverage(context);
+  await assert.rejects(inheritBackupHistory(coverage, context.root), /backup history context invalid/);
+  const receipt = await inheritBackupHistory(coverage, path.join(next, roles.database));
+  assert.equal(receipt.committed, true);
+  fs.copyFileSync(path.join(context.latest, roles.verified), path.join(next, roles.verified));
+  fs.unlinkSync(path.join(context.latest, roles.verified));
+  const nextCoverage = await historyCoverage(context);
+  assert.equal(nextCoverage({ candidate: snapshot(context.older), retained: snapshot(next) }), true);
+  assert.equal(nextCoverage({ candidate: snapshot(context.latest), retained: snapshot(next) }), true);
+}));
+
+test('unknown layout facts distinguish links without authorizing deletion', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-same']);
+  database(path.join(context.latest, roles.database), ['synthetic-same']);
+  fs.symlinkSync('synthetic-missing', path.join(context.older, 'synthetic-link'));
+  const coverage = await historyCoverage(context);
+  assert.equal(coverage({ candidate: snapshot(context.older), retained: snapshot(context.latest) }), false);
+  assert.equal(coverage.facts.coverage_unknown_symlink_count, 1);
+  assert.equal(coverage.facts.coverage_unknown_regular_file_count, 0);
+}));
+
+test('identical unrecognized files remain covered by the verified backup', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-same']);
+  database(path.join(context.latest, roles.database), ['synthetic-same']);
+  for (const directory of [context.older, context.latest]) {
+    write(path.join(directory, 'synthetic-unrecognized-file'), 'synthetic-identical-content');
+    fs.mkdirSync(path.join(directory, 'synthetic-unrecognized-directory'), { mode: 0o700 });
+    write(path.join(directory, 'synthetic-unrecognized-directory', 'synthetic-nested-file'), 'synthetic-identical-nested-content');
+  }
+  assert.equal(await proof(context), true);
+}));
+
+test('unrecognized content differences cannot be hidden by database coverage', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-same']);
+  database(path.join(context.latest, roles.database), ['synthetic-same']);
+  write(path.join(context.older, 'synthetic-unrecognized-file'), 'synthetic-old-content');
+  write(path.join(context.latest, 'synthetic-unrecognized-file'), 'synthetic-new-content');
+  assert.equal(await proof(context), false);
+}));
+
+test('unrecognized directory content must exist in the verified backup', fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-same']);
+  database(path.join(context.latest, roles.database), ['synthetic-same']);
+  for (const directory of [context.older, context.latest]) fs.mkdirSync(path.join(directory, 'synthetic-unrecognized-directory'), { mode: 0o700 });
+  write(path.join(context.older, 'synthetic-unrecognized-directory', 'synthetic-only-old-file'), 'synthetic-content');
+  assert.equal(await proof(context), false);
+}));
+
+
+test("unknown file changed during hashing cannot obtain coverage", fixture(async context => {
+  database(path.join(context.older, roles.database), ["synthetic-row"]);
+  database(path.join(context.latest, roles.database), ["synthetic-row"]);
+  const name = "synthetic-unknown.txt";
+  for (const directory of [context.older, context.latest]) write(path.join(directory, name), "synthetic-content");
+  const coverage = await historyCoverage(context);
+  const candidate = snapshot(context.older), retained = snapshot(context.latest);
+  const original = fs.readSync;
+  let changed = false;
+  fs.readSync = function (...args) {
+    const length = original.apply(this, args);
+    if (!changed && length > 0) {
+      changed = true;
+      write(path.join(context.older, name), "synthetic-replaced");
+    }
+    return length;
+  };
+  try {
+    assert.equal(coverage({ candidate, retained }), false);
+    assert.equal(changed, true);
+  } finally { fs.readSync = original; }
+}));
+
+test("unknown file mutation invalidates cached hash coverage", fixture(async context => {
+  database(path.join(context.older, roles.database), ["synthetic-row"]);
+  database(path.join(context.latest, roles.database), ["synthetic-row"]);
+  const name = "synthetic-unknown.txt";
+  for (const directory of [context.older, context.latest]) write(path.join(directory, name), "synthetic-content");
+  const coverage = await historyCoverage(context);
+  const candidate = snapshot(context.older), retained = snapshot(context.latest);
+  assert.equal(coverage({ candidate, retained }), true);
+  write(path.join(context.latest, name), "synthetic-replaced");
+  assert.equal(coverage({ candidate, retained }), false);
+  assert.equal(coverage({ candidate: snapshot(context.older), retained: snapshot(context.latest) }), false);
 }));

@@ -355,10 +355,13 @@ async function commitStoredRetentionHistory(options) {
       Object.keys(options).some(key => !fields.has(key))) throw new Error(transactionError);
   const { currentDirectory, olderDirectories, destinationDirectory } = options;
   if (typeof currentDirectory !== 'string' || !currentDirectory ||
-      typeof destinationDirectory !== 'string' || !destinationDirectory ||
+      (destinationDirectory !== undefined && (typeof destinationDirectory !== 'string' || !destinationDirectory)) ||
       !Array.isArray(olderDirectories) ||
       olderDirectories.some(directory => typeof directory !== 'string' || !directory)) {
     throw new Error(transactionError);
+  }
+  if (destinationDirectory === undefined) {
+    return await commitStoredHistoryInOwnedStage(currentDirectory, olderDirectories);
   }
   const recoveryError = 'retention history recovery required';
   const target = path.join(currentDirectory, 'retention-history.json');
@@ -486,4 +489,71 @@ async function commitStoredRetentionHistory(options) {
   return Object.freeze({ committed: true, previousArchivePresent: Boolean(originalIdentity), cleanupComplete: true });
 }
 
+async function commitStoredHistoryInOwnedStage(currentDirectory, olderDirectories) {
+  const transactionError = 'retention history transaction failed';
+  const recoveryError = 'retention history recovery required';
+  let stage, handle, identity, receipt, failure;
+  try {
+    await loadStoredForRetention(currentDirectory);
+    stage = await fs.mkdtemp(path.join(path.dirname(currentDirectory), '.lens-retention-history-'));
+    handle = await fs.open(stage, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+    identity = await handle.stat();
+    if (!identity.isDirectory() || (identity.mode & 0o777) !== 0o700) throw new Error(transactionError);
+    receipt = await commitStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory: stage });
+  } catch (error) {
+    failure = error.message === recoveryError ? recoveryError : transactionError;
+  } finally {
+    if (stage) {
+      try {
+        const now = await fs.lstat(stage);
+        if (!identity || now.dev !== identity.dev || now.ino !== identity.ino ||
+            !now.isDirectory() || now.isSymbolicLink()) throw new Error(recoveryError);
+        if ((await fs.readdir(stage)).length !== 0) throw new Error(recoveryError);
+        await fs.rmdir(stage);
+      } catch (_) { failure = recoveryError; }
+    }
+    if (handle) {
+      try { await handle.close(); } catch (_) { failure = recoveryError; }
+    }
+  }
+  if (failure) throw new Error(failure);
+  return receipt;
+}
+
 module.exports.commitStoredRetentionHistory = commitStoredRetentionHistory;
+
+async function verifyStoredRetentionHistoryMemoryRecovery({ directory, currentDirectory, decoderSource, optional = false }) {
+  const error = 'retention history recovery verification failed';
+  try {
+    if (typeof decoderSource !== 'string' || !decoderSource || decoderSource.length > 65536 ||
+        typeof optional !== 'boolean') throw new Error(error);
+    const current = await loadStoredForRetention(currentDirectory);
+    const archive = await readStoredRetentionHistory(directory, current, optional);
+    if (!archive) return Object.freeze({ verified: true, schemaCount: 0, rowVersionCount: 0, rowCount: 0, sourceCount: 0 });
+    const content = await readPrivateFile(archive.file, limits({}).maxBytes);
+    const rawHash = digest(content);
+    const child = require('node:child_process').spawnSync('python3', ['-c', decoderSource], {
+      input: JSON.stringify({ archive: Buffer.from(content).toString('base64'), sha256: rawHash }),
+      encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], maxBuffer: 4096, timeout: 15000,
+    });
+    if (child.error || child.status !== 0) throw new Error(error);
+    const result = JSON.parse(child.stdout);
+    const fields = ['ok', 'schema_count', 'row_version_count', 'row_count', 'source_count'];
+    if (!result || typeof result !== 'object' || Array.isArray(result) ||
+        Object.keys(result).length !== fields.length || Object.keys(result).some(key => !fields.includes(key)) ||
+        result.ok !== true || fields.slice(1).some(key => !Number.isSafeInteger(result[key]) || result[key] < 0)) {
+      throw new Error(error);
+    }
+    const expected = retentionHistoryStats(archive.value.tables, archive.value.sourceBindings);
+    if (result.schema_count !== expected.archivedSchemaCount || result.row_version_count !== expected.archivedRowVersionCount ||
+        result.row_count !== expected.archivedRowCount || result.source_count !== expected.sourceSnapshotCount) throw new Error(error);
+    const after = await loadStoredForRetention(currentDirectory);
+    if (after.fingerprint !== current.fingerprint || after.files.size !== current.files.size ||
+        [...current.files].some(([name, signature]) => after.files.get(name) !== signature) ||
+        await retentionHistoryIdentity(archive.file, (await retentionDirectory(directory)).uid) !== archive.identity ||
+        digest(await readPrivateFile(archive.file, limits({}).maxBytes)) !== rawHash) throw new Error(error);
+    return Object.freeze({ verified: true, schemaCount: result.schema_count,
+      rowVersionCount: result.row_version_count, rowCount: result.row_count, sourceCount: result.source_count });
+  } catch (_) { throw new Error(error); }
+}
+module.exports.verifyStoredRetentionHistoryMemoryRecovery = verifyStoredRetentionHistoryMemoryRecovery;

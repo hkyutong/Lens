@@ -315,7 +315,7 @@ def _adapt_control_bootstrap(source: str, mode: str) -> str:
     timeouts = [keyword for keyword in child.value.keywords if keyword.arg == "timeout"]
     if len(timeouts) != 1:
         raise ReleaseError("bootstrap_contract_changed")
-    timeouts[0].value = ast.Constant(1500 if mode in ('deploy', 'backup_retention_audit', 'backup_retention_cleanup') else 90)
+    timeouts[0].value = ast.Constant(1500 if mode in ('deploy', 'backup_retention_audit', 'backup_retention_cleanup', 'backup_history_commit', 'backup_history_recovery') else 90)
     parents = [node for node in ast.walk(attempts[0])
                if isinstance(node, ast.If) and child in node.body]
     if len(parents) != 1 or len(parents[0].body[parents[0].body.index(child) + 1:]) != 1:
@@ -393,13 +393,15 @@ def build_remote_program(request):
         base = _inject_context_capture(base)
         base = _inject_nginx_capture(base)
         worker = Path(__file__).with_name("lens_production_release_worker.cjs").read_text()
+        recovery_source = Path(__file__).with_name("lens_retention_history_recovery.py").read_text()
+        worker = "const __lensHistoryRecoverySource = " + json.dumps(recovery_source) + ";\n" + worker
         download_source = Path(__file__).with_name('lens_download_boundary.cjs').read_text()
         maintenance_source = Path(__file__).with_name("lens_maintenance_gate.cjs").read_text()
-        if request.get('mode') in ('backup_inventory', 'backup_retention_audit', 'backup_retention_cleanup'):
+        if request.get('mode') in ('backup_inventory', 'backup_retention_audit', 'backup_retention_cleanup', 'backup_history_commit', 'deploy', 'backup_history_recovery'):
             backup_source = Path(__file__).with_name('lens_backup_inventory.cjs').read_text(encoding='utf-8')
             worker = ('const __lensBackupInventory = (() => { const module = {exports: {}};\n'
               + backup_source + '\nreturn module.exports; })();\n' + worker)
-        if request.get('mode') in ('backup_retention_audit', 'backup_retention_cleanup'):
+        if request.get('mode') in ('backup_retention_audit', 'backup_retention_cleanup', 'backup_history_commit', 'deploy', 'backup_history_recovery'):
             retention_source = Path(__file__).with_name('lens_backup_retention.cjs').read_text(encoding='utf-8')
             worker = ('const __lensBackupRetention = (() => { const module = {exports: {}};\n'
                       + retention_source + '\nreturn module.exports; })();\n' + worker)

@@ -10,6 +10,11 @@ import lens_production_release as release
 class BackupRetentionResult:
     coverage_latest_valid: bool = False
     coverage_unknown_file_count: int = 0
+    coverage_unknown_symlink_count: int = 0
+    coverage_unknown_regular_file_count: int = 0
+    coverage_unknown_empty_file_count: int = 0
+    coverage_unknown_empty_directory_count: int = 0
+    coverage_unknown_directory_file_count: int = 0
     coverage_unknown_directory_count: int = 0
     coverage_binding_failure_count: int = 0
     coverage_extra_database_file_count: int = 0
@@ -22,6 +27,13 @@ class BackupRetentionResult:
     coverage_database_invalid_count: int = 0
     coverage_unknown_layout_count: int = 0
     coverage_metadata_rejected_count: int = 0
+    history_memory_recovery_verified: bool = False
+    history_archived_schema_count: int = 0
+    history_archived_version_count: int = 0
+    history_archived_row_count: int = 0
+    history_source_snapshot_count: int = 0
+    history_committed: bool = False
+    history_cleanup_complete: bool = False
     ok: bool = False
     scan_complete: bool = False
     namespace_owned: bool = False
@@ -51,9 +63,9 @@ def project_retention(value):
     for key, default in schema.items():
         if type(value[key]) is not type(default):
             return BackupRetentionResult(error='response_rejected')
-        if type(default) is int and not 0 <= value[key] <= 4096:
+        if type(default) is int and not 0 <= value[key] <= (1000000 if key in {"history_archived_version_count", "history_archived_row_count"} else 4096):
             return BackupRetentionResult(error='response_rejected')
-    errors = {'none', 'scan_incomplete', 'unsafe_entry', 'metadata_rejected',
+    errors = {"history_commit_failed", "history_recovery_failed", 'none', 'scan_incomplete', 'unsafe_entry', 'metadata_rejected',
               'changed_during_review', 'limits_exceeded', 'inventory_mismatch',
               'unique_verified_backup_required', 'operation_failed'}
     if value['error'] not in errors:
@@ -77,12 +89,16 @@ def project_retention(value):
                                              and value['retained_unverified_count'] == 0
                                              and value['verified_backup_preserved']):
         return BackupRetentionResult(error='response_rejected')
+    if value["history_committed"] and (not value["history_cleanup_complete"] or value["cleanup_requested"]):
+        return BackupRetentionResult(error='response_rejected')
     return BackupRetentionResult(**value)
 
 
 def run_backup_retention(*, cleanup=False, restore_verified=False,
                          expected_backups=12, expected_unverified=11,
-                         host_key_reviewed=False):
+                         host_key_reviewed=False, archive_history=False, recover_history=False):
+    if any(type(value) is not bool for value in (archive_history, recover_history, cleanup)) or sum((archive_history, recover_history, cleanup)) > 1:
+        return BackupRetentionResult(error='request_rejected')
     if (type(cleanup) is not bool or type(restore_verified) is not bool
             or type(expected_backups) is not int or type(expected_unverified) is not int
             or not 1 <= expected_backups <= 4096
@@ -94,7 +110,7 @@ def run_backup_retention(*, cleanup=False, restore_verified=False,
     try:
         secrets = safe_ops.load_project_entry()
         with safe_ops._trusted_connection(secrets, host_key_reviewed=host_key_reviewed) as client:
-            request = {'mode': 'backup_retention_cleanup' if cleanup else 'backup_retention_audit',
+            request = {'mode': 'backup_history_recovery' if recover_history else 'backup_history_commit' if archive_history else 'backup_retention_cleanup' if cleanup else 'backup_retention_audit',
                        'expected_backups': expected_backups, 'expected_unverified': expected_unverified}
             response = release._execute(client, request, 180)
         return project_retention(response.get('public'))
