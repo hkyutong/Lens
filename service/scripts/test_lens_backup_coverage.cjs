@@ -163,3 +163,39 @@ except BaseException:
     assert.equal(createFileBackupVerifier({ source, policy: f.policy })(f.bundle), false);
   } finally { if (f?.root) fs.rmSync(f.root, { recursive: true, force: true }); }
 });
+
+
+test('accepts complete historical rows only after they are archived in the retained backup', fixture(async context => {
+  const { older, latest } = context;
+  const oldDatabase = path.join(older, roles.database), currentDatabase = path.join(latest, roles.database);
+  database(oldDatabase, ['historical']);
+  database(currentDatabase, ['current']);
+  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-history-coverage-'));
+  try {
+    await core.prepareStoredRetentionHistory({ currentDirectory: currentDatabase,
+      olderDirectories: [oldDatabase], destinationDirectory: staging });
+    const archive = fs.readdirSync(staging)[0];
+    fs.copyFileSync(path.join(staging, archive), path.join(currentDatabase, archive));
+    fs.chmodSync(path.join(currentDatabase, archive), 0o600);
+    assert.equal(await proof(context), true);
+  } finally { fs.rmSync(staging, { recursive: true, force: true }); }
+}));
+
+test('refuses to discard history stored only in the older backup', fixture(async context => {
+  const { older, latest } = context;
+  const oldDatabase = path.join(older, roles.database), currentDatabase = path.join(latest, roles.database);
+  database(oldDatabase, ['same']);
+  database(currentDatabase, ['same']);
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-history-coverage-'));
+  try {
+    const origin = path.join(workspace, 'origin'), staging = path.join(workspace, 'archive');
+    database(origin, ['historical']);
+    fs.mkdirSync(staging, { mode: 0o700 });
+    await core.prepareStoredRetentionHistory({ currentDirectory: oldDatabase,
+      olderDirectories: [origin], destinationDirectory: staging });
+    const archive = fs.readdirSync(staging)[0];
+    fs.copyFileSync(path.join(staging, archive), path.join(oldDatabase, archive));
+    fs.chmodSync(path.join(oldDatabase, archive), 0o600);
+    assert.equal(await proof(context), false);
+  } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
+}));

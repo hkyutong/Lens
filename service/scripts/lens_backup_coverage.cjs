@@ -102,21 +102,28 @@ async function prepareBackupCoverage({ namespace, owner, roles, databaseCore, fi
       }
     });
     facts.coverage_latest_valid = true;
+    const history = typeof databaseCore.verifyStoredRetentionHistory === 'function'
+      ? await databaseCore.verifyStoredRetentionHistory({ directory: path.join(preserved, roles.database),
+        currentDirectory: path.join(preserved, roles.database), optional: true }) : null;
+    if (history && !await history.coversSnapshot(latest, path.join(preserved, roles.database))) return reject();
     const latestArtifacts = artifactProof(preserved);
     for (const bundle of bundles.filter(item => !item.verified)) {
       try {
         const databaseDirectory = path.join(bundle.directory, roles.database);
-        const older = fs.existsSync(databaseDirectory)
+        const hasDatabase = fs.existsSync(databaseDirectory);
+        const older = hasDatabase
           ? await databaseCore.loadStoredForRetention(databaseDirectory)
           : { database: latest.database, fingerprint: latest.fingerprint, tables: new Map(), files: new Map() };
         facts.coverage_database_valid_count++;
         if (older.database !== latest.database || older.fingerprint !== latest.fingerprint) continue;
-        let covered = true;
-        for (const [name, table] of older.tables) {
-          const current = latest.tables.get(name);
-          if (!current || current.schema !== table.schema ||
-              [...table.rows].some(([row, count]) => (current.rows.get(row) || 0) < count)) {
-            covered = false; break;
+        let covered = !hasDatabase || (history ? await history.coversSnapshot(older, databaseDirectory) : true);
+        if (!history) {
+          for (const [name, table] of older.tables) {
+            const current = latest.tables.get(name);
+            if (!current || current.schema !== table.schema ||
+                [...table.rows].some(([row, count]) => (current.rows.get(row) || 0) < count)) {
+              covered = false; break;
+            }
           }
         }
         if (covered) proofs.set(bundle.directory, {
