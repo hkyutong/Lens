@@ -346,3 +346,144 @@ async function prepareStoredRetentionHistory({ currentDirectory, olderDirectorie
 
 module.exports.prepareStoredRetentionHistory = prepareStoredRetentionHistory;
 module.exports.verifyStoredRetentionHistory = verifyStoredRetentionHistory;
+
+
+async function commitStoredRetentionHistory(options) {
+  const transactionError = 'retention history transaction failed';
+  const fields = new Set(['currentDirectory', 'olderDirectories', 'destinationDirectory']);
+  if (!options || typeof options !== 'object' || Array.isArray(options) ||
+      Object.keys(options).some(key => !fields.has(key))) throw new Error(transactionError);
+  const { currentDirectory, olderDirectories, destinationDirectory } = options;
+  if (typeof currentDirectory !== 'string' || !currentDirectory ||
+      typeof destinationDirectory !== 'string' || !destinationDirectory ||
+      !Array.isArray(olderDirectories) ||
+      olderDirectories.some(directory => typeof directory !== 'string' || !directory)) {
+    throw new Error(transactionError);
+  }
+  const recoveryError = 'retention history recovery required';
+  const target = path.join(currentDirectory, 'retention-history.json');
+  const staged = path.join(destinationDirectory, 'retention-history.json');
+  const previousPath = path.join(destinationDirectory, '.retention-history.previous');
+  const lockPath = path.join(currentDirectory, '.retention-history.lock');
+  const descriptors = [], ownedFiles = new Map(), unidentifiedCreated = new Set();
+  let stagedIdentity, originalIdentity, directoryIdentity;
+  let installed = false, committed = false, recoveryRequired = false;
+
+  async function stat(file) {
+    try { return await fs.lstat(file); }
+    catch (error) { if (error.code === 'ENOENT') return undefined; throw error; }
+  }
+  function same(left, right) {
+    return Boolean(left && right && left.dev === right.dev && left.ino === right.ino);
+  }
+  async function currentDirectoryUnchanged() {
+    const now = await stat(currentDirectory);
+    return same(now, directoryIdentity) && now.isDirectory() && !now.isSymbolicLink();
+  }
+  async function removeOwned(file, identity) {
+    if (!identity) return true;
+    const now = await stat(file);
+    if (!now) return true;
+    if (!same(now, identity) || !now.isFile() || now.nlink !== 1) return false;
+    await fs.unlink(file);
+    return true;
+  }
+  async function openPrivate(file, expected) {
+    const handle = await fs.open(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    descriptors.push(handle);
+    const identity = await handle.stat();
+    if (!same(identity, expected) || !identity.isFile() || identity.nlink !== 1 ||
+        (identity.mode & 0o777) !== 0o600) throw new Error(transactionError);
+    return { identity, bytes: await handle.readFile() };
+  }
+  async function writePrivate(file, bytes) {
+    const handle = await fs.open(file, fs.constants.O_WRONLY | fs.constants.O_CREAT |
+      fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    descriptors.push(handle);
+    unidentifiedCreated.add(file);
+    const identity = await handle.stat();
+    ownedFiles.set(file, identity);
+    unidentifiedCreated.delete(file);
+    await handle.writeFile(bytes);
+    await handle.sync();
+    return identity;
+  }
+  async function syncDirectory() {
+    if (!await currentDirectoryUnchanged()) throw new Error(recoveryError);
+    const handle = await fs.open(currentDirectory, fs.constants.O_RDONLY |
+      fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+    try {
+      if (!same(await handle.stat(), directoryIdentity)) throw new Error(recoveryError);
+      await handle.sync();
+    } finally { await handle.close(); }
+  }
+
+  try {
+    await loadStoredForRetention(currentDirectory);
+    directoryIdentity = await stat(currentDirectory);
+    if (!directoryIdentity || !directoryIdentity.isDirectory() || directoryIdentity.isSymbolicLink()) {
+      throw new Error(transactionError);
+    }
+    await writePrivate(lockPath, Buffer.from('retention-history-transaction\n'));
+    originalIdentity = await stat(target);
+    const previous = originalIdentity ? await openPrivate(target, originalIdentity) : undefined;
+    await prepareStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory });
+    stagedIdentity = await stat(staged);
+    await openPrivate(staged, stagedIdentity);
+    await verifyStoredRetentionHistory({ directory: destinationDirectory, currentDirectory });
+    if (previous) await writePrivate(previousPath, previous.bytes);
+    const currentTarget = await stat(target);
+    if (!await currentDirectoryUnchanged() || (originalIdentity ? !same(currentTarget, originalIdentity) : currentTarget)) {
+      throw new Error(transactionError);
+    }
+    await fs.rename(staged, target);
+    installed = true;
+    await syncDirectory();
+    const proof = await verifyStoredRetentionHistory({ directory: currentDirectory, currentDirectory });
+    for (const directory of olderDirectories) {
+      const snapshot = await loadStoredForRetention(directory);
+      if (!await proof.coversSnapshot(snapshot, directory)) throw new Error(transactionError);
+    }
+    if (!await currentDirectoryUnchanged() || !same(await stat(target), stagedIdentity)) throw new Error(recoveryError);
+    committed = true;
+  } catch (_) {
+    try {
+      if (stagedIdentity && same(await stat(target), stagedIdentity)) {
+        if (!await currentDirectoryUnchanged()) throw new Error(recoveryError);
+        if (originalIdentity) {
+          if (!same(await stat(previousPath), ownedFiles.get(previousPath))) throw new Error(recoveryError);
+          await fs.rename(previousPath, target);
+          ownedFiles.delete(previousPath);
+          await verifyStoredRetentionHistory({ directory: currentDirectory, currentDirectory });
+        } else if (!await removeOwned(target, stagedIdentity)) {
+          throw new Error(recoveryError);
+        }
+        await syncDirectory();
+      } else if (installed) {
+        recoveryRequired = true;
+      }
+    } catch (_) { recoveryRequired = true; }
+  } finally {
+    if (unidentifiedCreated.size) recoveryRequired = true;
+    if (!recoveryRequired) {
+      try {
+        if (!await removeOwned(staged, stagedIdentity) ||
+            !await removeOwned(previousPath, ownedFiles.get(previousPath))) recoveryRequired = true;
+      } catch (_) { recoveryRequired = true; }
+    }
+    const lockIdentity = ownedFiles.get(lockPath);
+    if (lockIdentity) {
+      try {
+        if (!await currentDirectoryUnchanged() || !await removeOwned(lockPath, lockIdentity)) recoveryRequired = true;
+      } catch (_) { recoveryRequired = true; }
+    }
+    for (const handle of descriptors) {
+      try { await handle.close(); } catch (_) { recoveryRequired = true; }
+    }
+  }
+  if (recoveryRequired) throw new Error(recoveryError);
+  if (!committed) throw new Error(transactionError);
+  return Object.freeze({ committed: true, previousArchivePresent: Boolean(originalIdentity), cleanupComplete: true });
+}
+
+module.exports.commitStoredRetentionHistory = commitStoredRetentionHistory;

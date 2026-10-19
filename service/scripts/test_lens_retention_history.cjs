@@ -275,3 +275,187 @@ test('retains a historical empty table definition with a different structure', a
   const proof = await api.verifyStoredRetentionHistory({ directory: destination, currentDirectory: current });
   assert.equal(await proof.coversSnapshot(await api.loadStoredForRetention(older), older), true);
 }));
+
+
+async function withHistoryTransactionFixture(action, overrides) {
+  await fixture(async fixture => {
+    const oldDirectory = fixture.database([[1, 'new']]);
+    const currentDirectory = fixture.database([[1, 'old']]);
+    const destinationDirectory = fixture.destination();
+    const transactionCore = core(overrides ? { ...require('node:fs').promises, ...overrides } : undefined);
+    require('node:assert/strict').equal(typeof transactionCore.commitStoredRetentionHistory, 'function');
+    await action({ core: transactionCore, fixture, oldDirectory, currentDirectory, destinationDirectory,
+      anotherCurrent: () => fixture.database([[1, 'old']]) });
+  });
+}
+
+test('commits historical rows beside the current database and removes staging files', async () => {
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs');
+    const p = require('node:path');
+    const check = require('node:assert/strict');
+    const before = io.readdirSync(currentDirectory).sort();
+    const result = await core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory });
+    check.equal(result.committed, true);
+    const proof = await core.verifyStoredRetentionHistory({ directory: currentDirectory, currentDirectory });
+    check.equal(await proof.coversSnapshot(await core.loadStoredForRetention(oldDirectory), oldDirectory), true);
+    check.deepEqual(io.readdirSync(destinationDirectory), []);
+    check.deepEqual(io.readdirSync(currentDirectory).sort(), [...before, 'retention-history.json'].sort());
+    check.equal(io.statSync(p.join(currentDirectory, 'retention-history.json')).mode & 0o777, 0o600);
+  });
+});
+
+test('keeps the previous archive when installation fails', async () => {
+  let failRename = false;
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory], destinationDirectory });
+    const previous = io.readFileSync(p.join(currentDirectory, 'retention-history.json'));
+    failRename = true;
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory }), /retention history transaction failed/);
+    check.deepEqual(io.readFileSync(p.join(currentDirectory, 'retention-history.json')), previous);
+    check.deepEqual(io.readdirSync(destinationDirectory), []);
+  }, { rename: async (...args) => {
+    if (failRename) throw new Error('synthetic rename failure');
+    return require('node:fs').promises.rename(...args);
+  }});
+});
+
+test('restores the previous archive after installed content fails verification', async () => {
+  let corruptInstall = false;
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory], destinationDirectory });
+    const previous = io.readFileSync(p.join(currentDirectory, 'retention-history.json'));
+    corruptInstall = true;
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory }), /retention history transaction failed/);
+    check.deepEqual(io.readFileSync(p.join(currentDirectory, 'retention-history.json')), previous);
+    await core.verifyStoredRetentionHistory({ directory: currentDirectory, currentDirectory });
+    check.deepEqual(io.readdirSync(destinationDirectory), []);
+  }, { rename: async (from, to) => {
+    const io = require('node:fs');
+    await io.promises.rename(from, to);
+    if (corruptInstall && require('node:path').basename(from) === 'retention-history.json') {
+      corruptInstall = false;
+      io.writeFileSync(to, '{}');
+    }
+  }});
+});
+
+test('restores an absent archive after first installation fails verification', async () => {
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory }), /retention history transaction failed/);
+    check.equal(io.existsSync(p.join(currentDirectory, 'retention-history.json')), false);
+    check.equal(io.existsSync(p.join(currentDirectory, '.retention-history.lock')), false);
+    check.deepEqual(io.readdirSync(destinationDirectory), []);
+  }, { rename: async (from, to) => {
+    const io = require('node:fs');
+    await io.promises.rename(from, to);
+    if (require('node:path').basename(from) === 'retention-history.json') io.writeFileSync(to, '{}');
+  }});
+});
+
+test('leaves an existing transaction lock untouched', async () => {
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    const lock = p.join(currentDirectory, '.retention-history.lock');
+    io.writeFileSync(lock, 'synthetic lock', { mode: 0o600 });
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory }), /retention history transaction failed/);
+    check.equal(io.readFileSync(lock, 'utf8'), 'synthetic lock');
+    check.equal(io.existsSync(p.join(currentDirectory, 'retention-history.json')), false);
+    check.deepEqual(io.readdirSync(destinationDirectory), []);
+  });
+});
+
+test('carries earlier historical rows through a later backup generation', async () => {
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory, anotherCurrent }) => {
+    const check = require('node:assert/strict');
+    const oldest = await core.loadStoredForRetention(oldDirectory);
+    await core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory });
+    const nextDirectory = anotherCurrent();
+    await core.commitStoredRetentionHistory({ currentDirectory: nextDirectory,
+      olderDirectories: [currentDirectory], destinationDirectory });
+    const proof = await core.verifyStoredRetentionHistory({ directory: nextDirectory, currentDirectory: nextDirectory });
+    check.equal(await proof.coversSnapshot(oldest, oldDirectory), true);
+    check.equal(await proof.coversSnapshot(await core.loadStoredForRetention(currentDirectory), currentDirectory), true);
+  });
+});
+
+
+test('preserves an unexpected replacement and the independent rollback copy', async () => {
+  let replaceInstalled = false;
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [oldDirectory], destinationDirectory });
+    const previous = io.readFileSync(p.join(currentDirectory, 'retention-history.json'));
+    replaceInstalled = true;
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory }), /retention history recovery required/);
+    check.equal(io.readFileSync(p.join(currentDirectory, 'retention-history.json'), 'utf8'), 'synthetic replacement');
+    check.deepEqual(io.readFileSync(p.join(destinationDirectory, '.retention-history.previous')), previous);
+    check.equal(io.existsSync(p.join(currentDirectory, '.retention-history.lock')), false);
+  }, { rename: async (from, to) => {
+    const io = require('node:fs').promises;
+    await io.rename(from, to);
+    if (replaceInstalled && require('node:path').basename(from) === 'retention-history.json') {
+      replaceInstalled = false;
+      await io.unlink(to);
+      await io.writeFile(to, 'synthetic replacement', { flag: 'wx', mode: 0o600 });
+    }
+  }});
+});
+
+test('removes its own partial lock after a write failure', async () => {
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory }), /retention history transaction failed/);
+    check.equal(io.existsSync(p.join(currentDirectory, '.retention-history.lock')), false);
+    check.deepEqual(io.readdirSync(destinationDirectory), []);
+  }, { open: async (...args) => {
+    const handle = await require('node:fs').promises.open(...args);
+    if (require('node:path').basename(args[0]) !== '.retention-history.lock') return handle;
+    return new Proxy(handle, { get(target, key) {
+      if (key === 'writeFile') return async () => { throw new Error('synthetic lock write failure'); };
+      const value = Reflect.get(target, key);
+      return typeof value === 'function' ? value.bind(target) : value;
+    }});
+  }});
+});
+
+test('reports recovery when a created lock cannot be identified', async () => {
+  await withHistoryTransactionFixture(async ({ core, oldDirectory, currentDirectory, destinationDirectory }) => {
+    const io = require('node:fs'), p = require('node:path'), check = require('node:assert/strict');
+    await check.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [oldDirectory], destinationDirectory }), /retention history recovery required/);
+    check.equal(io.existsSync(p.join(currentDirectory, '.retention-history.lock')), true);
+    check.deepEqual(io.readdirSync(destinationDirectory), []);
+  }, { open: async (...args) => {
+    const handle = await require('node:fs').promises.open(...args);
+    if (require('node:path').basename(args[0]) !== '.retention-history.lock') return handle;
+    return new Proxy(handle, { get(target, key) {
+      if (key === 'stat') return async () => { throw new Error('synthetic identity failure'); };
+      const value = Reflect.get(target, key);
+      return typeof value === 'function' ? value.bind(target) : value;
+    }});
+  }});
+});
+
+
+test('rejects malformed transaction input with a fixed public error', async () => {
+  const check = require('node:assert/strict');
+  const engine = core();
+  for (const input of [undefined, null, {},
+    { currentDirectory: 7, olderDirectories: [], destinationDirectory: 'synthetic' },
+    { currentDirectory: 'synthetic', olderDirectories: [null], destinationDirectory: 'synthetic' }]) {
+    await check.rejects(engine.commitStoredRetentionHistory(input), error =>
+      error && error.message === 'retention history transaction failed');
+  }
+});
