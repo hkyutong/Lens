@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { sanitizeMarkdownPreviewHtml } from '@/utils/markdownPreviewHtml'
+
 import { fetchAttachmentBlob, isPrivateAttachmentReference, usePrivateMediaSources } from '@/utils/privateMedia'
 
 import { renderMermaidWithRecovery } from '@/utils/mermaidRecovery'
@@ -2059,6 +2061,8 @@ const text = computed(() => {
   return rememberRenderedMessage(cacheKey, modifiedValue)
 })
 
+const renderedText = computed(() => sanitizeMarkdownPreviewHtml(text.value))
+
 watch(
   () => text.value,
   () => {
@@ -2876,7 +2880,7 @@ function openSingleImagePreview(src: string) {
                 'workspace-record__markdown--streaming': isStreamIn || loading,
               },
             ]"
-            v-html="text"
+            v-html="renderedText"
           ></div>
         </div>
 
