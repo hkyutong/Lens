@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { prepareBackupCoverage, createFileBackupVerifier, commitBackupHistory, inheritBackupHistory } = require('./lens_backup_coverage.cjs');
+const { prepareBackupCoverage, createFileBackupVerifier, commitBackupHistory, inheritBackupHistory, recoverBackupHistory } = require('./lens_backup_coverage.cjs');
 const { auditAndRetainBackups } = require('./lens_backup_retention.cjs');
 
 const privateModule = { exports: {} };
@@ -349,4 +349,143 @@ test("unknown file mutation invalidates cached hash coverage", fixture(async con
   write(path.join(context.latest, name), "synthetic-replaced");
   assert.equal(coverage({ candidate, retained }), false);
   assert.equal(coverage({ candidate: snapshot(context.older), retained: snapshot(context.latest) }), false);
+}));
+
+
+test("private history preserves different file versions after originals are removed", fixture(async context => {
+  database(path.join(context.older, roles.database), ["synthetic-older"]);
+  database(path.join(context.latest, roles.database), ["synthetic-current"]);
+  write(path.join(context.older, "synthetic-version.txt"), "synthetic-older-file");
+  write(path.join(context.latest, "synthetic-version.txt"), "synthetic-current-file");
+  assert.equal(await proof(context), false);
+  await commitBackupHistory(await historyCoverage(context));
+  assert.equal(await proof(context), true);
+  fs.rmSync(context.older, { recursive: true });
+  const source = fs.readFileSync(path.join(__dirname, 'lens_retention_history_recovery.py'), 'utf8');
+  const receipt = await recoverBackupHistory(await historyCoverage(context), source);
+  assert.equal(receipt.verified, true);
+}));
+
+test("private history preserves unknown directories and empty directories", fixture(async context => {
+  database(path.join(context.older, roles.database), ["synthetic-row"]);
+  database(path.join(context.latest, roles.database), ["synthetic-row"]);
+  fs.mkdirSync(path.join(context.older, 'synthetic-folder'), { mode: 0o700 });
+  fs.mkdirSync(path.join(context.older, 'synthetic-empty'), { mode: 0o700 });
+  write(path.join(context.older, 'synthetic-folder', 'synthetic.bin'), Buffer.from([0, 255, 1]).toString('base64'));
+  await commitBackupHistory(await historyCoverage(context));
+  assert.equal(await proof(context), true);
+}));
+
+test("private file history is inherited across a new complete backup", fixture(async context => {
+  database(path.join(context.older, roles.database), ["synthetic-older"]);
+  database(path.join(context.latest, roles.database), ["synthetic-current"]);
+  write(path.join(context.older, 'synthetic-history.txt'), 'synthetic-older-file');
+  await commitBackupHistory(await historyCoverage(context));
+  const next = path.join(context.root, 'synthetic-next');
+  fs.mkdirSync(next, { mode: 0o700 });
+  fs.copyFileSync(path.join(context.older, roles.control), path.join(next, roles.control));
+  database(path.join(next, roles.database), ['synthetic-next-row']);
+  await inheritBackupHistory(await historyCoverage(context), path.join(next, roles.database));
+  fs.copyFileSync(path.join(context.latest, roles.verified), path.join(next, roles.verified));
+  fs.unlinkSync(path.join(context.latest, roles.verified));
+  fs.rmSync(context.older, { recursive: true });
+  const coverage = await historyCoverage(context);
+  assert.equal(coverage({ candidate: snapshot(context.latest), retained: snapshot(next) }), true);
+  const decoderSource = fs.readFileSync(path.join(__dirname, 'lens_retention_history_recovery.py'), 'utf8');
+  assert.equal((await recoverBackupHistory(coverage, decoderSource)).verified, true);
+}));
+
+test("a source file changed after capture prevents archive submission", fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-row']);
+  database(path.join(context.latest, roles.database), ['synthetic-row']);
+  const file = path.join(context.older, 'synthetic-input.txt');
+  write(file, 'synthetic-before');
+  const coverage = await historyCoverage(context);
+  write(file, 'synthetic-after');
+  await assert.rejects(commitBackupHistory(coverage), /backup history context changed/);
+}));
+
+test("unknown symbolic links cannot be committed into private file history", fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-row']);
+  database(path.join(context.latest, roles.database), ['synthetic-row']);
+  fs.symlinkSync('synthetic-missing', path.join(context.older, 'synthetic-link'));
+  await assert.rejects(commitBackupHistory(await historyCoverage(context)), /backup history context invalid/);
+}));
+
+test("a late artifact change rolls back the previous private archive", fixture(async context => {
+  const currentDirectory = path.join(context.latest, roles.database);
+  const olderDirectory = path.join(context.older, roles.database);
+  database(olderDirectory, ['synthetic-before']);
+  database(currentDirectory, ['synthetic-current']);
+  await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [olderDirectory] });
+  const before = new Map(fs.readdirSync(currentDirectory).map(name => [name, fs.readFileSync(path.join(currentDirectory, name))]));
+  const content = Buffer.from('synthetic-new-file');
+  const artifact = { name: 'synthetic.txt', kind: 'file', mode: 0o600,
+    sha256: core.codec.digest(content), data: content.toString('base64') };
+  let visits = 0;
+  await assert.rejects(core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [olderDirectory],
+    artifacts: [artifact], assertArtifactsUnchanged: () => ++visits < 3 }), /retention history transaction failed/);
+  assert.equal(visits, 3);
+  assert.deepEqual(new Map(fs.readdirSync(currentDirectory).map(name => [name, fs.readFileSync(path.join(currentDirectory, name))])), before);
+}));
+
+
+test("a source file added after capture prevents archive submission", fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-row']);
+  database(path.join(context.latest, roles.database), ['synthetic-row']);
+  const coverage = await historyCoverage(context);
+  write(path.join(context.older, 'synthetic-added.txt'), 'synthetic-added');
+  await assert.rejects(commitBackupHistory(coverage), /backup history context changed/);
+}));
+
+test("an excessive unknown source file cannot be archived", fixture(async context => {
+  database(path.join(context.older, roles.database), ['synthetic-row']);
+  database(path.join(context.latest, roles.database), ['synthetic-row']);
+  const file = path.join(context.older, 'synthetic-large.bin');
+  write(file, '');
+  fs.truncateSync(file, 16777217);
+  await assert.rejects(commitBackupHistory(await historyCoverage(context)), /backup history context invalid/);
+}));
+
+
+test("malformed private file history cannot change the previous archive", fixture(async context => {
+  const currentDirectory = path.join(context.latest, roles.database);
+  const olderDirectory = path.join(context.older, roles.database);
+  database(olderDirectory, ['synthetic-before']);
+  database(currentDirectory, ['synthetic-current']);
+  await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [olderDirectory] });
+  const before = new Map(fs.readdirSync(currentDirectory).map(name => [name, fs.readFileSync(path.join(currentDirectory, name))]));
+  const bytes = Buffer.from('synthetic-data');
+  const valid = { name: 'synthetic.txt', kind: 'file', mode: 0o600,
+    sha256: core.codec.digest(bytes), data: bytes.toString('base64') };
+  for (const update of [{ name: '../synthetic' }, { name: '/synthetic' }, { sha256: '0'.repeat(64) },
+      { mode: 0o666 }, { data: 'AA===' }, { unexpected: true }]) {
+    await assert.rejects(core.commitStoredRetentionHistory({ currentDirectory,
+      olderDirectories: [olderDirectory], artifacts: [{ ...valid, ...update }] }), /retention history transaction failed/);
+    assert.deepEqual(new Map(fs.readdirSync(currentDirectory).map(name => [name, fs.readFileSync(path.join(currentDirectory, name))])), before);
+  }
+}));
+
+
+test("archive durability failure preserves the previous complete history", fixture(async context => {
+  const currentDirectory = path.join(context.latest, roles.database);
+  const olderDirectory = path.join(context.older, roles.database);
+  database(olderDirectory, ['synthetic-before']);
+  database(currentDirectory, ['synthetic-current']);
+  await core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [olderDirectory] });
+  const before = new Map(fs.readdirSync(currentDirectory).map(name => [name, fs.readFileSync(path.join(currentDirectory, name))]));
+  const original = fs.promises.open;
+  let injected = false;
+  fs.promises.open = async function (...args) {
+    const handle = await original.apply(this, args);
+    if (typeof args[1] === 'string' && args[1].includes('w')) {
+      handle.sync = async () => { injected = true; throw new Error('synthetic-durability-fault'); };
+    }
+    return handle;
+  };
+  try {
+    await assert.rejects(core.commitStoredRetentionHistory({ currentDirectory, olderDirectories: [olderDirectory] }), /retention history transaction failed/);
+    assert.equal(injected, true);
+    assert.deepEqual(new Map(fs.readdirSync(currentDirectory).map(name => [name, fs.readFileSync(path.join(currentDirectory, name))])), before);
+  } finally { fs.promises.open = original; }
 }));

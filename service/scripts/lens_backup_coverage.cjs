@@ -68,7 +68,7 @@ async function prepareBackupCoverage({ namespace, owner, roles, databaseCore, fi
     }
     return after;
   };
-  let preserved;
+  let preserved, retainedHistory;
   const bundles = [];
   try {
     const root = fs.lstatSync(namespace);
@@ -109,6 +109,7 @@ async function prepareBackupCoverage({ namespace, owner, roles, databaseCore, fi
         currentDirectory: path.join(preserved, roles.database), optional: true }), backupHistoryState, databaseCore, path.join(preserved, roles.database)) : null;
     if (history && !await history.coversSnapshot(latest, path.join(preserved, roles.database))) return reject();
     const latestArtifacts = artifactProof(preserved);
+    retainedHistory = history;
     for (const bundle of bundles.filter(item => !item.verified)) {
       try {
         const databaseDirectory = path.join(bundle.directory, roles.database);
@@ -142,6 +143,9 @@ async function prepareBackupCoverage({ namespace, owner, roles, databaseCore, fi
   } catch { facts.coverage_metadata_rejected_count++; return reject(); }
   const knownFiles = new Set(roles.files);
   const knownDirectories = new Set(roles.directories);
+  try {
+    backupHistoryState.artifactCapture = captureUnknownBackupArtifacts(bundles, roles);
+  } catch (_) { backupHistoryState.unsupported = true; }
   const unknownHashes = new Map();
   let unknownHashedBytes = 0n;
   const hashUnknownFile = (snapshot, relative, expected) => {
@@ -167,6 +171,15 @@ async function prepareBackupCoverage({ namespace, owner, roles, databaseCore, fi
     } finally { fs.closeSync(descriptor); }
   };
   const equivalentUnknown = (snapshot, relative, entry, retained) => {
+    if (!entry.symlink && retainedHistory?.coversArtifact) {
+      try {
+        const stat = fs.lstatSync(path.join(snapshot.directory, relative), { bigint: true });
+        const artifact = { name: relative.split(path.sep).join('/'),
+          kind: entry.directory ? 'directory' : 'file', mode: Number(stat.mode & 0o777n),
+          ...(entry.directory ? {} : { sha256: hashUnknownFile(snapshot, relative, entry) }) };
+        if (identity(stat) === entry.identity && retainedHistory.coversArtifact(artifact)) return true;
+      } catch (_) { return false; }
+    }
     const reference = retained.entries.get(relative);
     if (!reference || entry.symlink || reference.symlink || entry.directory !== reference.directory) return false;
     if (entry.directory) return true;
@@ -310,11 +323,92 @@ async function commitObservedBackupHistory(coverage, destination) {
     if (olderDirectories.length === 0) {
       return Object.freeze({ committed: false, noHistoryRequired: true, cleanupComplete: true });
     }
-    const result = await state.core.commitStoredRetentionHistory({ currentDirectory, olderDirectories });
+    const capture = state.artifactCapture;
+    if (!capture || !capture.unchanged()) throw new Error('backup history context changed');
+    const result = await state.core.commitStoredRetentionHistory({ currentDirectory, olderDirectories,
+      artifacts: capture.artifacts, assertArtifactsUnchanged: capture.unchanged });
     if (result.committed !== true || result.cleanupComplete !== true) throw new Error('backup history commit failed');
     return Object.freeze({ committed: true, noHistoryRequired: false, cleanupComplete: true });
   } catch (error) {
     const known = new Set(['backup history context changed', 'retention history recovery required']);
     throw new Error(known.has(error.message) ? error.message : 'backup history commit failed');
   }
+}
+
+function captureUnknownBackupArtifacts(bundles, roles) {
+  const crypto = require('node:crypto');
+  const signatures = new Map(), roots = new Map(), artifacts = new Map();
+  const knownFiles = new Set(roles.files), knownDirectories = new Set(roles.directories);
+  const identity = stat => [stat.dev, stat.ino, stat.mode, stat.uid, stat.nlink,
+    stat.size, stat.mtimeNs, stat.ctimeNs].map(String).join(':');
+  const fail = () => { throw new Error('backup history context changed'); };
+  let byteCount = 0, entryCount = 0;
+  for (const bundle of bundles) {
+    const root = fs.lstatSync(bundle.directory, { bigint: true });
+    if (!root.isDirectory() || root.isSymbolicLink() || (root.mode & 0o022n)) fail();
+    const unknownNames = fs.readdirSync(bundle.directory).filter(name =>
+      name !== roles.database && !knownFiles.has(name) && !knownDirectories.has(name)).sort();
+    roots.set(bundle.directory, { dev: root.dev, ino: root.ino, uid: root.uid, unknownNames });
+    const visit = (relative, depth) => {
+      if (depth > 32) fail();
+      for (const name of fs.readdirSync(path.join(bundle.directory, relative)).sort()) {
+        const child = path.join(relative, name), top = child.split(path.sep)[0];
+        if (top === roles.database || knownDirectories.has(top) || (!relative && knownFiles.has(name))) continue;
+        if (++entryCount > 4096) fail();
+        const file = path.join(bundle.directory, child), before = fs.lstatSync(file, { bigint: true });
+        if (before.uid !== root.uid || before.isSymbolicLink() || (before.mode & 0o022n) ||
+            (!before.isDirectory() && (!before.isFile() || before.nlink !== 1n))) fail();
+        signatures.set(file, identity(before));
+        const artifact = { name: child.split(path.sep).join('/'),
+          kind: before.isDirectory() ? 'directory' : 'file', mode: Number(before.mode & 0o777n) };
+        if (before.isDirectory()) visit(child, depth + 1);
+        else {
+          if (before.size > 16777216n || (byteCount += Number(before.size)) > 67108864) fail();
+          const descriptor = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+          try {
+            if (identity(fs.fstatSync(descriptor, { bigint: true })) !== identity(before)) fail();
+            const content = Buffer.alloc(Number(before.size));
+            let offset = 0;
+            while (offset < content.length) {
+              const length = fs.readSync(descriptor, content, offset, content.length - offset, null);
+              if (!length) fail();
+              offset += length;
+            }
+            if (fs.readSync(descriptor, Buffer.alloc(1), 0, 1, null)) fail();
+            if (identity(fs.fstatSync(descriptor, { bigint: true })) !== identity(before)) fail();
+            artifact.sha256 = crypto.createHash('sha256').update(content).digest('hex');
+            artifact.data = content.toString('base64');
+          } finally { fs.closeSync(descriptor); }
+        }
+        if (identity(fs.lstatSync(file, { bigint: true })) !== identity(before)) fail();
+        artifacts.set(JSON.stringify([artifact.name, artifact.kind, artifact.mode, artifact.sha256 || null]), artifact);
+      }
+    };
+    visit('', 0);
+  }
+  const unchanged = temporaryDirectory => {
+    try {
+      for (const [directory, expected] of roots) {
+        const current = fs.lstatSync(directory, { bigint: true });
+        if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev ||
+            current.ino !== expected.ino || current.uid !== expected.uid) return false;
+        const unknownNames = fs.readdirSync(directory).filter(name => {
+          if (name === roles.database || knownFiles.has(name) || knownDirectories.has(name)) return false;
+          if (temporaryDirectory && path.join(directory, name) === temporaryDirectory && !expected.unknownNames.includes(name)) {
+            const stage = fs.lstatSync(temporaryDirectory, { bigint: true });
+            if (!stage.isDirectory() || stage.isSymbolicLink() || stage.uid !== expected.uid || (stage.mode & 0o777n) !== 0o700n) throw new Error();
+            return false;
+          }
+          return true;
+        }).sort();
+        if (JSON.stringify(unknownNames) !== JSON.stringify(expected.unknownNames)) return false;
+      }
+      for (const [file, signature] of signatures) {
+        if (identity(fs.lstatSync(file, { bigint: true })) !== signature) return false;
+      }
+      return true;
+    } catch (_) { return false; }
+  };
+  if (!unchanged()) fail();
+  return Object.freeze({ artifacts: [...artifacts.values()], unchanged });
 }

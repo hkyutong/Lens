@@ -133,8 +133,8 @@ async function readStoredRetentionHistory(directory, current, optional = false) 
   const hash = text => typeof text === 'string' && /^[a-f0-9]{64}$/.test(text);
   const text = value => typeof value === 'string' && value.length > 0 && Buffer.byteLength(value) <= bounds.maxBytes;
   const material = storedRetentionRecords.get(current);
-  if (!keys(value, ['version', 'baseManifestHash', 'databaseFingerprint', 'sourceBindings', 'tables', 'contentHash']) ||
-      value.version !== 1 || value.baseManifestHash !== material.manifestHash ||
+  if (!keys(value, ['version', 'baseManifestHash', 'databaseFingerprint', 'sourceBindings', 'tables', 'contentHash', ...(value.version === 2 ? ['artifacts'] : [])]) ||
+      ![1, 2].includes(value.version) || value.baseManifestHash !== material.manifestHash ||
       value.databaseFingerprint !== current.fingerprint ||
       !Array.isArray(value.sourceBindings) || value.sourceBindings.length > 1024 ||
       !value.sourceBindings.every(hash) || new Set(value.sourceBindings).size !== value.sourceBindings.length ||
@@ -143,6 +143,7 @@ async function readStoredRetentionHistory(directory, current, optional = false) 
   }
   const { contentHash, ...payload } = value;
   if (!hash(contentHash) || digest(JSON.stringify(payload)) !== contentHash) throw retentionHistoryError();
+  normalizeRetentionArtifacts(value.version === 2 ? value.artifacts : []);
   const seen = new Set();
   let count = 0;
   for (const table of value.tables) {
@@ -184,7 +185,10 @@ function storedHistoryProof(current, archive) {
   for (const table of value.tables) {
     tables.set(JSON.stringify([table.name, table.structure]), new Map(table.rows.map(row => [digest(row.data), row.count])));
   }
+  const artifactKeys = new Set(normalizeRetentionArtifacts(value.artifacts || []).map(retentionArtifactKey));
+  const coversArtifact = artifact => artifactKeys.has(retentionArtifactKey(artifact));
   const result = { ok: true, ...retentionHistoryStats(value.tables, value.sourceBindings) };
+  Object.defineProperty(result, 'coversArtifact', { value: coversArtifact });
   const covers = ({ table, structure, row, count }) => {
     if (typeof table !== 'string' || typeof structure !== 'string' || typeof row !== 'string' ||
         !Number.isSafeInteger(count) || count < 0) return false;
@@ -206,6 +210,7 @@ function storedHistoryProof(current, archive) {
         for (const [row, count] of counts) if (!covers({ table: table.name, structure, row, count })) return false;
       }
       const previous = await readStoredRetentionHistory(directory, snapshot, true);
+    if (previous && (previous.value.artifacts || []).some(artifact => !coversArtifact(artifact))) return false;
       if (previous) for (const table of previous.value.tables) {
         if (current.tables.get(table.name)?.structure !== table.structure &&
             !tables.has(JSON.stringify([table.name, table.structure]))) return false;
@@ -229,7 +234,7 @@ async function verifyStoredRetentionHistory({ directory, currentDirectory, optio
   } catch (_) { throw retentionHistoryError(); }
 }
 
-async function prepareStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory }) {
+async function prepareStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory, artifacts = [] }) {
   let created = false, createdIdentity;
   const destination = path.join(destinationDirectory, retentionHistoryFile);
   try {
@@ -250,6 +255,7 @@ async function prepareStoredRetentionHistory({ currentDirectory, olderDirectorie
     }
     const current = sources[0].snapshot, material = storedRetentionRecords.get(current);
     const grouped = new Map(), bindings = new Set(), archives = [];
+    const retainedArtifacts = new Map(normalizeRetentionArtifacts(artifacts).map(artifact => [retentionArtifactKey(artifact), artifact]));
     function group(table) {
       const structure = retentionStructureKey(table);
       const key = JSON.stringify([table.name, structure]);
@@ -284,6 +290,9 @@ async function prepareStoredRetentionHistory({ currentDirectory, olderDirectorie
       if (present) {
         const archive = await readStoredRetentionHistory(source.directory, snapshot);
         archives.push({ ...archive, snapshot });
+        for (const artifact of normalizeRetentionArtifacts(archive.value.artifacts || [])) {
+          retainedArtifacts.set(retentionArtifactKey(artifact), artifact);
+        }
         for (const binding of archive.value.sourceBindings) bindings.add(binding);
         for (const table of archive.value.tables) {
           if (current.tables.get(table.name)?.structure !== table.structure) group(table);
@@ -294,8 +303,9 @@ async function prepareStoredRetentionHistory({ currentDirectory, olderDirectorie
       }
     }
     const tables = [...grouped.values()].map(table => ({ ...table, rows: [...table.rows.values()] }));
-    const payload = { version: 1, baseManifestHash: material.manifestHash, databaseFingerprint: current.fingerprint,
-      sourceBindings: [...bindings].sort(), tables };
+    const mergedArtifacts = normalizeRetentionArtifacts([...retainedArtifacts.values()]).sort((a, b) => retentionArtifactKey(a).localeCompare(retentionArtifactKey(b)));
+    const payload = { version: mergedArtifacts.length ? 2 : 1, baseManifestHash: material.manifestHash, databaseFingerprint: current.fingerprint,
+      sourceBindings: [...bindings].sort(), tables, ...(mergedArtifacts.length ? { artifacts: mergedArtifacts } : {}) };
     const value = { ...payload, contentHash: digest(JSON.stringify(payload)) };
     const content = JSON.stringify(value) + '\n';
     if (Buffer.byteLength(content) > limits({}).maxBytes) throw retentionHistoryError();
@@ -305,6 +315,7 @@ async function prepareStoredRetentionHistory({ currentDirectory, olderDirectorie
       const stat = await descriptor.stat({ bigint: true });
       createdIdentity = [stat.dev, stat.ino].map(String).join(':');
       await descriptor.writeFile(content);
+      await descriptor.sync();
     } finally { await descriptor.close(); }
     const proof = storedHistoryProof(current, await readStoredRetentionHistory(destinationDirectory, current));
     for (const source of sources) {
@@ -350,18 +361,18 @@ module.exports.verifyStoredRetentionHistory = verifyStoredRetentionHistory;
 
 async function commitStoredRetentionHistory(options) {
   const transactionError = 'retention history transaction failed';
-  const fields = new Set(['currentDirectory', 'olderDirectories', 'destinationDirectory']);
+  const fields = new Set(['currentDirectory', 'olderDirectories', 'destinationDirectory', 'artifacts', 'assertArtifactsUnchanged']);
   if (!options || typeof options !== 'object' || Array.isArray(options) ||
       Object.keys(options).some(key => !fields.has(key))) throw new Error(transactionError);
-  const { currentDirectory, olderDirectories, destinationDirectory } = options;
-  if (typeof currentDirectory !== 'string' || !currentDirectory ||
+  const { currentDirectory, olderDirectories, destinationDirectory, artifacts = [], assertArtifactsUnchanged = () => true } = options;
+  if (!Array.isArray(artifacts) || typeof assertArtifactsUnchanged !== 'function' || typeof currentDirectory !== 'string' || !currentDirectory ||
       (destinationDirectory !== undefined && (typeof destinationDirectory !== 'string' || !destinationDirectory)) ||
       !Array.isArray(olderDirectories) ||
       olderDirectories.some(directory => typeof directory !== 'string' || !directory)) {
     throw new Error(transactionError);
   }
   if (destinationDirectory === undefined) {
-    return await commitStoredHistoryInOwnedStage(currentDirectory, olderDirectories);
+    return await commitStoredHistoryInOwnedStage(currentDirectory, olderDirectories, artifacts, assertArtifactsUnchanged);
   }
   const recoveryError = 'retention history recovery required';
   const target = path.join(currentDirectory, 'retention-history.json');
@@ -430,7 +441,8 @@ async function commitStoredRetentionHistory(options) {
     await writePrivate(lockPath, Buffer.from('retention-history-transaction\n'));
     originalIdentity = await stat(target);
     const previous = originalIdentity ? await openPrivate(target, originalIdentity) : undefined;
-    await prepareStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory });
+    if (await assertArtifactsUnchanged(destinationDirectory) !== true) throw new Error(transactionError);
+    await prepareStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory, artifacts });
     stagedIdentity = await stat(staged);
     await openPrivate(staged, stagedIdentity);
     await verifyStoredRetentionHistory({ directory: destinationDirectory, currentDirectory });
@@ -439,6 +451,7 @@ async function commitStoredRetentionHistory(options) {
     if (!await currentDirectoryUnchanged() || (originalIdentity ? !same(currentTarget, originalIdentity) : currentTarget)) {
       throw new Error(transactionError);
     }
+    if (await assertArtifactsUnchanged(destinationDirectory) !== true) throw new Error(transactionError);
     await fs.rename(staged, target);
     installed = true;
     await syncDirectory();
@@ -448,6 +461,7 @@ async function commitStoredRetentionHistory(options) {
       if (!await proof.coversSnapshot(snapshot, directory)) throw new Error(transactionError);
     }
     if (!await currentDirectoryUnchanged() || !same(await stat(target), stagedIdentity)) throw new Error(recoveryError);
+    if (await assertArtifactsUnchanged(destinationDirectory) !== true) throw new Error(transactionError);
     committed = true;
   } catch (_) {
     try {
@@ -489,7 +503,7 @@ async function commitStoredRetentionHistory(options) {
   return Object.freeze({ committed: true, previousArchivePresent: Boolean(originalIdentity), cleanupComplete: true });
 }
 
-async function commitStoredHistoryInOwnedStage(currentDirectory, olderDirectories) {
+async function commitStoredHistoryInOwnedStage(currentDirectory, olderDirectories, artifacts, assertArtifactsUnchanged) {
   const transactionError = 'retention history transaction failed';
   const recoveryError = 'retention history recovery required';
   let stage, handle, identity, receipt, failure;
@@ -499,7 +513,7 @@ async function commitStoredHistoryInOwnedStage(currentDirectory, olderDirectorie
     handle = await fs.open(stage, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
     identity = await handle.stat();
     if (!identity.isDirectory() || (identity.mode & 0o777) !== 0o700) throw new Error(transactionError);
-    receipt = await commitStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory: stage });
+    receipt = await commitStoredRetentionHistory({ currentDirectory, olderDirectories, destinationDirectory: stage, artifacts, assertArtifactsUnchanged });
   } catch (error) {
     failure = error.message === recoveryError ? recoveryError : transactionError;
   } finally {
@@ -557,3 +571,38 @@ async function verifyStoredRetentionHistoryMemoryRecovery({ directory, currentDi
   } catch (_) { throw new Error(error); }
 }
 module.exports.verifyStoredRetentionHistoryMemoryRecovery = verifyStoredRetentionHistoryMemoryRecovery;
+
+
+function retentionArtifactKey(artifact) {
+  return JSON.stringify([artifact.name, artifact.kind, artifact.mode, artifact.sha256 || null]);
+}
+
+function normalizeRetentionArtifacts(artifacts) {
+  const fail = () => { throw retentionHistoryError(); };
+  if (!Array.isArray(artifacts) || artifacts.length > 4096) fail();
+  const result = [], seen = new Set();
+  let bytes = 0;
+  for (const artifact of artifacts) {
+    const fields = artifact?.kind === 'directory' ? ['name', 'kind', 'mode'] : ['name', 'kind', 'mode', 'sha256', 'data'];
+    if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact) ||
+        Object.keys(artifact).length !== fields.length || Object.keys(artifact).some(key => !fields.includes(key)) ||
+        !['file', 'directory'].includes(artifact.kind) || typeof artifact.name !== 'string' ||
+        !artifact.name || Buffer.byteLength(artifact.name) > 4096 || artifact.name.includes('\0') ||
+        artifact.name.includes('\\') || artifact.name.startsWith('/') ||
+        artifact.name.split('/').some(part => !part || part === '.' || part === '..') ||
+        !Number.isSafeInteger(artifact.mode) || artifact.mode < 0 || artifact.mode > 0o777 || (artifact.mode & 0o022)) fail();
+    if (artifact.kind === 'file') {
+      if (typeof artifact.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(artifact.sha256) ||
+          typeof artifact.data !== 'string' || artifact.data.length > 22369624) fail();
+      const content = Buffer.from(artifact.data, 'base64');
+      bytes += content.length;
+      if (content.length > 16777216 || bytes > 67108864 || content.toString('base64') !== artifact.data ||
+          digest(content) !== artifact.sha256) fail();
+    }
+    const key = retentionArtifactKey(artifact);
+    if (seen.has(key)) fail();
+    seen.add(key);
+    result.push({ ...artifact });
+  }
+  return result;
+}

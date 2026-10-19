@@ -45,3 +45,52 @@ class MemoryRecoveryTests(unittest.TestCase):
     def test_invalid_binary_and_nonfinite_number_are_closed(self):
         for cell in [["buffer", "zz"], ["number", "1e9999"]]:
             self.assertEqual(recovery.inspect_payload(payload([cell])), recovery._closed())
+
+
+class FileHistoryRecoveryTests(unittest.TestCase):
+    def archived(self, artifacts):
+        value = json.loads(base64.b64decode(payload()["archive"]))
+        value["version"] = 2
+        value["artifacts"] = artifacts
+        raw = json.dumps(value).encode()
+        return {"archive": base64.b64encode(raw).decode(), "sha256": hashlib.sha256(raw).hexdigest()}
+
+    def file(self):
+        content = bytes([0, 1, 255, 128])
+        return {"name": "synthetic-folder/synthetic.bin", "kind": "file", "mode": 0o600,
+                "sha256": hashlib.sha256(content).hexdigest(), "data": base64.b64encode(content).decode()}
+
+    def test_binary_files_and_empty_directories_recover_without_originals(self):
+        result = recovery.inspect_payload(self.archived([self.file(), {"name": "synthetic-empty", "kind": "directory", "mode": 0o700}]))
+        self.assertTrue(result["ok"])
+        self.assertEqual(set(result), {"ok", "schema_count", "row_version_count", "row_count", "source_count"})
+        self.assertNotIn("synthetic", json.dumps(result))
+
+    def test_file_hash_and_encoding_changes_are_rejected(self):
+        for update in ({"sha256": "0" * 64}, {"data": "!"}, {"data": "AA==="}):
+            with self.subTest():
+                artifact = self.file()
+                artifact.update(update)
+                self.assertFalse(recovery.inspect_payload(self.archived([artifact]))["ok"])
+
+    def test_unsafe_names_modes_and_unknown_kinds_are_rejected(self):
+        for update in ({"name": "../synthetic"}, {"name": "/synthetic"}, {"name": "synthetic//file"},
+                       {"name": "synthetic\\file"}, {"mode": True}, {"mode": 0o666}, {"kind": "symlink"}):
+            with self.subTest():
+                artifact = self.file()
+                artifact.update(update)
+                self.assertFalse(recovery.inspect_payload(self.archived([artifact]))["ok"])
+
+    def test_duplicate_artifacts_and_unknown_fields_are_rejected(self):
+        self.assertFalse(recovery.inspect_payload(self.archived([self.file(), self.file()]))["ok"])
+        artifact = self.file()
+        artifact["synthetic_unknown"] = "synthetic-value"
+        self.assertFalse(recovery.inspect_payload(self.archived([artifact]))["ok"])
+
+    def test_unsupported_archive_version_is_rejected(self):
+        data = self.archived([])
+        value = json.loads(base64.b64decode(data["archive"]))
+        value["version"] = 3
+        raw = json.dumps(value).encode()
+        data = {"archive": base64.b64encode(raw).decode(), "sha256": hashlib.sha256(raw).hexdigest()}
+        self.assertFalse(recovery.inspect_payload(data)["ok"])

@@ -54,6 +54,47 @@ def _decode_cell(cell):
     raise ValueError()
 
 
+def _restore_artifacts(artifacts):
+    if type(artifacts) is not list or len(artifacts) > 4096:
+        raise ValueError()
+    restored, seen = [], set()
+    byte_count = 0
+    for artifact in artifacts:
+        if type(artifact) is not dict:
+            raise ValueError()
+        kind = artifact.get("kind")
+        fields = {"name", "kind", "mode"}
+        if kind == "file":
+            fields |= {"sha256", "data"}
+        elif kind != "directory":
+            raise ValueError()
+        _keys(artifact, fields)
+        name, mode = artifact["name"], artifact["mode"]
+        if (type(name) is not str or not name or len(name.encode()) > 4096 or
+                "\0" in name or "\\" in name or name.startswith("/") or
+                any(part in ("", ".", "..") for part in name.split("/")) or
+                type(mode) is not int or not 0 <= mode <= 0o777 or mode & 0o022):
+            raise ValueError()
+        content, digest = None, None
+        if kind == "file":
+            digest, encoded = artifact["sha256"], artifact["data"]
+            if (type(digest) is not str or not re.fullmatch("[a-f0-9]{64}", digest) or
+                    type(encoded) is not str or len(encoded) > 22369624):
+                raise ValueError()
+            content = base64.b64decode(encoded, validate=True)
+            byte_count += len(content)
+            if (len(content) > 16777216 or byte_count > 67108864 or
+                    base64.b64encode(content).decode("ascii") != encoded or
+                    hashlib.sha256(content).hexdigest() != digest):
+                raise ValueError()
+        key = (name, kind, mode, digest)
+        if key in seen:
+            raise ValueError()
+        seen.add(key)
+        restored.append((name, kind, mode, content))
+    return restored
+
+
 def inspect_payload(payload):
     """Only this closed summary may leave the controlled process."""
     try:
@@ -64,14 +105,15 @@ def inspect_payload(payload):
         if len(raw) > _MAX_BYTES or hashlib.sha256(raw).hexdigest() != payload["sha256"]:
             raise ValueError()
         value = json.loads(raw)
-        _keys(value, {"version", "baseManifestHash", "databaseFingerprint", "sourceBindings", "tables", "contentHash"})
-        if type(value["version"]) is not int or value["version"] != 1:
+        _keys(value, {"version", "baseManifestHash", "databaseFingerprint", "sourceBindings", "tables", "contentHash"} | ({"artifacts"} if value.get("version") == 2 else set()))
+        if type(value["version"]) is not int or value["version"] not in (1, 2):
             raise ValueError()
         sources = value["sourceBindings"]
         if type(sources) is not list or len(sources) > 1024 or any(type(s) is not str or not re.fullmatch(r"[a-f0-9]{64}", s) for s in sources):
             raise ValueError()
         if len(set(sources)) != len(sources) or type(value["tables"]) is not list or len(value["tables"]) > 1024:
             raise ValueError()
+        restored_artifacts = _restore_artifacts(value.get("artifacts", []))
         restored = []
         versions = rows = 0
         for table in value["tables"]:
@@ -100,6 +142,7 @@ def inspect_payload(payload):
             restored.append((table["name"], table["create"], table["columns"], restored_rows))
         result = _closed(True, len(restored), versions, rows, len(sources))
         restored.clear()
+        restored_artifacts.clear()
         return result
     except BaseException:
         return _closed()
