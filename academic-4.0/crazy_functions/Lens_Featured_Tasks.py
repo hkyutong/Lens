@@ -43,7 +43,11 @@ def _run_task(task_key, txt, llm_kwargs, plugin_kwargs, chatbot, history, system
                 try:
                     next(pending)
                 except StopIteration as finished:
-                    return finished.value or output
+                    result = finished.value or output
+                    # The worker's connection notice is a service failure, not model JSON to repair.
+                    if isinstance(result, str) and result.lstrip().startswith("学术服务连接异常，请稍后重试。"):
+                        raise RuntimeError("featured_model_unavailable")
+                    return result
                 yield from update_ui(chatbot=chatbot, history=history)
 
         output = yield from collect_model_output(

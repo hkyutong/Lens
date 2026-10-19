@@ -774,6 +774,8 @@ export class AcademicService {
     userId: number,
     scene: 'chat' | 'workflow',
   ) {
+    if (!this.canRetryAcademicAtGateway(payload)) return null;
+
     const currentContent = this.preserveStablePolishDisplay(
       currentState,
       this.pickBestAcademicOutput(currentState),
@@ -1202,6 +1204,14 @@ export class AcademicService {
 
   private isLensFeaturedPlugin(normalizedPluginName: string) {
     return String(normalizedPluginName || '').startsWith(this.normalizePluginName('Lens｜'));
+  }
+
+  private canRetryAcademicAtGateway(payload: Record<string, any>) {
+    // Featured plugins already own transport retries and schema repair.
+    return !(
+      payload.function === 'plugin' &&
+      this.isLensFeaturedPlugin(this.normalizePluginName(payload.plugin_name || ''))
+    );
   }
 
   private isFileRequiredPlugin(normalizedPluginName: string) {
@@ -3417,6 +3427,7 @@ export class AcademicService {
           }
           const shouldRetryOnEmptyError =
             !controller.signal.aborted &&
+            this.canRetryAcademicAtGateway(academicPayload) &&
             this.isAcademicEmptyFailureState(state, finalContent) &&
             !state.fileVectorResult &&
             !this.isMeaningfulAcademicContent(finalContent);
@@ -3584,14 +3595,14 @@ export class AcademicService {
           ) {
             state.streamError = '学术服务处理失败，请重试';
           }
-          if (!this.isMeaningfulAcademicContent(finalContent) && !state.fileVectorResult) {
+          const hasRenderableOutput = Boolean(
+            this.isMeaningfulAcademicContent(finalContent) || state.fileVectorResult,
+          );
+          if (!hasRenderableOutput) {
             state.streamError = state.streamError || '学术后端未返回可展示内容';
             finalContent =
               this.getSafeAcademicErrorMessage(state.streamError) || '学术后端未返回可展示内容';
           }
-          const hasRenderableOutput = Boolean(
-            this.isMeaningfulAcademicContent(finalContent) || state.fileVectorResult,
-          );
           const persistedFinalContent = this.resolvePersistedAcademicContent(
             state,
             finalContent,
@@ -4615,7 +4626,11 @@ export class AcademicService {
           rawStageOutput = '';
           stageContent = '';
         }
-        if (!state.fileVectorResult && !this.isMeaningfulAcademicContent(rawStageOutput)) {
+        if (
+          !state.fileVectorResult &&
+          !this.isMeaningfulAcademicContent(rawStageOutput) &&
+          this.canRetryAcademicAtGateway(academicPayload)
+        ) {
           if (!controller.signal.aborted) {
             try {
               startWorkflowHeartbeat();
@@ -5228,7 +5243,7 @@ export class AcademicService {
     );
     if (!normalized) return false;
     const compact = normalized.replace(/\s+/g, ' ').trim();
-    return /^(?:学术服务处理失败，请重试|学术服务连接异常，请稍后重试。?|学术模型鉴权失败，请联系管理员检查模型密钥配置|多能力编排执行失败，请稍后重试|执行失败，请重试|请稍后重试。?)$/i.test(
+    return /^(?:学术服务处理失败，请重试|学术服务连接异常，请稍后重试。?|学术模型鉴权失败，请联系管理员检查模型密钥配置|多能力编排执行失败，请稍后重试|特色能力暂时无法完成，请稍后重试。?|结果未通过结构与来源校验，请重试或补充材料。?|执行失败，请重试|请稍后重试。?)$/i.test(
       compact,
     );
   }
