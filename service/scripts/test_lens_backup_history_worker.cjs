@@ -8,7 +8,7 @@ const ts = require('typescript');
 
 const source = fs.readFileSync(path.join(__dirname, 'lens_production_release_worker.cjs'), 'utf8');
 const parsed = ts.createSourceFile('synthetic-worker.cjs', source, ts.ScriptTarget.Latest, true);
-const functions = ['__lensControl', '__backupHistoryCoverage', '__historyRecoveryFacts'].map(name =>
+const functions = ['__lensControl', '__backupHistoryCoverage', '__historyRecoveryFacts', '__historyRecoveryFailure'].map(name =>
   parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name.text === name).getText(parsed));
 
 async function exercise(mode, { auditOk = true, commitFails = false, recoverFails = false } = {}) {
@@ -98,6 +98,6 @@ test('explicit memory recovery never commits or deletes history', async () => {
 test('failed memory recovery blocks all cleanup', async () => {
   const { result, events } = await exercise('backup_retention_cleanup', { recoverFails: true });
   assert.equal(result.ok, false);
-  assert.equal(result.error, 'history_recovery_failed');
+  assert.equal(result.error, 'backup_history_recovery_failed');
   assert.deepEqual(events, ['prepare', 'recover', 'audit']);
 });

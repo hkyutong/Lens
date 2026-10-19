@@ -160,6 +160,31 @@ async function __backupHistoryCoverage(context, namespace) {
   return __lensBackupCoverage.prepareBackupCoverage({ namespace: namespace, owner: __owner(context), roles: {"control":"control.json","verified":"verified.json","database":"database","files":["pm2.conf.json","control.json","dependencies.json","download-boundary-checks.json","verified.json","nginx-maintenance-backup.json","config-restore-probe"],"directories":["dependencies","dependency-restore-probe"],"artifacts":"files"}, databaseCore: __lensStoredDatabaseCoverage, fileBackupVerifier: __lensBackupCoverage.createFileBackupVerifier(__lensFileBackupVerifierFactory) });
 }
 
+function __historyRecoveryFailure(error) {
+  const categories = {
+    input: 'backup_history_recovery_input_failed',
+    snapshot: 'backup_history_recovery_snapshot_failed',
+    archive: 'backup_history_recovery_archive_failed',
+    archive_bytes: 'backup_history_recovery_read_failed',
+    decoder: 'backup_history_recovery_decoder_failed',
+    decoder_input: 'backup_history_recovery_decoder_input_failed',
+    decoder_archive_decode: 'backup_history_recovery_decoder_archive_decode_failed',
+    decoder_archive_schema: 'backup_history_recovery_decoder_archive_schema_failed',
+    decoder_source_bindings: 'backup_history_recovery_decoder_source_bindings_failed',
+    decoder_artifacts: 'backup_history_recovery_decoder_artifacts_failed',
+    decoder_table_schema: 'backup_history_recovery_decoder_table_schema_failed',
+    decoder_column_schema: 'backup_history_recovery_decoder_column_schema_failed',
+    decoder_row_schema: 'backup_history_recovery_decoder_row_schema_failed',
+    decoder_row_data: 'backup_history_recovery_decoder_row_data_failed',
+    decoder_cells: 'backup_history_recovery_decoder_cells_failed',
+    decoder_contract: 'backup_history_recovery_contract_failed',
+    decoder_counts: 'backup_history_recovery_counts_failed',
+    source_stability: 'backup_history_recovery_source_changed',
+  };
+  return Object.prototype.hasOwnProperty.call(categories, error?.recoveryStage)
+    ? categories[error.recoveryStage] : 'backup_history_recovery_failed';
+}
+
 async function __lensControl() {
   // Library warnings, entity imports, and PM2 diagnostics never reach SSH output.
   process.stdout.write = () => true;
@@ -197,7 +222,7 @@ if (['backup_retention_audit', 'backup_retention_cleanup', 'backup_history_commi
       try {
         const receipt = await __lensBackupCoverage.recoverBackupHistory(__proveBackupCoverage, __lensHistoryRecoverySource);
         Object.assign(before, __historyRecoveryFacts(receipt));
-      } catch (_) { before.ok = false; before.error = 'history_recovery_failed'; }
+      } catch (error) { before.ok = false; before.error = __historyRecoveryFailure(error); }
       return __lensEmit(before);
     }
     if (__lensRequest.mode === 'backup_history_commit') {
@@ -222,9 +247,9 @@ if (['backup_retention_audit', 'backup_retention_cleanup', 'backup_history_commi
       try {
         recoveryFacts = __historyRecoveryFacts(await __lensBackupCoverage.recoverBackupHistory(
           __proveBackupCoverage, __lensHistoryRecoverySource));
-      } catch (_) {
+      } catch (error) {
         const before = __lensBackupRetention.auditAndRetainBackups(options);
-        before.ok = false; before.error = 'history_recovery_failed';
+        before.ok = false; before.error = __historyRecoveryFailure(error);
         return __lensEmit(before);
       }
     }
@@ -591,18 +616,32 @@ report.download_boundary_verified=true;
     if (maintenance && !maintenance.verifyBackup()) __fail('backup_verification_failed');
     if (!__fileWorker(stage, { action: 'verify', bundle }).ok || __tree(__path.join(bundle, 'dependencies')).hash !== oldDependencies
         || !__fs.readFileSync(__path.join(bundle, 'pm2.conf.json')).equals(config.raw)) __fail('backup_verification_failed');
-    const historyNamespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
-    const previousInventory = __lensBackupInventory.inventoryBackupNamespace(historyNamespace, __owner(context));
-    if (!previousInventory.ok || !previousInventory.scan_complete || !previousInventory.namespace_owned ||
-        previousInventory.unknown_entry_count || previousInventory.unsafe_entry_count) __fail('backup_verification_failed');
-    if (previousInventory.declared_verified_count === 1) {
-      const historyCoverage = await __backupHistoryCoverage(context, historyNamespace);
-      await __lensBackupCoverage.inheritBackupHistory(historyCoverage, __path.join(bundle, 'database'));
-      const recoveredHistory = await __lensStoredDatabaseCoverage.verifyStoredRetentionHistoryMemoryRecovery({
-        directory: __path.join(bundle, 'database'), currentDirectory: __path.join(bundle, 'database'), decoderSource: __lensHistoryRecoverySource });
-      if (!recoveredHistory.verified) __fail('backup_verification_failed');
-    } else if (previousInventory.declared_verified_count !== 0 || previousInventory.backup_directory_count !== 1) {
-      __fail('backup_verification_failed');
+    let historyStep = 'inventory';
+    try {
+      const historyNamespace = __path.join(__path.dirname(context.serviceCwd), '.lens-release-bundles');
+      const previousInventory = __lensBackupInventory.inventoryBackupNamespace(historyNamespace, __owner(context));
+      if (!previousInventory.ok || !previousInventory.scan_complete || !previousInventory.namespace_owned ||
+          previousInventory.unknown_entry_count || previousInventory.unsafe_entry_count) __fail('backup_verification_failed');
+      if (previousInventory.declared_verified_count === 1) {
+        historyStep = 'capture';
+        const historyCoverage = await __backupHistoryCoverage(context, historyNamespace);
+        historyStep = 'inherit';
+        await __lensBackupCoverage.inheritBackupHistory(historyCoverage, __path.join(bundle, 'database'));
+        historyStep = 'recover';
+        const recoveredHistory = await __lensStoredDatabaseCoverage.verifyStoredRetentionHistoryMemoryRecovery({
+          directory: __path.join(bundle, 'database'), currentDirectory: __path.join(bundle, 'database'), decoderSource: __lensHistoryRecoverySource });
+        if (!recoveredHistory.verified) __fail('backup_verification_failed');
+      } else if (previousInventory.declared_verified_count !== 0 || previousInventory.backup_directory_count !== 1) {
+        __fail('backup_verification_failed');
+      }
+    } catch (error) {
+          const historyErrors = {
+        inventory: 'backup_history_inventory_failed',
+        capture: 'backup_history_capture_failed',
+        inherit: 'backup_history_inheritance_failed',
+        recover: 'backup_history_recovery_failed',
+      };
+      __fail(historyStep === 'recover' ? __historyRecoveryFailure(error) : historyErrors[historyStep]);
     }
     __write600(__path.join(bundle, 'verified.json'), JSON.stringify({ version: 1, project: __owner(context), bundle_verified: true }));
     // Only explicit, previously verified bundles in this owned namespace qualify.

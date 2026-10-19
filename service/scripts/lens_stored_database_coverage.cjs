@@ -538,29 +538,47 @@ module.exports.commitStoredRetentionHistory = commitStoredRetentionHistory;
 
 async function verifyStoredRetentionHistoryMemoryRecovery({ directory, currentDirectory, decoderSource, optional = false }) {
   const error = 'retention history recovery verification failed';
+  let recoveryStage = 'input';
   try {
     if (typeof decoderSource !== 'string' || !decoderSource || decoderSource.length > 65536 ||
         typeof optional !== 'boolean') throw new Error(error);
+    recoveryStage = 'snapshot';
     const current = await loadStoredForRetention(currentDirectory);
+    recoveryStage = 'archive';
     const archive = await readStoredRetentionHistory(directory, current, optional);
     if (!archive) return Object.freeze({ verified: true, schemaCount: 0, rowVersionCount: 0, rowCount: 0, sourceCount: 0 });
+    recoveryStage = 'archive_bytes';
     const content = await readPrivateFile(archive.file, limits({}).maxBytes);
     const rawHash = digest(content);
+    recoveryStage = 'decoder';
     const child = require('node:child_process').spawnSync('python3', ['-c', decoderSource], {
       input: JSON.stringify({ archive: Buffer.from(content).toString('base64'), sha256: rawHash }),
       encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], maxBuffer: 4096, timeout: 15000,
     });
     if (child.error || child.status !== 0) throw new Error(error);
+    recoveryStage = 'decoder_contract';
     const result = JSON.parse(child.stdout);
     const fields = ['ok', 'schema_count', 'row_version_count', 'row_count', 'source_count'];
+    const decoderStages = ['input', 'archive_decode', 'archive_schema', 'source_bindings',
+      'artifacts', 'table_schema', 'column_schema', 'row_schema', 'row_data', 'cells'];
+    if (result && typeof result === 'object' && !Array.isArray(result) && result.ok === false &&
+        Object.keys(result).length === fields.length + 1 &&
+        Object.keys(result).every(key => fields.includes(key) || key === 'failure_stage') &&
+        fields.slice(1).every(key => result[key] === 0) && decoderStages.includes(result.failure_stage)) {
+      recoveryStage = 'decoder_' + result.failure_stage;
+      throw new Error(error);
+    }
+
     if (!result || typeof result !== 'object' || Array.isArray(result) ||
         Object.keys(result).length !== fields.length || Object.keys(result).some(key => !fields.includes(key)) ||
         result.ok !== true || fields.slice(1).some(key => !Number.isSafeInteger(result[key]) || result[key] < 0)) {
       throw new Error(error);
     }
+    recoveryStage = 'decoder_counts';
     const expected = retentionHistoryStats(archive.value.tables, archive.value.sourceBindings);
     if (result.schema_count !== expected.archivedSchemaCount || result.row_version_count !== expected.archivedRowVersionCount ||
         result.row_count !== expected.archivedRowCount || result.source_count !== expected.sourceSnapshotCount) throw new Error(error);
+    recoveryStage = 'source_stability';
     const after = await loadStoredForRetention(currentDirectory);
     if (after.fingerprint !== current.fingerprint || after.files.size !== current.files.size ||
         [...current.files].some(([name, signature]) => after.files.get(name) !== signature) ||
@@ -568,7 +586,9 @@ async function verifyStoredRetentionHistoryMemoryRecovery({ directory, currentDi
         digest(await readPrivateFile(archive.file, limits({}).maxBytes)) !== rawHash) throw new Error(error);
     return Object.freeze({ verified: true, schemaCount: result.schema_count,
       rowVersionCount: result.row_version_count, rowCount: result.row_count, sourceCount: result.source_count });
-  } catch (_) { throw new Error(error); }
+  } catch (_) { const failure = new Error(error);
+    failure.recoveryStage = recoveryStage;
+    throw failure; }
 }
 module.exports.verifyStoredRetentionHistoryMemoryRecovery = verifyStoredRetentionHistoryMemoryRecovery;
 

@@ -12,7 +12,7 @@ import math
 import re
 import sys
 
-_MAX_BYTES = 16 * 1024 * 1024
+_MAX_BYTES = 128 * 1024 * 1024
 _MAX_ROWS = 1000000
 
 
@@ -95,45 +95,55 @@ def _restore_artifacts(artifacts):
     return restored
 
 
-def inspect_payload(payload):
+def inspect_payload(payload, *, diagnostic=False):
     """Only this closed summary may leave the controlled process."""
+    stage = "input"
     try:
         _keys(payload, {"archive", "sha256"})
         if type(payload["archive"]) is not str or len(payload["archive"]) > (_MAX_BYTES * 4 // 3 + 8):
             raise ValueError()
+        stage = 'archive_decode'
         raw = base64.b64decode(payload["archive"], validate=True)
         if len(raw) > _MAX_BYTES or hashlib.sha256(raw).hexdigest() != payload["sha256"]:
             raise ValueError()
+        stage = 'archive_schema'
         value = json.loads(raw)
         _keys(value, {"version", "baseManifestHash", "databaseFingerprint", "sourceBindings", "tables", "contentHash"} | ({"artifacts"} if value.get("version") == 2 else set()))
         if type(value["version"]) is not int or value["version"] not in (1, 2):
             raise ValueError()
+        stage = 'source_bindings'
         sources = value["sourceBindings"]
         if type(sources) is not list or len(sources) > 1024 or any(type(s) is not str or not re.fullmatch(r"[a-f0-9]{64}", s) for s in sources):
             raise ValueError()
         if len(set(sources)) != len(sources) or type(value["tables"]) is not list or len(value["tables"]) > 1024:
             raise ValueError()
+        stage = 'artifacts'
         restored_artifacts = _restore_artifacts(value.get("artifacts", []))
         restored = []
         versions = rows = 0
         for table in value["tables"]:
+            stage = 'table_schema'
             _keys(table, {"name", "columns", "create", "structure", "rows"})
             if any(type(table[k]) is not str or not table[k] for k in ("name", "create", "structure")):
                 raise ValueError()
             if type(table["columns"]) is not list or len(table["columns"]) > 1024 or type(table["rows"]) is not list:
                 raise ValueError()
             for column in table["columns"]:
+                stage = 'column_schema'
                 _keys(column, {"name", "type", "charset"})
                 if type(column["name"]) is not str or type(column["type"]) is not str or (column["charset"] is not None and type(column["charset"]) is not str):
                     raise ValueError()
             restored_rows = []
             for row in table["rows"]:
+                stage = 'row_schema'
                 _keys(row, {"data", "count"})
                 if type(row["data"]) is not str or type(row["count"]) is not int or not 1 <= row["count"] <= _MAX_ROWS:
                     raise ValueError()
+                stage = 'row_data'
                 encoded = json.loads(row["data"])
                 if type(encoded) is not list or len(encoded) != len(table["columns"]):
                     raise ValueError()
+                stage = 'cells'
                 restored_rows.append((row["count"], tuple(_decode_cell(cell) for cell in encoded)))
                 versions += 1
                 rows += row["count"]
@@ -145,7 +155,10 @@ def inspect_payload(payload):
         restored_artifacts.clear()
         return result
     except BaseException:
-        return _closed()
+        result = _closed()
+        if diagnostic:
+            result["failure_stage"] = stage
+        return result
 
 
 def main():
@@ -153,7 +166,7 @@ def main():
     try:
         raw = sys.stdin.buffer.read(_MAX_BYTES * 2 + 1)
         if len(raw) <= _MAX_BYTES * 2:
-            result = inspect_payload(json.loads(raw))
+            result = inspect_payload(json.loads(raw), diagnostic=True)
     except BaseException:
         pass
     sys.stdout.write(json.dumps(result, separators=(",", ":")))
