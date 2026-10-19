@@ -60,12 +60,26 @@ class ProductionReleaseTests(unittest.TestCase):
                 "size": len(content), "sha256": hashlib.sha256(content).hexdigest(),
             })
 
+        for relative in (
+            "service/dist/entities/common/entity/baseEntity.js",
+            "service/dist/entities/modules/synthetic/synthetic.entity.js",
+        ):
+            content = b"module.exports = {};\n"
+            file = self.artifacts / relative
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(content)
+            self.manifest["entries"].append({
+                "source": relative, "role": "service_build",
+                "size": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            })
+
     def tearDown(self):
         self.temp.cleanup()
 
     def test_closed_manifest_accepts_only_build_roles(self):
         bundle = release.prepare_artifact_bundle(self.artifacts, self.manifest)
-        self.assertEqual(len(bundle.entries), 15)
+        self.assertEqual(len(bundle.entries), len(self.manifest["entries"]))
         self.assertEqual(repr(bundle), "<ArtifactBundle>")
         self.assertEqual(hashlib.sha256(bundle.archive).hexdigest(), bundle.archive_digest)
 
@@ -350,6 +364,24 @@ const reviewed=['academic_context_invalid','academic_controller_failed','academi
         child = subprocess.run(["node", "-e", script, str(worker)], capture_output=True, text=True, check=False)
         self.assertEqual(child.returncode, 0, "academic_boundary_fixture_failed")
         self.assertTrue(json.loads(child.stdout)["ok"], "reviewed_academic_failure_class_lost")
+
+    def test_bundle_rejects_missing_entity_metadata(self):
+        import copy
+        import lens_production_release as release
+        manifest = copy.deepcopy(self.manifest)
+        manifest["entries"] = [entry for entry in manifest["entries"]
+                               if not entry["source"].endswith(".entity.js")]
+        with self.assertRaises(release.ReleaseError):
+            release.prepare_artifact_bundle(str(self.artifacts), manifest)
+
+    def test_bundle_rejects_missing_entity_base_module(self):
+        import copy
+        import lens_production_release as release
+        manifest = copy.deepcopy(self.manifest)
+        manifest["entries"] = [entry for entry in manifest["entries"]
+                               if entry["source"] != "service/dist/entities/common/entity/baseEntity.js"]
+        with self.assertRaises(release.ReleaseError):
+            release.prepare_artifact_bundle(str(self.artifacts), manifest)
 
 
 

@@ -230,6 +230,14 @@ def prepare_artifact_bundle(artifact_root, manifest) -> ArtifactBundle:
                 approved.append(dict(item))
         if {entry["source"] for entry in approved if entry["role"] == "academic_runtime"} != _ACADEMIC_RUNTIME_FILES:
             raise ReleaseError("artifact_invalid")
+
+        service_files = {entry["source"] for entry in approved if entry["role"] == "service_build"}
+        entity_files = {
+            source for source in service_files
+            if source.startswith("service/dist/entities/") and source.endswith(".entity.js")
+        }
+        if not entity_files or "service/dist/entities/common/entity/baseEntity.js" not in service_files:
+            raise ReleaseError("entity_metadata_missing")
         if roles != {'service_build', 'service_package', 'service_lock', 'chat_static', 'admin_static', 'service_workspace', "academic_runtime"}:
             raise ReleaseError("artifact_invalid")
         if "chat/dist/index.html" not in names or "admin/dist/index.html" not in names:
