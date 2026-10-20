@@ -36,6 +36,7 @@ import {
   buildAcademicAttachmentContext as composeAcademicAttachmentContext,
   type AcademicAttachmentContextSource,
 } from './academicAttachmentContext';
+import { classifyAcademicFailure } from './academicFailureKind';
 
 interface AcademicChatBody {
   function?: 'chat' | 'basic' | 'plugin';
@@ -3901,6 +3902,7 @@ export class AcademicService {
         }
         this.logger.error(
           JSON.stringify({
+          failureKind: classifyAcademicFailure(error),
             event: 'academic_stream_error',
             errorCategory: error instanceof HttpException ? 'http' : 'runtime',
           }),
@@ -3942,6 +3944,7 @@ export class AcademicService {
       const err = error as Error;
       this.logger.error(
         JSON.stringify({
+          failureKind: classifyAcademicFailure(err),
           event: 'academic_request_failed',
           errorCategory: err instanceof HttpException ? 'http' : 'runtime',
         }),
