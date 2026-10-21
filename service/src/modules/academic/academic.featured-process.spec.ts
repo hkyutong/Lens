@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { Readable } from 'stream';
 import { AcademicService } from './academic.service';
 
 declare const describe: any;
@@ -17,7 +18,7 @@ const SYNTHETIC_REPORT = [
   '仅使用虚构数据，说明知情同意、数据保护及分阶段研究安排。',
 ].join('\n\n');
 
-function createHarness(content: string) {
+function createHarness(content: string, upstreamResponse?: Response) {
   const service = Reflect.construct(AcademicService, []) as any;
   const req = Object.assign(new EventEmitter(), {
     user: { id: 101 },
@@ -81,7 +82,7 @@ function createHarness(content: string) {
   service.buildAcademicModelEndpoint = jest.fn().mockReturnValue('https://academic.invalid');
   service.resolvePluginName = jest.fn((name: string) => name);
   service.fetchAcademicStream = jest.fn().mockImplementation(async () => ({
-    response: new Response(
+    response: upstreamResponse || new Response(
       `${JSON.stringify({ text: content })}\n`,
       { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } },
     ),
@@ -157,6 +158,74 @@ describe('featured research request persistence and charging', () => {
     expect(harness.service.userBalanceService.deductFromBalance).toHaveBeenCalledTimes(1);
     expect(harness.service.modelsService.saveUseLog).toHaveBeenCalledTimes(1);
     expect(harness.chunks.join('')).toContain('"finishReason":"stop"');
+    expect(harness.res.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns an upstream stream read failure into a completed error response', async () => {
+    const upstreamBody = new ReadableStream({
+      start(controller) {
+        setTimeout(() => controller.error(new TypeError('synthetic upstream stream failure')), 10);
+      },
+    });
+    const upstreamResponse = new Response(upstreamBody, {
+      status: 200,
+      headers: { 'Content-Type': 'application/x-ndjson' },
+    });
+    const harness = createHarness('', upstreamResponse);
+    const uncaught: unknown[] = [];
+    const onUncaught = (error: unknown) => uncaught.push(error);
+    process.on('uncaughtException', onUncaught);
+    try {
+      const request = harness.service.academicChatProcess(
+        {
+          prompt: '请根据合成材料生成研究方案。',
+          model: 'synthetic-academic-model',
+          function: 'plugin',
+          plugin_name: FEATURED_PLUGIN,
+        },
+        harness.req,
+        harness.res,
+      );
+      await request;
+      await Promise.race([
+        harness.finished,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('synthetic response did not finish')), 300)),
+      ]);
+    } finally {
+      process.off('uncaughtException', onUncaught);
+      if (!harness.res.writableEnded) harness.res.end();
+    }
+
+    expect(uncaught).toEqual([]);
+    expect(harness.res.end).toHaveBeenCalledTimes(1);
+    expect(harness.chunks.join('')).toContain('"finishReason":"error"');
+    expect(harness.service.userBalanceService.deductFromBalance).not.toHaveBeenCalled();
+  });
+
+  it('finalizes only once when an upstream end and error race', async () => {
+    const upstreamBody = new EventEmitter() as EventEmitter & { destroyed: boolean };
+    upstreamBody.destroyed = false;
+    const fromWeb = jest.spyOn(Readable, 'fromWeb').mockReturnValue(upstreamBody as any);
+    const harness = createHarness('', { status: 200, body: {} } as any);
+    try {
+      await harness.service.academicChatProcess(
+        {
+          prompt: '请根据合成材料生成研究方案。',
+          model: 'synthetic-academic-model',
+          function: 'plugin',
+          plugin_name: FEATURED_PLUGIN,
+        },
+        harness.req,
+        harness.res,
+      );
+      upstreamBody.emit('end');
+      upstreamBody.emit('error', new TypeError('synthetic stream failure after end'));
+      await new Promise(resolve => setImmediate(resolve));
+    } finally {
+      fromWeb.mockRestore();
+      if (!harness.res.writableEnded) harness.res.end();
+    }
+
     expect(harness.res.end).toHaveBeenCalledTimes(1);
   });
 });

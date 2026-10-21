@@ -3268,6 +3268,12 @@ export class AcademicService {
       let pendingSerializedLine = '';
       let lastThinkingPreview = '';
       let lastThinkingPreviewAt = 0;
+      let streamFinalizationStarted = false;
+      const beginStreamFinalization = () => {
+        if (streamFinalizationStarted || responseCompleted) return false;
+        streamFinalizationStarted = true;
+        return true;
+      };
       const emitThinkingPreview = (preview: string) => {
         const safePreview = String(preview || '').trim();
         if (!safePreview || responseCompleted || res.writableEnded || res.writableFinished) return;
@@ -3365,6 +3371,7 @@ export class AcademicService {
       });
 
       upstreamBody.on('end', async () => {
+        if (!beginStreamFinalization()) return;
         clearIdleTimer();
         clearMaxDurationTimer();
         clearForceCloseTimer();
@@ -3765,6 +3772,7 @@ export class AcademicService {
       });
 
       upstreamBody.on('error', async error => {
+        if (!beginStreamFinalization()) return;
         clearIdleTimer();
         clearMaxDurationTimer();
         clearForceCloseTimer();
