@@ -1,6 +1,7 @@
 import contextlib
 import hashlib
 import http.server
+import io
 import threading
 import hmac
 import json
@@ -10,7 +11,7 @@ import sys
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import lens_academic_inventory as inventory
 
@@ -335,6 +336,34 @@ class InventoryTests(unittest.TestCase):
             result = inventory.run_academic_inventory(object(), host_key_reviewed=True)
         self.assertEqual(seen, [True])
         self.assertEqual(result["error"], "academic_process_missing")
+
+    def test_cli_passes_reviewed_host_gate_to_inventory(self):
+        entry = types.SimpleNamespace(close=lambda: None)
+        result = inventory.empty_result()
+        output = io.StringIO()
+        adapter = types.SimpleNamespace(
+            _silent_boundary=contextlib.nullcontext,
+            load_project_entry=lambda: entry,
+        )
+        with patch.dict(sys.modules, {"lens_safe_ops": adapter}), \
+                patch.object(inventory, "run_academic_inventory", return_value=result) as run, \
+                contextlib.redirect_stdout(output):
+            inventory.main(["--host-key-reviewed"])
+        run.assert_called_once_with(entry, host_key_reviewed=True)
+        self.assertEqual(json.loads(output.getvalue())["error"], "inventory_failed")
+
+    def test_cli_without_reviewed_gate_does_not_load_entry(self):
+        load = Mock()
+        adapter = types.SimpleNamespace(
+            _silent_boundary=contextlib.nullcontext,
+            load_project_entry=load,
+        )
+        with patch.dict(sys.modules, {"lens_safe_ops": adapter}):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                inventory.main([])
+            self.assertEqual(json.loads(output.getvalue())["error"], "ssh_read_failed")
+            load.assert_not_called()
 
     def test_node_source_verified_accepts_attested_legacy_lens_bundle(self):
         source = self.root / "legacy-node"

@@ -1,6 +1,7 @@
 """Read-only Academic inventory. Runtime values never enter the public projection."""
 
 import ast
+import argparse
 import hashlib
 import hmac
 import ipaddress
@@ -575,15 +576,20 @@ def run_academic_inventory(secrets, *, host_key_reviewed=False):
         return empty_result("ssh_read_failed")
 
 
-def main():
+def main(argv=None):
     from lens_safe_ops import _silent_boundary, load_project_entry
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--host-key-reviewed', action='store_true')
+    args = parser.parse_args(argv)
     secrets = None
     try:
         with _silent_boundary():
+            if not args.host_key_reviewed:
+                raise ValueError('host_key_review_required')
             secrets = load_project_entry()
-            result = run_academic_inventory(secrets)
+            result = run_academic_inventory(secrets, host_key_reviewed=True)
     except Exception:
-        result = empty_result("entry_unavailable")
+        result = empty_result("entry_unavailable" if args.host_key_reviewed else "ssh_read_failed")
     finally:
         if secrets is not None:
             secrets.close()
