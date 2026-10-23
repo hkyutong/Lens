@@ -361,7 +361,13 @@ const invoke=vm.runInNewContext('('+target.getText(parsed)+')',{__fail:code=>{co
 const reviewed=['academic_context_invalid','academic_controller_failed','academic_route_invalid','academic_ready_failed','academic_restore_failed','academic_manager_failed','academic_apply_failed','academic_cleanup_failed'];
 (async()=>{let passed=true;for(const code of [...reviewed,'unreviewed_synthetic_error']){const expected=reviewed.includes(code)?code:'academic_transaction_failed';try{await invoke({ready:async()=>{const error=new Error('synthetic private detail');error.lensCode=code;throw error;}},'ready');passed=false;}catch(error){passed=passed&&error.lensCode===expected;}}console.log(JSON.stringify({ok:passed}));})();
 """
-        child = subprocess.run(["node", "-e", script, str(worker)], capture_output=True, text=True, check=False)
+        child = subprocess.run(
+            ["node", "-e", script, str(worker)],
+            cwd=worker.parent.parent,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         self.assertEqual(child.returncode, 0, "academic_boundary_fixture_failed")
         self.assertTrue(json.loads(child.stdout)["ok"], "reviewed_academic_failure_class_lost")
 
