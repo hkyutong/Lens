@@ -60,14 +60,8 @@ export class DatabaseService implements OnModuleInit {
       await this.connection.query(
         `INSERT INTO balance (userId, balance, usesLeft, paintCount) VALUES ('${userId}', 0, 1000, 100)`,
       );
-      Logger.log(
-        `初始化创建${role}用户成功、用户名为[${username}]、初始密码为[${
-          username === 'super' ? 'super' : '123456'
-        }] ==============> 请注意查阅`,
-        'DatabaseService',
-      );
+      Logger.log(`初始化创建${role}用户成功`, 'DatabaseService');
     } catch (error) {
-      console.log('error: ', error);
       throw new HttpException('创建默认超级管理员失败！', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
@@ -199,7 +193,6 @@ export class DatabaseService implements OnModuleInit {
         'DatabaseService',
       );
     } catch (error) {
-      console.log('error: ', error);
       throw new HttpException('创建默认网站配置失败！', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }

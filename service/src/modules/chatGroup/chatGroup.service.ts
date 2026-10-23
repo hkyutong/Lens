@@ -160,19 +160,18 @@ export class ChatGroupService {
         where: params,
         order: { isSticky: 'DESC', updatedAt: 'DESC' },
       });
+      const appIds = [...new Set(res.filter(item => item.appId).map(item => item.appId))];
+      const appInfos = appIds.length
+        ? await this.appEntity.find({ where: { id: In(appIds) } })
+        : [];
+      const appLogoById = new Map(appInfos.map(app => [app.id, app.coverImg]));
       return res.map(item => ({
         ...item,
+        appLogo: item.appId ? appLogoById.get(item.appId) : undefined,
         config: this.applyVectorParsingToConfig(item.config),
       }));
-      // const res = await this.chatGroupEntity.find({ where: params, order: { isSticky: 'DESC', id: 'DESC' } });
-      const appIds = res.filter(t => t.appId).map(t => t.appId);
-      const appInfos = await this.appEntity.find({ where: { id: In(appIds) } });
-      return res.map((item: any) => {
-        item.appLogo = appInfos.find(t => t.id === item.appId)?.coverImg;
-        return item;
-      });
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('查询对话组失败', ChatGroupService.name);
     }
   }
 

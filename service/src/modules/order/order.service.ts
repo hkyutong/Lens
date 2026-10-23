@@ -112,7 +112,6 @@ export class OrderService {
     doc['channel'] = payType;
     // create order
     const order = await this.orderEntity.save(doc);
-    console.log('order: ', order);
     return order;
   }
 

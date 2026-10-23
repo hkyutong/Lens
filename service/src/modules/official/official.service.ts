@@ -68,10 +68,7 @@ export class OfficialService {
   async fetchQRCodeTicket(sceneStr: string) {
     Logger.log(`获取普通二维码ticket - sceneStr: ${sceneStr}`, 'OfficialService');
     const accessToken = await this.globalConfigService.getConfigs(['wechatAccessToken']);
-    Logger.log(
-      `获取普通二维码的access_token: ${accessToken.substring(0, 10)}...`,
-      'OfficialService',
-    );
+    Logger.log('开始获取普通登录二维码', 'OfficialService');
 
     const Url = formatUrl(process.env.weChatApiUrl || 'https://api.weixin.qq.com');
     const params = {
@@ -79,13 +76,11 @@ export class OfficialService {
       action_info: { scene: { scene_str: sceneStr } },
     };
 
-    Logger.log(`普通二维码请求参数: ${JSON.stringify(params)}`, 'OfficialService');
     const res = await axios.post(
       `${Url}/cgi-bin/qrcode/create?access_token=${accessToken}`,
       params,
     );
 
-    Logger.log(`普通二维码创建响应: ${JSON.stringify(res.data)}`, 'OfficialService');
     const {
       data: { errmsg, ticket },
     } = res;
@@ -95,7 +90,7 @@ export class OfficialService {
       throw new HttpException(errmsg, HttpStatus.BAD_REQUEST);
     }
 
-    Logger.log(`普通二维码ticket获取成功: ${ticket.substring(0, 20)}...`, 'OfficialService');
+    Logger.log('普通二维码ticket获取成功', 'OfficialService');
     return ticket;
   }
 
@@ -121,7 +116,7 @@ export class OfficialService {
         `${Url}/sns/userinfo?access_token=${access_token}&openid=${openid}&lang=zh_CN`,
       );
       await this.userService.updateUserInfo(user.id, userInfo.data);
-      Logger.log(`微信授权登录成功 - OpenID: ${openid}, UserID: ${user.id}`, 'OfficialService');
+      Logger.log('微信授权登录成功', 'OfficialService');
       return this.authService.loginByOpenId(user, req);
     }
   }
@@ -129,33 +124,22 @@ export class OfficialService {
   /* 扫码事件 初次扫码关注 或者二次扫码都一样 */
   async scan(openID: string, sceneStr: string) {
     try {
-      Logger.debug(`处理扫码事件 - OpenID: ${openID}, SceneStr: ${sceneStr}`, 'OfficialService');
+      Logger.debug('处理扫码事件', 'OfficialService');
 
       // 检查 sceneStr 是否有效
       if (!this.sceneStrMap[sceneStr]) {
-        Logger.error(`非法扫码请求 - 未找到的sceneStr: ${sceneStr}`, 'OfficialService');
+        Logger.error('非法扫码请求', 'OfficialService');
         throw new HttpException('非法参数', HttpStatus.BAD_REQUEST);
       }
 
-      Logger.debug(`sceneStrMap中存在key [${sceneStr}]`, 'OfficialService');
-
       // 获取用户信息
       const user = await this.userService.getUserFromOpenId(openID, sceneStr);
-      Logger.debug(
-        `扫码用户信息 - OpenID: ${openID}, UserID: ${user?.id || '未找到'}`,
-        'OfficialService',
-      );
 
       // 记录扫描事件
       this.scanedSceneStrMap[sceneStr] = user.id;
-      Logger.debug(`更新scanedSceneStrMap, 设置[${sceneStr}] = ${user.id}`, 'OfficialService');
-
-      Logger.log(
-        `用户扫码成功 - OpenID: ${openID}, UserID: ${user?.id || '未找到'}, SceneStr: ${sceneStr}`,
-        'OfficialService',
-      );
+      Logger.log('用户扫码成功', 'OfficialService');
     } catch (error) {
-      Logger.error(`扫码处理失败 - OpenID: ${openID}, Error: ${error.message}`, 'OfficialService');
+      Logger.error('扫码处理失败', 'OfficialService');
       throw new HttpException('处理扫码事件时发生错误', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
@@ -163,49 +147,43 @@ export class OfficialService {
   /* 轮询扫码登录响应 */
   async loginBySceneStr(req, body) {
     const { sceneStr } = body;
-    Logger.debug(`轮询扫码登录 - SceneStr: ${sceneStr}`, 'OfficialService');
-    Logger.debug(`当前scanedSceneStrMap状态检查`, 'OfficialService');
+    Logger.debug('轮询扫码登录', 'OfficialService');
 
     if (!this.sceneStrMap[sceneStr]) {
-      Logger.debug(`sceneStr [${sceneStr}] 不存在于sceneStrMap中`, 'OfficialService');
+      Logger.debug('扫码状态不存在', 'OfficialService');
       return;
     }
 
     const userId = this.scanedSceneStrMap[sceneStr];
     if (!userId) {
-      Logger.debug(`userId不存在于scanedSceneStrMap[${sceneStr}]中`, 'OfficialService');
+      Logger.debug('扫码用户不存在', 'OfficialService');
       return '';
     }
 
-    Logger.debug(`找到匹配的userId: ${userId}`, 'OfficialService');
     const user = await this.userService.getUserById(userId);
 
-    Logger.log(`扫码登录成功 - UserID: ${userId}, SceneStr: ${sceneStr}`, 'OfficialService');
+    Logger.log('扫码登录成功', 'OfficialService');
 
     delete this.scanedSceneStrMap[sceneStr];
-    Logger.debug(`从scanedSceneStrMap中删除 [${sceneStr}]`, 'OfficialService');
 
     return this.authService.loginByOpenId(user, req);
   }
 
   /* 扫码事件 绑定微信 */
   async scanBindWx(openId: string, sceneStr) {
-    Logger.debug(`处理绑定微信扫码 - OpenID: ${openId}, SceneStr: ${sceneStr}`, 'OfficialService');
+    Logger.debug('处理绑定微信扫码', 'OfficialService');
 
     if (!this.sceneStrMap[sceneStr]) {
-      Logger.error(`非法参数 - sceneStr [${sceneStr}] 不在sceneStrMap中`, 'OfficialService');
+      Logger.error('非法绑定参数', 'OfficialService');
       throw new HttpException('非法参数', HttpStatus.BAD_REQUEST);
     }
 
     const userId = sceneStr.split('/')[1];
-    Logger.debug(`解析的UserID: ${userId}`, 'OfficialService');
-
     const bindRes = await this.userService.bindWx(openId, userId);
 
     this.scanedSceneStrMap[sceneStr] = bindRes;
-    Logger.debug(`更新scanedSceneStrMap, 设置[${sceneStr}]`, 'OfficialService');
 
-    Logger.log(`微信绑定成功 - OpenID: ${openId}, UserID: ${userId}`, 'OfficialService');
+    Logger.log('微信绑定成功', 'OfficialService');
     return bindRes;
   }
 
@@ -547,21 +525,10 @@ export class OfficialService {
         action_info: { scene: { scene_str: sceneStr } },
       };
 
-      Logger.log(
-        `创建二维码请求 - URL: ${Url}/cgi-bin/qrcode/create, token: ${accessToken.substring(
-          0,
-          10,
-        )}...`,
-        'OfficialService',
-      );
-      Logger.log(`请求参数: ${JSON.stringify(params)}`, 'OfficialService');
-
       const res = await axios.post(
         `${Url}/cgi-bin/qrcode/create?access_token=${accessToken}`,
         params,
       );
-
-      Logger.log(`二维码创建响应: ${JSON.stringify(res.data)}`, 'OfficialService');
 
       const {
         data: { errmsg, ticket, errcode },
@@ -579,8 +546,8 @@ export class OfficialService {
 
       return ticket;
     } catch (error) {
-      Logger.error(`创建二维码异常: ${error.message}`, 'OfficialService');
-      throw new HttpException(error.message || '创建二维码失败', HttpStatus.INTERNAL_SERVER_ERROR);
+      Logger.error('创建二维码异常', 'OfficialService');
+      throw new HttpException('创建二维码失败，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

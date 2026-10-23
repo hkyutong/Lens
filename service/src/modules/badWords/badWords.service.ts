@@ -221,7 +221,7 @@ export class BadWordsService implements OnModuleInit {
         .execute();
       await this.violationLogEntity.save(data);
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('违规记录写入失败', BadWordsService.name);
     }
   }
 

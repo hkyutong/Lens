@@ -61,7 +61,6 @@ export class PayService {
       where: { id: order.goodsId },
     });
     if (!goods) throw new HttpException('套餐不存在!', HttpStatus.BAD_REQUEST);
-    Logger.log('本次支付类型: ', order.payPlatform);
     try {
       if (order.payPlatform == 'wechat') {
         return this.payWeChat(userId, orderId, payType);
@@ -631,21 +630,19 @@ export class PayService {
     //   return result;
     // }
     if (payType == 'jsapi') {
-      Logger.log(`[WeChat Pay JSAPI] 开始JSAPI支付流程，用户ID: ${userId}, 订单ID: ${orderId}`);
+      Logger.log('[WeChat Pay JSAPI] 开始支付流程', PayService.name);
       // 查询用户的openid
       const openid = await this.userService.getOpenIdByUserId(userId);
-      Logger.log(`[WeChat Pay JSAPI] 用户OpenID: ${openid}`);
-
       // 构建支付请求参数
       params['payer'] = { openid: openid };
-      Logger.log(`[WeChat Pay JSAPI] 发送支付请求参数: `, JSON.stringify(params, null, 2));
+      Logger.log('[WeChat Pay JSAPI] 已准备支付请求', PayService.name);
 
       try {
         // 发送支付请求
         const response = await pay.transactions_jsapi(params);
         // 检查响应结构中是否有 data 字段，如果有，则直接使用 data 字段的内容；否则，使用整个响应内容
         const result = response.data ? response.data : response;
-        Logger.log(`[WeChat Pay JSAPI] 支付请求成功，返回结果: `, JSON.stringify(result, null, 2));
+        Logger.log('[WeChat Pay JSAPI] 支付请求成功', PayService.name);
 
         // 直接返回 result，确保不含 data 字段，并包含 status
         return {
@@ -658,39 +655,31 @@ export class PayService {
           paySign: result.paySign || result.data?.paySign,
         };
       } catch (error) {
-        console.error(`[WeChat Pay JSAPI] 支付请求过程中发生错误: ${error.message}`, error);
-        // 记录完整的错误对象
-        console.error('[WeChat Pay JSAPI] 完整的错误对象：', error);
+        Logger.error('[WeChat Pay JSAPI] 支付请求失败', PayService.name);
         throw new HttpException('JSAPI支付失败', HttpStatus.BAD_REQUEST);
       }
     }
 
     if (payType == 'native') {
-      Logger.log(`开始进行微信Native支付流程，订单ID: ${orderId}, 用户ID: ${userId}`);
-
       try {
         const res = await pay.transactions_native(params);
-        Logger.log(`微信Native支付响应数据: `, JSON.stringify(res, null, 2));
+        Logger.log('微信Native支付请求成功', PayService.name);
 
         const url_qrcode = res.code_url || res.data?.code_url;
 
         if (!url_qrcode) {
-          console.error(
-            `微信Native支付请求成功，但未返回code_url，响应数据: `,
-            JSON.stringify(res, null, 2),
-          );
+          Logger.warn('微信Native支付请求未返回二维码', PayService.name);
         } else {
-          Logger.log(`微信Native支付请求成功，code_url: ${url_qrcode}`);
+          Logger.log('微信Native支付已返回二维码', PayService.name);
         }
 
         return { url_qrcode, isRedirect: false };
       } catch (error) {
-        console.error(`微信Native支付过程中发生错误，错误信息: ${error.message}`, error);
-        console.error('完整的错误对象：', error);
+        Logger.error('微信Native支付失败', PayService.name);
         throw new HttpException('微信Native支付失败', HttpStatus.BAD_REQUEST);
       }
     } else {
-      console.warn(`支付请求使用了不支持的支付类型: ${payType}`);
+      Logger.warn('支付请求使用了不支持的支付类型', PayService.name);
       throw new HttpException('unsupported pay type', HttpStatus.BAD_REQUEST);
     }
   }
@@ -826,7 +815,7 @@ export class PayService {
     const {
       data: { code, msg, data: result },
     } = await axios.post('https://api.ltzf.cn/api/wxpay/get_pay_order', formBody, config);
-    if (code != 0) throw new HttpException(msg + JSON.stringify(params), HttpStatus.BAD_REQUEST);
+    if (code != 0) throw new HttpException('查询支付订单失败，请稍后重试', HttpStatus.BAD_REQUEST);
     return result;
   }
 

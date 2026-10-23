@@ -87,18 +87,6 @@ const detectPosition = () => {
   const newPosition = `${verticalDirection}-${horizontalDirection}` as Exclude<Position, 'auto'>
   autoPosition.value = newPosition
 
-  // 添加调试信息（开发时可用）
-  if (import.meta.env.DEV) {
-    console.log('Auto position detection:', {
-      triggerRect,
-      viewportHeight,
-      triggerCenterY,
-      isTopHalf,
-      verticalDirection,
-      horizontalDirection,
-      finalPosition: newPosition,
-    })
-  }
 }
 
 // 计算最终位置

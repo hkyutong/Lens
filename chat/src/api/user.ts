@@ -108,7 +108,6 @@ export function fetchBindWxByOldWechatAPI<T>(data: { sceneStr: string }): Promis
  * 后端API: /official/getOldQRCode
  */
 export function fetchGetOldQRCodeAPI<T>(data: { sceneStr: string }): Promise<Response<T>> {
-  console.log('[API调试] 调用getOldQRCode接口, 参数:', data)
   return get<T>({
     url: '/official/getOldQRCode',
     data, // 使用data字段传递参数，会被转换为URL参数

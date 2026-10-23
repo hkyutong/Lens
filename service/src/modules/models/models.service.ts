@@ -272,8 +272,8 @@ export class ModelsService {
         }
       }
     } catch (error) {
-      console.log('error: ', error);
-      throw new HttpException(error?.message || '设置模型失败', HttpStatus.BAD_REQUEST);
+      Logger.error('模型配置写入失败', ModelsService.name);
+      throw new HttpException('设置模型失败，请稍后重试', HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -460,7 +460,7 @@ export class ModelsService {
       if (error instanceof HttpException) {
         throw error;
       }
-      Logger.error(`获取模型详情失败: ${error.message}`, 'ModelsService');
+      Logger.error('获取模型详情失败', ModelsService.name);
       throw new HttpException('获取模型详情失败', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }

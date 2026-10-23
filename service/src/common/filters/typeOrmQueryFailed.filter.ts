@@ -9,15 +9,13 @@ export class TypeOrmQueryFailedFilter implements ExceptionFilter {
     const request = ctx.getRequest();
     if ((exception as any).code === 'ER_DUP_ENTRY') {
       throw new BadRequestException('该记录已经存在，请勿重复添加！');
-    } else {
-      console.log('other query error');
     }
 
     response.status(500).json({
       statusCode: 500,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: `Database query failed: ${exception.message}`,
+      message: '数据库操作失败，请稍后重试',
     });
   }
 }

@@ -35,8 +35,7 @@ export class AllExceptionsFilter<_T> implements ExceptionFilter {
         userId,
         path: request?.path,
         status,
-        message: rawMessage,
-        response: exceptionResponse,
+        message: safeMessage,
       };
       const serialized = JSON.stringify(payload);
       if (status >= HttpStatus.INTERNAL_SERVER_ERROR && (exception as any)?.stack) {

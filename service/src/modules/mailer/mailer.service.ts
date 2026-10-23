@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 
@@ -48,7 +48,7 @@ export class MailerService {
         html: html,
       });
     } catch (error) {
-      console.error('error: ', error);
+      Logger.error('邮件发送失败', MailerService.name);
       throw new HttpException('邮件发送失败！', HttpStatus.BAD_REQUEST);
     }
   }

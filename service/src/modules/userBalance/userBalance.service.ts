@@ -1,7 +1,7 @@
 import { parsePackageEntitlements, isMissingPackageEntitlementsColumn } from '../../common/utils/packageEntitlements';
 import { RechargeType } from '@/common/constants/balance.constant';
 import { createRandomUid, hideString } from '@/common/utils';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
 import { In, LessThan, Repository } from 'typeorm';
@@ -124,7 +124,7 @@ export class UserBalanceService {
         useTokens: 0,
       });
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('注册赠送处理失败', UserBalanceService.name);
       throw new HttpException('注册赠送失败,请联系管理员！', HttpStatus.BAD_REQUEST);
     }
   }
@@ -425,7 +425,7 @@ export class UserBalanceService {
       res.expirationTime = res.expirationTime ? formatDate(res.expirationTime, 'YYYY-MM-DD') : null;
       return res;
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('查询用户余额失败', UserBalanceService.name);
     }
   }
 
@@ -595,14 +595,13 @@ export class UserBalanceService {
         throw new HttpException(`${userId}充值失败`, HttpStatus.BAD_REQUEST);
       }
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('用户充值失败', UserBalanceService.name);
       throw new HttpException('用户充值失败！', HttpStatus.BAD_REQUEST);
     }
   }
 
   /* 支付成功给用户充值套餐 */
   async addBalanceToOrder(order) {
-    console.log('充值的工单信息:', order);
     try {
       const { userId } = order;
       const hasSnapshot = Boolean(order?.packageNameSnapshot);
@@ -653,7 +652,7 @@ export class UserBalanceService {
         days,
       });
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('充值处理失败', UserBalanceService.name);
       throw new HttpException('充值失败！', HttpStatus.BAD_REQUEST);
     }
   }
@@ -710,7 +709,7 @@ export class UserBalanceService {
       }
       return { rows, count };
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('查询用户账户失败', UserBalanceService.name);
       throw new HttpException('查询用户账户失败！', HttpStatus.BAD_REQUEST);
     }
   }
@@ -776,7 +775,7 @@ export class UserBalanceService {
       // 已过期，返回空数组
       return [];
     } catch (error) {
-      console.log('检查用户会员状态出错: ', error);
+      Logger.error('检查用户会员状态失败', UserBalanceService.name);
       return []; // 出错时返回空数组
     }
   }

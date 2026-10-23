@@ -410,8 +410,7 @@ export class UploadService implements OnModuleInit {
       return fileUrl;
     } catch (error) {
       Logger.error('UPLOAD_OPERATION_FAILED');
-      Logger.error('UPLOAD_OPERATION_FAILED');
-      throw new HttpException(`上传文件失败[S3]: ${error.message}`, HttpStatus.BAD_REQUEST);
+      throw new HttpException('上传文件失败，请稍后重试', HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -486,10 +485,7 @@ export class UploadService implements OnModuleInit {
       }
     } catch (error) {
       Logger.error('UPLOAD_OPERATION_FAILED');
-      throw new HttpException(
-        `上传图片失败[Chevereto|buffer] --> ${error.response?.data.error.message}`,
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException('上传图片失败，请稍后重试', HttpStatus.BAD_REQUEST);
     }
   }
 

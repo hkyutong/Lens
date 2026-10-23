@@ -153,7 +153,6 @@ export class OpenAIChatService {
         break;
       }
       const delta = chunk.choices[0]?.delta;
-      Logger.debug(`思考流delta: ${JSON.stringify(delta)}`, 'OpenAIChatService');
       const content = delta?.content;
       const reasoning_content = (delta as any)?.reasoning_content || '';
 
@@ -161,10 +160,6 @@ export class OpenAIChatService {
       if (thinkingSourceType === 'reasoning_content') {
         // 已确定使用reasoning_content字段
         if (reasoning_content) {
-          Logger.debug(
-            `继续接收reasoning_content思考流: ${reasoning_content}`,
-            'OpenAIChatService',
-          );
           result.reasoning_content = [
             {
               type: 'text',
@@ -178,7 +173,6 @@ export class OpenAIChatService {
         } else if (content && !content.includes('<think>')) {
           // 如果出现普通content，对于非DeepSeek模型终止思考流
           // 对于DeepSeek模型，将内容作为正常响应处理
-          Logger.debug(`reasoning_content模式下收到普通content: ${content}`, 'OpenAIChatService');
           if (deepThinkingType === 2) {
             result.content = [
               {
@@ -245,7 +239,6 @@ export class OpenAIChatService {
             }
           } else {
             // 继续接收think标签内的思考内容
-            Logger.debug(`继续接收think标签思考流: ${content}`, 'OpenAIChatService');
             result.reasoning_content = [
               {
                 type: 'text',
@@ -279,10 +272,6 @@ export class OpenAIChatService {
       // 尚未确定思考流来源类型，进行检测
       if (reasoning_content) {
         // 确定使用reasoning_content字段作为思考流
-        Logger.debug(
-          `首次检测到reasoning_content，确定使用reasoning_content思考流方式: ${reasoning_content}`,
-          'OpenAIChatService',
-        );
         thinkingSourceType = 'reasoning_content';
         result.reasoning_content = [
           {
@@ -303,7 +292,6 @@ export class OpenAIChatService {
           // 提取第一个块中的内容
           const thinkContent = content.replace(/<think>/, '');
           if (thinkContent) {
-            Logger.debug(`从<think>标签中提取的初始思考内容: ${thinkContent}`, 'OpenAIChatService');
             result.reasoning_content = [
               {
                 type: 'text',
@@ -364,8 +352,6 @@ export class OpenAIChatService {
           }
         } else {
           // 没有任何思考流标记，不同模型有不同处理
-          Logger.debug(`没有检测到思考流标记，处理普通内容: ${content}`, 'OpenAIChatService');
-
           if (deepThinkingType === 2) {
             // DeepSeek模型直接处理为正常内容
             thinkingSourceType = 'normal_content';

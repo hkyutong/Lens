@@ -131,8 +131,6 @@ export class NetSearchService {
             messages: [{ role: 'user', content: prompt }],
           };
 
-      Logger.log(`[搜索] 请求参数: ${JSON.stringify(requestBody, null, 2)}`);
-
       const response = await fetch(pluginUrl, {
         method: 'POST',
         headers: {
@@ -148,8 +146,6 @@ export class NetSearchService {
       }
 
       const apiResult = await response.json();
-      Logger.log(`[搜索] 原始返回数据: ${JSON.stringify(apiResult, null, 2)}`);
-
       let searchResults: any[] = [];
 
       if (isBochaiApi) {
@@ -219,8 +215,6 @@ export class NetSearchService {
         //     .map((img) => img.contentUrl);
         // }
       }
-
-      Logger.log(`[搜索] 格式化后的结果: ${JSON.stringify(formattedResult, null, 2)}`);
 
       // 同时返回搜索结果和图片数组
       return {

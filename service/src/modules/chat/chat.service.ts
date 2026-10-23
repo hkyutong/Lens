@@ -70,8 +70,6 @@ export class ChatService {
       modelAvatar,
     } = body;
 
-    Logger.debug(`body: ${JSON.stringify(body)}`, 'ChatService');
-
     // 获取应用信息
     let appInfo;
     if (appId) {
@@ -148,8 +146,6 @@ export class ChatService {
 
     /* 自动回复 */
     const autoReplyRes = await this.autoReplyService.checkAutoReply(prompt);
-    Logger.debug(`自动回复检查结果: ${JSON.stringify(autoReplyRes)}`, 'ChatService');
-
     /* 设置对话变量 */
     let currentRequestModelKey = null;
     let appName = '';
@@ -520,8 +516,6 @@ export class ChatService {
             },
             abortController,
           });
-
-          Logger.debug(`JSON: ${JSON.stringify(response)}`, 'ChatService');
 
           if (response.errMsg) {
             Logger.error(

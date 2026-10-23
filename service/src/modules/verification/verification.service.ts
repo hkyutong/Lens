@@ -75,7 +75,6 @@ export class VerificationService {
   async sendPhoneCode(messageInfo) {
     const { accessKeyId, accessKeySecret, SignName, TemplateCode } =
       await this.globalConfigService.getPhoneVerifyConfig();
-    console.log('Received messageInfo:', messageInfo);
     const { phone, code } = messageInfo;
     if (!phone || !code) {
       throw new HttpException('确实必要参数错误！', HttpStatus.BAD_REQUEST);

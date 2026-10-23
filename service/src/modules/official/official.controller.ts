@@ -27,7 +27,6 @@ export class OfficialController {
   @Get('notify')
   @ApiOperation({ summary: '公众号通知接口GET' })
   async notify(@Req() req, @Query() query, @Body() body) {
-    Logger.debug('GET通知 - ' + JSON.stringify(query), 'OfficialController');
     const result = await this.officialService.verify(query.signature, query.nonce, query.timestamp);
     return result ? query.echostr : '';
   }
@@ -35,8 +34,6 @@ export class OfficialController {
   @Post('notify')
   @ApiOperation({ summary: '公众号通知接口POST' })
   async notifyPost(@Req() req, @Query() query, @Body() xmlData, @Res() res) {
-    Logger.debug(`收到POST通知，完整请求体: ${JSON.stringify(xmlData)}`, 'OfficialController');
-
     if (!xmlData || !xmlData.xml) {
       Logger.warn('xmlData结构异常，缺少xml字段', 'OfficialController');
       return res.status(200).send('');
@@ -52,8 +49,6 @@ export class OfficialController {
       Logger.debug('XML存在嵌套结构，使用内部xml数组的第一个元素', 'OfficialController');
       xmlObject = xmlObject.xml[0];
     }
-
-    Logger.debug(`标准化后的XML对象: ${JSON.stringify(xmlObject)}`, 'OfficialController');
 
     // 辅助函数，安全地访问XML字段
     const getXmlValue = field => {
@@ -235,7 +230,7 @@ export class OfficialController {
       Logger.log(`生成普通登录二维码URL: ${qrCodeUrl}`, 'OfficialController');
       return qrCodeUrl;
     } catch (error) {
-      Logger.error(`获取普通登录二维码失败: ${error.message}`, 'OfficialController');
+      Logger.error('获取普通登录二维码失败', 'OfficialController');
       throw error;
     }
   }
@@ -334,7 +329,7 @@ export class OfficialController {
 
       return qrCodeUrl;
     } catch (error) {
-      Logger.error(`获取旧公众号二维码失败: ${error.message}`, 'OfficialController');
+      Logger.error('获取旧公众号二维码失败', 'OfficialController');
       throw error;
     }
   }

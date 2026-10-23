@@ -3,18 +3,12 @@ import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@ne
 import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import { Request } from 'express';
-import * as fs from 'fs';
 import { In, Repository } from 'typeorm';
 import { ChatLogEntity } from './../chatLog/chatLog.entity';
 import { ModelsService } from './../models/models.service';
 import { ConfigEntity } from './config.entity';
 import { QueryConfigDto } from './dto/queryConfig.dto';
 import { SetConfigDto } from './dto/setConfig.dto';
-const packageJsonContent = fs.readFileSync('package.json', 'utf-8');
-const packageJson = JSON.parse(packageJsonContent);
-const version = packageJson.version;
-console.log(' current use version in ------>: ', version);
-
 @Injectable()
 export class GlobalConfigService implements OnModuleInit {
   constructor(
@@ -149,14 +143,12 @@ export class GlobalConfigService implements OnModuleInit {
       'wechatOfficialAppSecret',
     ]);
     if (!appId || !secret) {
-      return Logger.error(
-        '还未配置微信的appId和secret、配置后才可进行微信扫码登录！！！',
-        'OfficialService',
-      );
+      Logger.error('微信登录配置缺失', 'GlobalConfigService');
+      return;
     }
     this.wechatAccessToken = await this.fetchBaseAccessToken(appId, secret, isInit);
     // this.wechatJsapiTicket = await this.fetchJsapiTicket(this.wechatAccessToken);
-    Logger.log(`wechat refresh access_token  ==> ${this.wechatAccessToken}`, 'OfficialService');
+    Logger.log('微信 access_token 已刷新', 'GlobalConfigService');
   }
 
   /* 定时刷新旧账号的 access_token */
@@ -184,10 +176,7 @@ export class GlobalConfigService implements OnModuleInit {
 
   /* 获取微信access_token */
   async fetchBaseAccessToken(appId: string, secret: string, isInit = false) {
-    Logger.log(
-      `开始获取access_token, appId: ${appId.substring(0, 5)}..., isInit: ${isInit}`,
-      'GlobalConfigService',
-    );
+    Logger.log(`开始获取 access_token，初始化模式：${isInit}`, 'GlobalConfigService');
 
     // 检查开发模式标志，开发模式下也应该需要获取token
     if (process.env.ISDEV === 'true') {
@@ -199,18 +188,13 @@ export class GlobalConfigService implements OnModuleInit {
         process.env.weChatApiUrlToken || 'https://api.weixin.qq.com/cgi-bin/token',
       );
       const requestUrl = `${Url}?grant_type=client_credential&appid=${appId}&secret=${secret}`;
-      Logger.log(`请求access_token URL: ${requestUrl}`, 'GlobalConfigService');
 
       const response = await axios.get(requestUrl);
-      Logger.log(`获取access_token响应: ${JSON.stringify(response.data)}`, 'GlobalConfigService');
 
       const { errmsg, access_token, errcode } = response.data;
 
       if (errmsg || errcode) {
-        Logger.error(
-          `获取access_token失败 - 错误码: ${errcode}, 错误信息: ${errmsg}`,
-          'GlobalConfigService',
-        );
+        Logger.error('获取access_token失败', 'GlobalConfigService');
         return '';
       }
 
@@ -219,13 +203,10 @@ export class GlobalConfigService implements OnModuleInit {
         return '';
       }
 
-      Logger.log(
-        `成功获取access_token: ${access_token.substring(0, 10)}...`,
-        'GlobalConfigService',
-      );
+      Logger.log('成功获取access_token', 'GlobalConfigService');
       return access_token;
     } catch (error) {
-      Logger.error(`获取access_token异常: ${error.message}`, 'GlobalConfigService');
+      Logger.error('获取access_token异常', 'GlobalConfigService');
       return '';
     }
   }
@@ -432,7 +413,7 @@ export class GlobalConfigService implements OnModuleInit {
 
       return '设置完成！';
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('配置更新失败', GlobalConfigService.name);
     }
   }
 
@@ -443,16 +424,16 @@ export class GlobalConfigService implements OnModuleInit {
       const { configKey, configVal, status = 1 } = setting;
       const c = await this.configEntity.findOne({ where: { configKey } });
       if (c) {
-        const res = await this.configEntity.update({ configKey }, { configVal, status });
+        await this.configEntity.update({ configKey }, { configVal, status });
       } else {
-        const save = await this.configEntity.save({
+        await this.configEntity.save({
           configKey,
           configVal,
           status,
         });
       }
     } catch (error) {
-      console.log('error: ', error);
+      Logger.error('配置写入失败', GlobalConfigService.name);
       throw new HttpException('设置配置信息错误！', HttpStatus.BAD_REQUEST);
     }
   }
