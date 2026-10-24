@@ -179,15 +179,22 @@ const vm = require('node:vm');
 const path = require('node:path');
 const input = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
 const scenario = input.scenario;
+const bundleScenario = scenario.startsWith('bundle_');
+const guardDefinition = 'const blockLegacyUploadStatic = (req, res, next) => {}; exports.blockLegacyUploadStatic = blockLegacyUploadStatic;';
+const guardRegistration = 'consumer.apply(guard.blockLegacyUploadStatic).forRoutes("*");';
 let monitorCalls = 0, queries = 0, invalidQuery = false;
 const columns = Object.entries({id:['varchar',36], ownerId:['int'], storageKey:['varchar',40], filename:['varchar',180], contentType:['varchar',100], byteSize:['int'], createdAt:['datetime']}).map(([name, type]) => ({COLUMN_NAME:name, DATA_TYPE:type[0], CHARACTER_MAXIMUM_LENGTH:type[1], IS_NULLABLE:'NO', COLUMN_KEY:name==='id'?'PRI':'', COLUMN_TYPE:name==='byteSize'?'int unsigned':type[0]}));
 if (scenario === 'incompatible') columns[0].IS_NULLABLE = 'YES';
 const fixtureFs = {
   statSync: () => ({isFile:()=>true, size:100}),
-  readFileSync: file => file.endsWith('package.json') ? JSON.stringify({dependencies:{'@nestjs/core':'synthetic'}}) : Buffer.from('DB_HOST=synthetic.invalid'),
-  existsSync: file => !file.endsWith('/.env') && (file.includes('/public/file') || file.includes('/private/attachments') || file.includes('/dist/')),
+  readFileSync: file => file.endsWith('package.json') ? JSON.stringify({dependencies:{'@nestjs/core':'synthetic'}})
+    : file.endsWith('/dist/main.js') ? (scenario==='bundle_marker_only' ? 'blockLegacyUploadStatic'
+      : scenario==='bundle_unregistered' ? guardDefinition
+      : scenario==='bundle_unexported' ? guardRegistration : guardDefinition + guardRegistration)
+    : Buffer.from('DB_HOST=synthetic.invalid'),
+  existsSync: file => !file.endsWith('/.env') && (file.includes('/public/file') || file.includes('/private/attachments') || (file.includes('/dist/') && (!bundleScenario || file.endsWith('/dist/main.js')))),
   realpathSync: file => file,
-  lstatSync: file => ({isSymbolicLink:()=>scenario==='symlink' && file.endsWith('/public/file'), isDirectory:()=>true, mode:0o700}),
+  lstatSync: file => ({isSymbolicLink:()=>(scenario==='symlink' && file.endsWith('/public/file')) || (scenario==='bundle_symlink' && file.endsWith('/dist/main.js')), isDirectory:()=>true, isFile:()=>true, size:scenario==='bundle_oversized' && file.endsWith('/dist/main.js') ? 16777217 : 100, mode:0o700}),
   readdirSync: () => scenario==='legacy' ? [{name:'synthetic.txt',isSymbolicLink:()=>false,isDirectory:()=>false,isFile:()=>true}] : [],
 };
 const connection = {destroy(){}, async execute(options) {
@@ -237,6 +244,24 @@ class RemoteEvidenceTests(unittest.TestCase):
         self.assertTrue(value['result']['attachmentSchemaChecked'])
         self.assertFalse(value['result']['attachmentTablePresent'])
         self.assertFalse(value['result']['attachmentSchemaCompatible'])
+
+    def test_bundled_registered_boundary_is_detected(self):
+        self.assertTrue(self.inspect('bundle_valid')['result']['attachmentBoundaryDeployed'])
+
+    def test_bundled_unregistered_guard_is_not_deployed(self):
+        self.assertFalse(self.inspect('bundle_unregistered')['result']['attachmentBoundaryDeployed'])
+
+    def test_bundled_marker_alone_is_not_deployed(self):
+        self.assertFalse(self.inspect('bundle_marker_only')['result']['attachmentBoundaryDeployed'])
+
+    def test_bundled_missing_export_is_not_deployed(self):
+        self.assertFalse(self.inspect('bundle_unexported')['result']['attachmentBoundaryDeployed'])
+
+    def test_bundled_symlink_is_rejected(self):
+        self.assertFalse(self.inspect('bundle_symlink')['result']['attachmentBoundaryDeployed'])
+
+    def test_bundled_oversized_artifact_is_rejected(self):
+        self.assertFalse(self.inspect('bundle_oversized')['result']['attachmentBoundaryDeployed'])
 
     def test_nullable_mismatch_is_rejected(self):
         self.assertFalse(self.inspect('incompatible')['result']['attachmentSchemaCompatible'])

@@ -183,6 +183,23 @@ function below(child, parent) {
   const relative = path.relative(parent, child);
   return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
 }
+function attachmentBoundaryArtifactPresent(cwd) {
+  const regular = file => {
+    const st = fs.lstatSync(file);
+    return st.isFile() && !st.isSymbolicLink() && st.size <= 16777216 && fs.realpathSync(file) === file;
+  };
+  try {
+    const module = path.join(cwd, 'dist', 'modules', 'attachment', 'legacyUploadStatic.middleware.js');
+    if (fs.existsSync(module) && regular(module)) return true;
+    const bundle = path.join(cwd, 'dist', 'main.js');
+    if (!regular(bundle)) return false;
+    const source = fs.readFileSync(bundle, 'utf8');
+    // Artifact presence only; the release smoke separately probes live denials.
+    return /const\s+blockLegacyUploadStatic\s*=\s*\(req,\s*res,\s*next\)\s*=>/.test(source)
+      && /exports\.blockLegacyUploadStatic\s*=\s*blockLegacyUploadStatic/.test(source)
+      && /\.apply\(\s*[A-Za-z_$][\w$]*\.blockLegacyUploadStatic\s*\)\.forRoutes\(\s*['"]\*['"]\s*\)/.test(source);
+  } catch (_) { return false; }
+}
 function legacyScan(directory) {
   let seen = 0;
   const pending = [directory];
@@ -230,7 +247,7 @@ async function inspect(rows) {
     result.privateStoragePresent = st.isDirectory();
     result.privateStoragePermissionsRestricted = (st.mode & 0o077) === 0;
   } catch (_) {}
-  result.attachmentBoundaryDeployed = fs.existsSync(path.join(cwd, 'dist', 'modules', 'attachment', 'legacyUploadStatic.middleware.js'));
+  result.attachmentBoundaryDeployed = attachmentBoundaryArtifactPresent(cwd);
   try { result.legacyScanComplete = legacyScan(path.join(cwd, 'public', 'file')); } catch (_) {}
   Object.assign(result, inspectNginx(cwd));
   try {
