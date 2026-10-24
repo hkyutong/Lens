@@ -1,5 +1,13 @@
 # 更新日志
 
+## 2026-10-24：共享连接器多适配器登记与错误边界收口
+
+- 共享受控连接器登记 Aliyun、Fakabao、Lens；每个项目仍只读取自己的入口，CLI 继续只接受固定的 `preflight`/`inventory` 动作，写权限保持关闭。
+- 已知 Aliyun/Fakabao 适配器连接异常统一映射到封闭错误分类；未知异常和未知错误码仍返回 `connector_internal_failure`，不输出异常原文或远端内容。
+- 共享连接器合同 8/8、Aliyun 11/11、Aliyun 运维 6/6、Fakabao 合成合同、tuchuang 离线解析 21 项与只读启动器 7 个用例/42 项断言、Lens 安全合同 60/60 均通过。
+- 本轮三项已登记适配器真实只读探针未建立生产 SSH 会话：Aliyun/Fakabao 返回 `connection_failed`，Lens 预检返回 `connection_failed`、运行时盘点返回 `runtime_inventory_unavailable`；未执行生产写入、重启、部署或清理。
+- tuchuang 仍未登记，因为现有工具缺少统一合同要求的固定只读探针；其他项目也未登记。此前静态筛选输出超出必要范围的本地常量后已停止原文读取，未复制或外传。
+
 ## 2026-10-18 公开资源定位后台图标发布门禁
 
 - 通过 Codex 自带浏览器观察正式后台已加载的公开资源，再只读 GET 并在本机内存比较六项固定静态资源；仅 favicon.svg 与候选不同，其余五项一致。未通过 SSH 传输或执行此前被拒绝的核验代码，该脚本已删除。
