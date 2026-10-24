@@ -8,7 +8,9 @@ const { createRequire } = require('node:module');
 
 function productionParserFixture(f) {
   const store = fs.realpathSync(path.join(__dirname, '..', 'node_modules', '.pnpm'));
-  const entry = fs.readdirSync(store).find(name => /^js-yaml@4\.3\./.test(name));
+  const entries = fs.readdirSync(store);
+  const entry = entries.find(name => /^js-yaml@5\.4\./.test(name))
+    || entries.find(name => /^js-yaml@4\.3\./.test(name));
   assert.ok(entry, 'the existing patched production parser must be available');
   const installed = new Map();
   function copyPackage(source) {

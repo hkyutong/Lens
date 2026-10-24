@@ -46,6 +46,7 @@ function existingYaml(nodeModulesPath) {
       const entries = fs.readdirSync(store).sort();
       for (const entry of [
         ...entries.filter(name => /^yaml@[^/]+$/.test(name)),
+        ...entries.filter(name => /^js-yaml@5\.[^/]+$/.test(name)),
         ...entries.filter(name => /^js-yaml@4\.[^/]+$/.test(name)),
       ]) {
         const name = entry.startsWith('js-yaml@') ? 'js-yaml' : 'yaml';
@@ -69,6 +70,14 @@ function document(filename, yaml) {
       if (parsed.errors.length || parsed.warnings.length) fail('invalid_document');
       value = parsed.toJS({ maxAliasCount: 0 });
     } else {
+      if (typeof yaml.parseEvents === 'function') {
+        let documents = 0;
+        for (const event of yaml.parseEvents(source)) {
+          if (event.type === yaml.EVENT_DOCUMENT && ++documents > 1) fail('invalid_document');
+          if ((Number.isInteger(event.anchorStart) && event.anchorStart >= 0) ||
+              (Number.isInteger(event.tagStart) && event.tagStart >= 0)) fail('invalid_document');
+        }
+      }
       value = yaml.load(source, {
         schema: yaml.JSON_SCHEMA,
         json: false,
