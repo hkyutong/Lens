@@ -633,7 +633,10 @@ class ExplicitUsernameAliasCompatibilityTests(unittest.TestCase):
     def setUpClass(cls):
         import io
         import paramiko
-        import lens_safe_ops
+        try:
+            from . import lens_safe_ops
+        except ImportError:
+            import lens_safe_ops
         cls.ops = lens_safe_ops
         buffer = io.StringIO()
         try:
